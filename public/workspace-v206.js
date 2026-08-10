@@ -129,6 +129,9 @@
     firstFrameDirection: "",
     projectNameDraft: "",
     projectLoading: Boolean(requestedProjectId),
+    sourceMutation: 0,
+    invalidatedDerivedByProject: stored.invalidatedDerivedByProject && typeof stored.invalidatedDerivedByProject === "object" ? stored.invalidatedDerivedByProject : {},
+    generationSources: stored.generationSources && typeof stored.generationSources === "object" ? stored.generationSources : {},
   };
   if (previewMode) {
     const previewProjectId = "00000000-0000-4000-8000-000000000001";
@@ -194,6 +197,8 @@
       canonicalProjectId: state.canonicalProjectId,
       generationKeys: state.generationKeys,
       assistantThreadId: state.assistantThreadId,
+      invalidatedDerivedByProject: state.invalidatedDerivedByProject,
+      generationSources: state.generationSources,
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
   }
@@ -222,12 +227,65 @@
   function esc(value) { return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char])); }
   function hasVideo(url) { return /\.(mp4|mov|webm)(?:[?#]|$)/i.test(String(url || "")); }
   function publicPreview(asset) { return asset?.preview || asset?.url || ""; }
-  function assetFor(id) { return state.selected[id] || null; }
   function canonicalProject() {
     if (requestedProjectId) return state.canonicalProjects.find((project) => project.id === requestedProjectId) || null;
     return state.canonicalProjects.find((project) => project.id === state.canonicalProjectId)
       || state.canonicalProjects.find((project) => project.templateId === state.templateId)
       || null;
+  }
+  function sourceSignature() {
+    return ["person", "outfit", "scene", "motion"].map((slot) => state.selected[slot]?.mediaId || "").join(":");
+  }
+  function generationInputSignature(kind) {
+    return kind === "final" ? `${sourceSignature()}:${state.selected.frame?.mediaId || ""}` : sourceSignature();
+  }
+  function derivedInvalidation() {
+    const projectId = canonicalProject()?.id;
+    const record = projectId ? state.invalidatedDerivedByProject[projectId] : null;
+    return record?.sourceSignature === sourceSignature() ? record : null;
+  }
+  function derivedOutputIsInvalidated(kind) {
+    return Boolean(derivedInvalidation()?.[kind]);
+  }
+  function invalidateDerivedOutputs() {
+    const projectId = canonicalProject()?.id;
+    if (!projectId) return;
+    state.invalidatedDerivedByProject[projectId] = { sourceSignature: sourceSignature(), frame: true, final: true };
+    state.pendingFirstFrame = null;
+    state.firstFrameDraftAnalyzing = false;
+    state.pendingVideo = null;
+    state.frameJobId = "";
+    state.showFinalVideo = false;
+    firstFrameDraftRecoveryRun += 1;
+    writeState();
+  }
+  function markDerivedOutputCurrent(kind) {
+    const projectId = canonicalProject()?.id;
+    const record = projectId ? derivedInvalidation() : null;
+    if (!record || !record[kind]) return;
+    delete record[kind];
+    if (!record.frame && !record.final) delete state.invalidatedDerivedByProject[projectId];
+    else state.invalidatedDerivedByProject[projectId] = record;
+    if (kind === "final") state.showFinalVideo = true;
+    writeState();
+  }
+  function completedJob(job) {
+    return /^(completed|finished|succeeded|success|ready)$/i.test(String(job?.status || ""));
+  }
+  function reconcileDerivedOutputs() {
+    let changed = false;
+    for (const job of state.jobs) {
+      const source = state.generationSources[job.id];
+      if (!source || !completedJob(job) || source.signature !== generationInputSignature(source.kind)) continue;
+      markDerivedOutputCurrent(source.kind);
+      delete state.generationSources[job.id];
+      changed = true;
+    }
+    if (changed) writeState();
+  }
+  function assetFor(id) {
+    if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
+    return state.selected[id] || null;
   }
   function assetFromMedia(media) {
     if (!media?.id) return null;
@@ -326,6 +384,7 @@
     return activeVideoAsset()?.url || "";
   }
   function activeVideoAsset() {
+    if (derivedOutputIsInvalidated("final")) return null;
     const project = canonicalProject();
     const finalNode = project?.nodes?.find((node) => node.role === "FINAL_VIDEO" && node.media?.url);
     if (finalNode?.media) return assetFromMedia(finalNode.media);
@@ -628,6 +687,7 @@
     state.notifications = notificationData.notifications || [];
     state.unreadNotifications = Number(notificationData.unreadCount || 0);
     hydrateCanonicalProject(canonicalProject());
+    reconcileDerivedOutputs();
     const activeThread = state.assistantThreadId && canonicalProject()?.id
       ? await mediaRequest(`/api/v1/assistant/threads/${encodeURIComponent(state.assistantThreadId)}/messages`).catch(() => null)
       : null;
@@ -1235,7 +1295,9 @@
     state.materials = state.materials.slice(0, 60);
   }
   async function assign(asset) {
-    if (!asset || asset.kind !== slots[state.target]?.type) return;
+    const target = state.target;
+    if (!asset || asset.kind !== slots[target]?.type) return;
+    const mutation = ++state.sourceMutation;
     state.busy = "assign";
     render();
     try {
@@ -1246,14 +1308,24 @@
       }
       if (!durableAsset.mediaId) throw new Error("MEDIA_ID_REQUIRED");
       const project = await ensureCanonicalProject();
-      await mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[state.target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }) });
+      await mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }) });
       const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
+      if (mutation !== state.sourceMutation) return;
       state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
       hydrateCanonicalProject(refreshed);
-      if (state.target === "motion") state.motionReferenceTime = null;
+      if (["person", "outfit", "scene", "motion"].includes(target)) {
+        invalidateDerivedOutputs();
+        if (target === "motion") state.motionReferenceTime = null;
+        setWorkflowStep(target);
+      } else if (target === "frame") {
+        markDerivedOutputCurrent("frame");
+      }
       addMaterial(durableAsset);
       state.view = null;
-      flash(`${slots[state.target].title}已替换并保存。`);
+      writeState();
+      flash(["person", "outfit", "scene", "motion"].includes(target)
+        ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
+        : `${slots[target].title}已替换并保存。`);
     } catch (error) {
       flash(error.message || "素材没有保存到项目。", "warning");
     } finally {
@@ -1502,6 +1574,7 @@
       const job = result.job;
       state.jobs = job ? [job, ...state.jobs.filter((item) => item.id !== job.id)] : state.jobs;
       state.frameJobId = job?.id || state.frameJobId;
+      if (job?.id) state.generationSources[job.id] = { kind: "frame", signature: generationInputSignature("frame") };
       state.pendingFirstFrame = null;
       setWorkflowStep("frame");
       writeState();
@@ -1530,6 +1603,7 @@
       const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/quality/${encodeURIComponent(reviewId)}/repair`, { method: "POST", body: JSON.stringify({}) });
       if (result.job) state.jobs = [result.job, ...state.jobs.filter((job) => job.id !== result.job.id)];
       state.frameJobId = result.job?.id || state.frameJobId;
+      if (result.job?.id) state.generationSources[result.job.id] = { kind: "frame", signature: generationInputSignature("frame") };
       state.pendingFirstFrame = null;
       writeState();
       scheduleTaskRefresh();
@@ -1572,6 +1646,7 @@
         body: JSON.stringify({ kind: "action_transfer", input: { firstFrameMediaId: pending.firstFrameMediaId, motionMediaId: pending.motionMediaId, quotedMaxDurationSeconds: pending.maximumSeconds, fps: 24, frameLoadCap: stable ? 360 : pending.standardFrames, resolution: "720p", actionVariant: "standard", cameraMotion: false, stableRetry: stable } }),
       });
       if (result.job) state.jobs = [result.job, ...state.jobs.filter((item) => item.id !== result.job.id)];
+      if (result.job?.id) state.generationSources[result.job.id] = { kind: "final", signature: generationInputSignature("final") };
       clearGenerationIdempotencyKey("action_transfer");
       state.pendingVideo = null;
       scheduleTaskRefresh();

@@ -5165,6 +5165,9 @@ async function autoSyncProduction(project) {
 }
 
 async function runTaskAutoSync() {
+  // The v206 workspace owns its own bounded task refresh. Keeping this legacy
+  // loop alive here allowed a second state store to overwrite a newer edit.
+  if (normalizePath() === "/workspace") return;
   if (normalizePath() !== "/workspace" || !state.session) return;
   if (pendingActionStartsWith("sync-asset-image") || state.pendingAction === "sync-all-asset-images") return;
   const jobs = state.imageJobs.filter(imageJobNeedsAutoSync).slice(0, 4);
@@ -5182,6 +5185,7 @@ async function runTaskAutoSync() {
 
 function startTaskAutoSync() {
   window.clearInterval(taskAutoSyncTimer);
+  if (normalizePath() === "/workspace") return;
   taskAutoSyncTimer = window.setInterval(() => {
     window.setTimeout(runTaskAutoSync, 600);
   }, 8000);
