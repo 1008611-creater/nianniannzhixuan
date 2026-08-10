@@ -126,6 +126,7 @@
     frameJobId: stored.frameJobId || "",
     projectId: stored.projectId || "",
     taskRefreshAt: 0,
+    taskRefreshAttempts: 0,
     firstFrameDirection: "",
     projectNameDraft: "",
     projectLoading: Boolean(requestedProjectId),
@@ -233,6 +234,10 @@
       || state.canonicalProjects.find((project) => project.templateId === state.templateId)
       || null;
   }
+  function privateMediaUrl(media) {
+    const id = String(media?.id || "");
+    return String(media?.url || "") || (UUID_PATTERN.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/content` : "");
+  }
   function sourceSignature() {
     return ["person", "outfit", "scene", "motion"].map((slot) => state.selected[slot]?.mediaId || "").join(":");
   }
@@ -290,7 +295,7 @@
   function assetFromMedia(media) {
     if (!media?.id) return null;
     const kind = media.kind === "VIDEO" ? "video" : "image";
-    const asset = toAsset(media.url || "", kind, media.label || "私有素材", "", media.id);
+    const asset = toAsset(privateMediaUrl(media), kind, media.label || "私有素材", "", media.id);
     if (kind === "video") asset.preview = "";
     return { ...asset, width: media.width || null, height: media.height || null, durationSeconds: media.durationSeconds || null, source: media.source || "", isTemplateSample: String(media.source || "").startsWith("workspace_template:") };
   }
@@ -663,37 +668,34 @@
   }
   function scheduleTaskRefresh(delay = 12000) {
     window.clearTimeout(taskRefreshTimer);
-    if (!state.session) return;
+    if (!state.session || state.view === "sources" || document.visibilityState === "hidden") return;
     const project = activeProject();
     const hasActiveImage = state.jobs.some((job) => jobBelongsToProject(job, project) && taskIsActive(job.status));
     const hasActiveVideo = taskIsActive(project?.production?.status);
     const hasPendingFirstFrameQuality = ["queued", "running"].includes(String(project?.firstFrameQuality?.status || "").toLowerCase());
     if (!hasActiveImage && !hasActiveVideo && !hasPendingFirstFrameQuality) return;
-    taskRefreshTimer = window.setTimeout(refreshTaskState, delay);
+    const backoffDelay = Math.min(30_000, delay + state.taskRefreshAttempts * 3_000);
+    taskRefreshTimer = window.setTimeout(refreshTaskState, backoffDelay);
   }
   async function refreshTaskState() {
     taskRefreshTimer = 0;
-    if (!state.session) return;
+    if (!state.session || state.view === "sources" || document.visibilityState === "hidden") return;
     const before = taskStateFingerprint();
-    const [projects, media, jobs, notificationData] = await Promise.all([
+    const [projects, media, jobs] = await Promise.all([
       mediaRequest("/api/v1/projects"),
       mediaRequest("/api/v1/media"),
       mediaRequest("/api/v1/jobs"),
-      mediaRequest("/api/v1/notifications").catch(() => ({ notifications: state.notifications, unreadCount: state.unreadNotifications })),
     ]);
     state.canonicalProjects = projects.projects || [];
     hydrateCanonicalMedia(media.media || []);
     state.jobs = jobs.jobs || [];
-    state.notifications = notificationData.notifications || [];
-    state.unreadNotifications = Number(notificationData.unreadCount || 0);
     hydrateCanonicalProject(canonicalProject());
     reconcileDerivedOutputs();
-    const activeThread = state.assistantThreadId && canonicalProject()?.id
-      ? await mediaRequest(`/api/v1/assistant/threads/${encodeURIComponent(state.assistantThreadId)}/messages`).catch(() => null)
-      : null;
-    if (activeThread?.thread?.messages) state.chat = activeThread.thread.messages;
     state.taskRefreshAt = Date.now();
-    if (before !== taskStateFingerprint()) render();
+    if (before !== taskStateFingerprint()) {
+      state.taskRefreshAttempts = 0;
+      render();
+    } else state.taskRefreshAttempts = Math.min(state.taskRefreshAttempts + 1, 6);
     scheduleTaskRefresh();
   }
   function requireLogin() {
@@ -739,6 +741,9 @@
       MEDIA_IMAGE_INVALID_JPEG: "这张 JPG 图片不完整，请重新导出后再上传。",
       MEDIA_IMAGE_DIMENSIONS_UNSUPPORTED: "无法读取图片尺寸，请另存为 JPG、PNG 或 WebP 后再上传。",
       MEDIA_UPLOAD_TOO_LARGE: "图片不能超过 25 MB。",
+      MEDIA_UPLOAD_COMPLETED_BUT_UNAVAILABLE: "素材已上传但暂时无法读取，请刷新素材库后重试。",
+      MEDIA_UPLOAD_FAILED: "上传传输没有完成，请重新选择文件后再试。",
+      SIGNED_UPLOAD_FAILED: "上传通道暂时不可用，请重新选择文件后再试。",
     }[code] || "";
   }
   function imageMarkup(asset, alt) {
@@ -1460,11 +1465,12 @@
       if (!cosMultipart && (!contentResponse?.ok || contentResult.upload?.complete === false)) throw new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
       const completed = await mediaRequest(`/api/v1/media/${intent.media.id}/complete`, { method: "POST", body: JSON.stringify({}) });
       const library = await mediaRequest("/api/v1/media");
-      const media = completed.media?.url
+      const media = completed.media?.id
         ? completed.media
-        : (library.media || []).find((item) => item.id === completed.media?.id || item.id === intent.media.id);
-      if (!media?.url) throw new Error("MEDIA_UPLOAD_COMPLETED_BUT_UNAVAILABLE");
-      const asset = { id: media.id, label: media.label || file.name.replace(/\.[^.]+$/, "") || "已上传素材", kind: media.kind === "VIDEO" ? "video" : "image", url: media.url, preview: thumbnailFor(media.url) };
+        : (library.media || []).find((item) => item.id === intent.media.id);
+      const mediaUrl = privateMediaUrl(media);
+      if (!media?.id || !mediaUrl) throw new Error("MEDIA_UPLOAD_COMPLETED_BUT_UNAVAILABLE");
+      const asset = { id: media.id, label: media.label || file.name.replace(/\.[^.]+$/, "") || "已上传素材", kind: media.kind === "VIDEO" ? "video" : "image", url: mediaUrl, preview: thumbnailFor(mediaUrl) };
       asset.mediaId = media.id;
       addMaterial(asset);
       if (assistantReference) {
@@ -1854,7 +1860,7 @@
   }
   function handleAction(button) {
     const action = button.dataset.v206Action;
-    if (action === "close") { state.view = null; render(); return; }
+    if (action === "close") { state.view = null; render(); scheduleTaskRefresh(); return; }
     if (action === "workflow-step") { setWorkflowStep(button.dataset.step); render(); return; }
     if (action === "workflow-next") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.min(index + 1, workflowSteps.length - 1)].id); render(); return; }
     if (action === "workflow-previous") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.max(index - 1, 0)].id); render(); return; }
@@ -1918,9 +1924,18 @@
   });
   document.addEventListener("change", (event) => {
     const assistantUpload = closestEventTarget(event, "[data-v206-assistant-upload]");
-    if (assistantUpload?.files?.[0]) upload("person", assistantUpload.files[0], { assistantReference: true });
+    if (assistantUpload?.files?.[0]) {
+      const file = assistantUpload.files[0];
+      assistantUpload.value = "";
+      upload("person", file, { assistantReference: true });
+    }
     const input = closestEventTarget(event, "[data-v206-upload]");
-    if (input?.files?.[0]) upload(input.dataset.v206Upload, input.files[0]);
+    if (input?.files?.[0]) {
+      const file = input.files[0];
+      const target = input.dataset.v206Upload;
+      input.value = "";
+      upload(target, file);
+    }
     const videoMode = closestEventTarget(event, "[data-v206-video-mode]");
     if (videoMode) {
       state.videoMode = videoMode.value === "stable" ? "stable" : "standard";
@@ -1953,7 +1968,10 @@
     if (form.dataset.v206Form === "rename-project") renameProject();
   });
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.view) { state.view = null; render(); }
+    if (event.key === "Escape" && state.view) { state.view = null; render(); scheduleTaskRefresh(); }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") scheduleTaskRefresh();
   });
   let booted = false;
   async function boot() {
