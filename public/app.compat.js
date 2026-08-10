@@ -7411,14 +7411,14 @@ async function deletePersonalTemplateVideo(mediaId) {
   }
 }
 
-function renderPersonalTemplateVideoCard(item, index) {
+function renderPersonalTemplateVideoCard(item) {
   const duration = Number(item.durationSeconds || 0);
   const mediaId = String(item.id || "");
   const useAction = `use-personal-template-video:${mediaId}`;
   const useLabel = isPendingAction(useAction) ? "进入中..." : "做这个";
   const poster = item.posterUrl || item.previewUrl || item.thumbnailUrl || "";
   return `
-    <article class="showcase-video-card template-personal-video ${index === 0 ? "featured" : ""}" data-preview-state="idle" data-media-id="${escapeHtml(mediaId)}">
+    <article class="showcase-video-card template-personal-video" data-preview-state="idle" data-media-id="${escapeHtml(mediaId)}">
       <div class="template-video-preview">
         <video data-src="${escapeHtml(item.url || "")}" ${poster ? `poster="${escapeHtml(poster)}"` : ""} muted loop playsinline preload="none" aria-label="${escapeHtml(item.label || "我的模板视频")}"></video>
         <button class="template-video-activate" type="button" data-action="activate-personal-template-preview" aria-label="播放${escapeHtml(item.label || "模板视频")}" title="播放预览"><span aria-hidden="true">&#9654;</span></button>
