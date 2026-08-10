@@ -1,6 +1,6 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 
 const port = Number(process.env.PORT || 18890);
 const remoteOrigin = process.env.REMOTE_ORIGIN || "https://dh.cauai.fun";
@@ -15,7 +15,8 @@ const mimeTypes = {
 function localFile(pathname) {
   const safePath = normalize(pathname).replace(/^([/\\])+/, "");
   const file = join(publicDir, safePath || "index.html");
-  return file.startsWith(publicDir) ? file : null;
+  const withinPublic = relative(publicDir, file);
+  return !isAbsolute(withinPublic) && !withinPublic.startsWith("../") && !withinPublic.startsWith("..\\") && withinPublic !== ".." ? file : null;
 }
 
 function proxyHeaders(headers) {
@@ -49,6 +50,11 @@ async function proxy(request, response) {
 createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
+    if (request.method === "GET" && pathname === "/healthz") {
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      response.end(JSON.stringify({ ok: true, service: "dh-cauai-local", port, remoteOrigin }));
+      return;
+    }
     const file = localFile(pathname);
     if (request.method === "GET" && file && existsSync(file) && statSync(file).isFile()) {
       response.writeHead(200, { "content-type": mimeTypes[extname(file).toLowerCase()] || "application/octet-stream" });

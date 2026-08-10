@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "download": "node scripts/download-site.mjs",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "verify": "node --check server.mjs && node --check scripts/download-site.mjs && node --check scripts/verify.mjs && node scripts/verify.mjs"
   }
 }

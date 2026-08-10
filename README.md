@@ -12,6 +12,9 @@ npm start
 
 Open `http://127.0.0.1:18890`.
 
+After starting the server, run `npm run verify` to check the homepage, local assets,
+health endpoint, and the upstream API proxy.
+
 Use another port when needed:
 
 ```powershell
