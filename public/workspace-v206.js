@@ -426,6 +426,9 @@
     return "暂时无法准备首帧，请稍后再试。";
   }
   async function sha256(file) {
+    if (typeof window.NianNianUploadHash?.sha256File === "function") {
+      return window.NianNianUploadHash.sha256File(file);
+    }
     const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
     return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
   }

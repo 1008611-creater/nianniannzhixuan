@@ -4328,116 +4328,6 @@ function whiteBackgroundPrompt(node) {
   ].join("，");
 }
 
-async function submitWhiteBackgroundGeneration(nodeId) {
-  if (!state.session) {
-    state.workspaceMessage = "请先登录，再转白底。";
-    navigate("/login");
-    return;
-  }
-  const template = activeImportedTemplate();
-  const node = workflowNodesForTemplate(template).find((item) => item.id === nodeId);
-  const sourceUrl = workflowNodePublicUrl(node || {});
-  if (!node || !sourceUrl || !["character", "clothes"].includes(nodeId)) {
-    state.workspaceMessage = "先准备好人物图或衣服图，再转白底。";
-    render();
-    return;
-  }
-
-  state.isBusy = true;
-  state.workspaceMessage = `${node.title}正在转白底，预计 1-3 分钟。`;
-  render();
-
-  try {
-    const result = await fetchJson("/api/image2/generate", {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: whiteBackgroundPrompt(node),
-        imageUrls: [sourceUrl],
-        aspectRatio: "4:5",
-        resolution: "2k",
-        targetNodeId: node.id,
-        targetLabel: `${node.title}白底图`,
-        purpose: "whitebg",
-      }),
-    });
-    state.imageJobs = result.jobs || [result.job, ...state.imageJobs.filter((item) => item.id !== result.job?.id)];
-    if (result.job?.resultUrls?.length) applyAutoImageResult(result.job);
-    state.session = result.user || state.session;
-    state.system.runninghub = result.runninghub || state.system.runninghub;
-    state.workspaceMessage = result.blocked
-      ? result.reason
-      : `${node.title}白底任务已提交，完成后点“同步白底”。`;
-  } catch (error) {
-    state.workspaceMessage = error.message;
-  } finally {
-    state.isBusy = false;
-    render();
-  }
-}
-
-async function handleSyncNodeImage(nodeId) {
-  const job = latestNodeImageJobByPurpose(nodeId, "whitebg");
-  if (!job?.runninghubTaskId) {
-    state.workspaceMessage = "还没有可同步的白底任务。";
-    render();
-    return;
-  }
-
-  state.isBusy = true;
-  state.workspaceMessage = "正在同步白底结果。";
-  render();
-
-  try {
-    const result = await fetchJson("/api/image2/sync", {
-      method: "POST",
-      body: JSON.stringify({ jobId: job.id }),
-    });
-    state.imageJobs = result.jobs || [result.job, ...state.imageJobs.filter((item) => item.id !== result.job?.id)];
-    const updatedJob = result.job || state.imageJobs.find((item) => item.id === job.id);
-    if (applyImageJobResultToNode(updatedJob, "白底图")) {
-      state.workspaceMessage = `已生成并替换${updatedJob.targetLabel || "白底图"}。`;
-    } else {
-      state.workspaceMessage = result.blocked ? result.reason : (updatedJob?.statusText || "生成中。");
-    }
-  } catch (error) {
-    state.workspaceMessage = error.message;
-  } finally {
-    state.isBusy = false;
-    render();
-  }
-}
-
-async function handleExportVideo() {
-  const project = latestProject();
-  if (!state.session || !project) return;
-  state.workspaceMessage = "正在扣减额度并准备无水印导出。";
-  render();
-  try {
-    const result = await fetchJson("/api/projects/export", {
-      method: "POST",
-      body: JSON.stringify({ projectId: project.id }),
-    });
-    state.session = result.user;
-    state.projects = state.projects.map((item) => (item.id === result.project.id ? result.project : item));
-    const exportUrl = (result.project?.exportUrls || result.project?.production?.outputUrls || []).find(Boolean);
-    state.workspaceMessage = exportUrl ? "导出完成，成片已准备好；如果没有自动打开，请点“打开成片”。" : "导出完成，不额外扣费。视频费用已在生成成功时按秒结算。";
-    if (exportUrl) {
-      setUiNotice("导出完成，可以打开成片。", "success");
-      const link = document.createElement("a");
-      link.href = exportUrl;
-      link.target = "_blank";
-      link.rel = "noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    }
-  } catch (error) {
-    state.workspaceMessage = error.message;
-  }
-  render();
-}
-
-
 function firstFrameTaskState(job, nodes) {
   const generatedFrame = nodeAssetOverride("firstFrame");
   const inputCount = firstFrameInputUrls(nodes).length;
@@ -7586,6 +7476,9 @@ function safeAccountDisplayName(user) {
 }
 
 async function templateVideoSha256(file) {
+  if (typeof window.NianNianUploadHash?.sha256File === "function") {
+    return window.NianNianUploadHash.sha256File(file);
+  }
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 
@@ -24,6 +24,14 @@ function proxyHeaders(headers) {
   result.delete("host");
   result.delete("connection");
   return result;
+}
+
+async function serveIndex(response) {
+  const index = join(publicDir, "index.html");
+  const html = readFileSync(index, "utf8");
+  const withUploadHash = html.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
+  response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
+  response.end(withUploadHash);
 }
 
 async function proxy(request, response) {
@@ -55,6 +63,10 @@ createServer(async (request, response) => {
       response.end(JSON.stringify({ ok: true, service: "dh-cauai-local", port, remoteOrigin }));
       return;
     }
+    if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) {
+      await serveIndex(response);
+      return;
+    }
     const file = localFile(pathname);
     if (request.method === "GET" && file && existsSync(file) && statSync(file).isFile()) {
       response.writeHead(200, { "content-type": mimeTypes[extname(file).toLowerCase()] || "application/octet-stream" });
@@ -64,8 +76,7 @@ createServer(async (request, response) => {
     if (pathname.startsWith("/api/") || /\.[A-Za-z0-9]{1,8}$/.test(pathname)) return await proxy(request, response);
     const index = join(publicDir, "index.html");
     if (request.method === "GET" && existsSync(index)) {
-      response.writeHead(200, { "content-type": mimeTypes[".html"] });
-      createReadStream(index).pipe(response);
+      await serveIndex(response);
       return;
     }
     response.writeHead(404).end("Not found");
