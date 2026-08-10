@@ -517,23 +517,14 @@
     }
   }
   async function load() {
-    const [session, canonicalProjects, canonicalMedia, canonicalJobs, assistantThreads, notificationData] = await Promise.all([
+    const [session, canonicalProjects] = await Promise.all([
       request("/api/v1/auth/me").catch((error) => ({ user: null, error })),
       mediaRequest("/api/v1/projects").catch(() => ({ projects: [] })),
-      mediaRequest("/api/v1/media").catch(() => ({ media: [] })),
-      mediaRequest("/api/v1/jobs").catch(() => ({ jobs: [] })),
-      mediaRequest("/api/v1/assistant/threads").catch(() => ({ threads: [] })),
-      mediaRequest("/api/v1/notifications").catch(() => ({ notifications: [], unreadCount: 0 })),
     ]);
     const sessionAuthFailed = session.error?.status === 401;
     state.session = session.user || (sessionAuthFailed ? null : state.session);
     state.projects = [];
     state.canonicalProjects = canonicalProjects.projects || [];
-    hydrateCanonicalMedia(canonicalMedia.media || []);
-    state.jobs = canonicalJobs.jobs || [];
-    state.assistantThreads = assistantThreads.threads || [];
-    state.notifications = notificationData.notifications || [];
-    state.unreadNotifications = Number(notificationData.unreadCount || 0);
     if (!state.session && requestedProjectId && !sessionAuthFailed) {
       flash("登录状态暂时无法确认，请稍后重试。", "warning");
       return;
@@ -562,13 +553,31 @@
     const project = activeProject();
     if (project && !state.projectId) state.projectId = project.id;
     if (state.session && project?.id) mediaRequest("/api/v1/workspace/opened", { method: "POST", body: JSON.stringify({ projectId: project.id }) }).catch(() => {});
-    const thread = state.assistantThreads.find((item) => item.id === state.assistantThreadId && item.projectId === project?.id)
-      || state.assistantThreads.find((item) => item.projectId === project?.id);
+    if (state.session) void loadSecondaryWorkspaceState(project?.id || "");
+  }
+
+  async function loadSecondaryWorkspaceState(projectId) {
+    const [canonicalMedia, canonicalJobs, assistantThreads, notificationData] = await Promise.all([
+      mediaRequest("/api/v1/media").catch(() => ({ media: [] })),
+      mediaRequest("/api/v1/jobs").catch(() => ({ jobs: [] })),
+      mediaRequest("/api/v1/assistant/threads").catch(() => ({ threads: [] })),
+      mediaRequest("/api/v1/notifications").catch(() => ({ notifications: [], unreadCount: 0 })),
+    ]);
+    hydrateCanonicalMedia(canonicalMedia.media || []);
+    state.jobs = canonicalJobs.jobs || [];
+    state.assistantThreads = assistantThreads.threads || [];
+    state.notifications = notificationData.notifications || [];
+    state.unreadNotifications = Number(notificationData.unreadCount || 0);
+    render();
+    scheduleTaskRefresh();
+    const thread = state.assistantThreads.find((item) => item.id === state.assistantThreadId && item.projectId === projectId)
+      || state.assistantThreads.find((item) => item.projectId === projectId);
     if (thread) {
       state.assistantThreadId = thread.id;
       const detail = await mediaRequest(`/api/v1/assistant/threads/${thread.id}/messages`).catch(() => ({ thread: { messages: [] } }));
       state.chat = detail.thread?.messages || [];
     } else state.chat = [];
+    render();
   }
 
   function currentFirstFrameDraftPayload() {
@@ -1129,6 +1138,11 @@
   }
   function render() {
     if (!root) return;
+    const accountLabel = document.querySelector("[data-v206-account-label]");
+    if (accountLabel) {
+      const accountName = String(state.session?.name || "").trim();
+      accountLabel.textContent = state.session ? (accountName && !accountName.includes("童装影厂") ? accountName : "账户") : "去登录";
+    }
     state.mediaObserver?.disconnect();
     state.mediaObserver = null;
     if (state.projectLoading) {
@@ -1922,7 +1936,7 @@
     }
     if (action === "confirm-assistant-proposal") { confirmAssistantProposalAction(button.dataset.proposalAction); return; }
     if (action === "choose-assistant-conflict") { chooseAssistantConflict(button.dataset.proposalId, button.dataset.conflictChoice); return; }
-    if (action === "account") { window.location.assign(state.session ? "/billing" : "/access"); }
+    if (action === "account") { window.location.assign(state.session ? "/billing" : "/login"); }
   }
   function closestEventTarget(event, selector) {
     return event.target instanceof Element ? event.target.closest(selector) : null;

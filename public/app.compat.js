@@ -6820,6 +6820,10 @@ window.addEventListener("resize", () => fitMaterialPreviewImage({ resetTransform
 async function bootApp() {
   if (window.location.pathname === "/") window.history.replaceState({}, "", "/templates");
   const bootPath = normalizePath();
+  if (bootPath === "/workspace") {
+    render();
+    return;
+  }
   const peerPaths = new Set(["/templates", "/workspace", "/pricing", "/billing"]);
   // Peer routes share one authenticated shell. Load session state before first
   // paint so route changes never briefly downgrade nav to a logged-out header.

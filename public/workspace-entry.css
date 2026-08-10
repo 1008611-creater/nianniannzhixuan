@@ -1,0 +1,90 @@
+:root {
+  color-scheme: light;
+  background: #e8f0e6;
+  font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { min-width: 320px; color: #1d3428; background: #e8f0e6; }
+button, input, textarea, select { font-family: inherit; }
+button { cursor: pointer; }
+a:focus-visible, button:focus-visible { outline: 2px solid #b08d39; outline-offset: 3px; }
+
+#app { position: relative; min-height: 100%; isolation: isolate; }
+#app::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  background: #e8f0e6 url("/assets/frosted-dress-art-bg.webp") center top / cover no-repeat;
+  opacity: .78;
+  pointer-events: none;
+}
+#app > header, #app > main { position: relative; z-index: 1; }
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 10px clamp(18px, 4vw, 64px);
+  border-bottom: 1px solid rgba(40, 76, 56, .2);
+  background: rgba(247, 248, 243, .86);
+  box-shadow: 0 12px 34px rgba(25, 54, 37, .06);
+  backdrop-filter: blur(7px) saturate(1.16);
+}
+.brand { justify-self: start; display: inline-flex; align-items: center; text-decoration: none; }
+.brand-mark { width: 36px; height: 36px; display: block; object-fit: contain; }
+.top-nav {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid rgba(40, 76, 56, .2);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, .64);
+}
+.top-nav a {
+  min-width: 74px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 14px;
+  color: #65776c;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 750;
+}
+.top-nav a:hover { color: #315b45; background: rgba(237, 244, 235, .7); }
+.top-nav a.active { color: #fffdf8; background: #15231f; }
+.header-actions { justify-self: end; display: flex; align-items: center; }
+.ghost-button {
+  min-height: 38px;
+  border: 1px solid rgba(40, 76, 56, .3);
+  border-radius: 4px;
+  padding: 0 15px;
+  color: #15231f;
+  background: rgba(255, 255, 252, .44);
+  font-weight: 800;
+}
+.ghost-button:hover { border-color: #315b45; color: #315b45; }
+
+@media (max-width: 760px) {
+  .site-header { min-height: 62px; grid-template-columns: auto 1fr auto; gap: 10px; padding: 8px 12px; }
+  .brand-mark { width: 32px; height: 32px; }
+  .top-nav { justify-self: stretch; overflow-x: auto; }
+  .top-nav a { min-width: 58px; min-height: 32px; padding: 0 9px; font-size: 12px; }
+  .ghost-button { min-height: 34px; padding: 0 10px; font-size: 12px; }
+}
+
+@media (max-width: 520px) {
+  .top-nav a:nth-child(3), .top-nav a:nth-child(4) { display: none; }
+}

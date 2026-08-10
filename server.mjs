@@ -34,6 +34,12 @@ async function serveIndex(response) {
   response.end(withUploadHash);
 }
 
+async function serveWorkspace(response) {
+  const html = readFileSync(join(publicDir, "workspace.html"), "utf8");
+  response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
+  response.end(html);
+}
+
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
   const upstream = await fetch(url, {
@@ -65,6 +71,10 @@ createServer(async (request, response) => {
     }
     if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) {
       await serveIndex(response);
+      return;
+    }
+    if (request.method === "GET" && (pathname === "/workspace" || pathname === "/workspace/")) {
+      await serveWorkspace(response);
       return;
     }
     const file = localFile(pathname);
