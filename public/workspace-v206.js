@@ -736,7 +736,7 @@
       : unavailable
         ? `<div class="v206-stage-placeholder v206-stage-media-error" role="status"><strong>${stage.mode === "video" ? "视频暂时无法播放" : "素材暂时不可用"}</strong>${stage.mode === "video" ? "请更换参考视频后继续制作。" : "请在素材库中重新选择一张图片后继续制作。"}</div>`
       : stage.mode === "image"
-        ? `<img class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览">`
+        ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览"></div>`
         : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.url)}" ${stage.poster ? `poster="${esc(stage.poster)}"` : ""} controls playsinline preload="metadata"></video>`;
     const project = activeProject();
     const projectTitle = project?.title || "当前项目";
@@ -1078,17 +1078,25 @@
     const stage = root.querySelector(".v206-stage-media");
     if (!media || !stage) return;
     const fit = () => fitStageMedia(media, stage);
+    const markUnavailable = () => {
+      const mediaId = media.getAttribute("data-v206-media-id");
+      if (!mediaId || state.unavailableMedia?.has(mediaId)) return;
+      state.unavailableMedia ||= new Set();
+      state.unavailableMedia.add(mediaId);
+      render();
+      refreshPrivateMedia(mediaId);
+    };
     if (media.tagName === "VIDEO") {
       media.addEventListener("loadedmetadata", fit, { once: true });
-      media.addEventListener("error", () => {
-        const mediaId = media.getAttribute("data-v206-media-id");
-        if (!mediaId || state.unavailableMedia?.has(mediaId)) return;
-        state.unavailableMedia ||= new Set();
-        state.unavailableMedia.add(mediaId);
-        render();
-      }, { once: true });
+      media.addEventListener("error", markUnavailable, { once: true });
     }
-    else media.addEventListener("load", fit, { once: true });
+    else {
+      media.addEventListener("load", () => {
+        stage.classList.add("is-ready");
+        fit();
+      }, { once: true });
+      media.addEventListener("error", markUnavailable, { once: true });
+    }
     if (media.tagName === "VIDEO" && state.target === "motion") {
       const rememberTime = () => { state.motionReferenceTime = Number.isFinite(media.currentTime) ? media.currentTime : null; };
       media.addEventListener("seeked", rememberTime);
@@ -1377,7 +1385,9 @@
       if (!cosMultipart && (!contentResponse?.ok || contentResult.upload?.complete === false)) throw new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
       const completed = await mediaRequest(`/api/v1/media/${intent.media.id}/complete`, { method: "POST", body: JSON.stringify({}) });
       const library = await mediaRequest("/api/v1/media");
-      const media = (library.media || []).find((item) => item.id === completed.media?.id || item.id === intent.media.id);
+      const media = completed.media?.url
+        ? completed.media
+        : (library.media || []).find((item) => item.id === completed.media?.id || item.id === intent.media.id);
       if (!media?.url) throw new Error("MEDIA_UPLOAD_COMPLETED_BUT_UNAVAILABLE");
       const asset = { id: media.id, label: media.label || file.name.replace(/\.[^.]+$/, "") || "已上传素材", kind: media.kind === "VIDEO" ? "video" : "image", url: media.url, preview: thumbnailFor(media.url) };
       asset.mediaId = media.id;
@@ -1845,15 +1855,7 @@
     const media = event.target instanceof Element ? event.target.closest("[data-v206-media-id]") : null;
     if (media?.dataset.v206MediaId) {
       const mediaId = media.dataset.v206MediaId;
-      fetch(media.currentSrc || media.src || "", { method: "HEAD", credentials: "same-origin" }).then((response) => {
-        if (response.status === 404) {
-          state.unavailableMedia ||= new Set();
-          state.unavailableMedia.add(mediaId);
-          render();
-          return;
-        }
-        refreshPrivateMedia(mediaId);
-      }).catch(() => refreshPrivateMedia(mediaId));
+      refreshPrivateMedia(mediaId);
     }
   }, true);
   document.addEventListener("input", (event) => {

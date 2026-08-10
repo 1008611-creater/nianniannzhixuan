@@ -1426,6 +1426,7 @@ async function uploadFileToServer(file, nodeId, options = {}) {
 
 async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材") {
   if (!file) throw new Error("MEDIA_UPLOAD_EMPTY");
+  file = normalizeTemplateVideoFile(file);
   const kind = /^video\//i.test(file.type || "") ? "VIDEO" : "IMAGE";
   const sha256 = await templateVideoSha256(file);
   const intent = await fetchJson("/api/v1/media/upload-intents", {
@@ -1485,7 +1486,9 @@ async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材"
   }
   const completed = await fetchJson(`/api/v1/media/${intent.media.id}/complete`, { method: "POST", body: "{}" });
   const library = await fetchJson(`/api/v1/media?kind=${encodeURIComponent(kind)}`);
-  const media = (library.media || []).find((item) => item.id === completed.media?.id || item.id === intent.media.id);
+  const media = completed.media?.url
+    ? completed.media
+    : (library.media || []).find((item) => item.id === completed.media?.id || item.id === intent.media.id);
   if (!media?.url) throw new Error("MEDIA_UPLOAD_COMPLETED_BUT_UNAVAILABLE");
   return {
     fileName: media.originalName || file.name || label,
@@ -1977,7 +1980,7 @@ function publicAssetUrl(url) {
   if (!url) return "";
   if (/^(https?:|blob:|data:)/i.test(url)) return url;
   const origin = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
-    ? "https://tzdh.lsb0713.online"
+    ? "https://dh.cauai.fun"
     : window.location.origin;
   return `${origin}${url.startsWith("/") ? "" : "/"}${url}`;
 }
@@ -2369,6 +2372,9 @@ function normalizeRequestError(error) {
   }
   if (/timeout|timed out|ETIMEDOUT/i.test(message)) {
     return "请求超时了，任务可能还在处理中，请打开右侧任务栏查看或稍后重试。";
+  }
+  if (/SIGNED_UPLOAD_FAILED/.test(message)) {
+    return "视频已连接到上传存储，但分片传输失败。请检查网络后重试。";
   }
   return message || "请求失败，请稍后重试。";
 }
@@ -3528,7 +3534,7 @@ async function uploadTemplateVideoMaterial(input) {
     navigate("/login");
     return;
   }
-  if (file.type !== "video/mp4") {
+  if (!isTemplateVideoFile(file)) {
     state.workspaceMessage = "目前仅支持 MP4 模板视频。";
     render();
     return;
@@ -7584,11 +7590,13 @@ async function templateVideoSha256(file) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function templateVideoCsrfHeaders(headers = {}) {
-  const result = new Headers(headers);
-  const match = document.cookie.match(/(?:^|;\s*)kidswear_csrf_v2=([^;]+)/);
-  if (match) result.set("x-csrf-token", decodeURIComponent(match[1]));
-  return result;
+function isTemplateVideoFile(file) {
+  return String(file?.type || "").toLowerCase() === "video/mp4" || /\.mp4$/i.test(String(file?.name || ""));
+}
+
+function normalizeTemplateVideoFile(file) {
+  if (!file || String(file.type || "").toLowerCase() === "video/mp4" || !/\.mp4$/i.test(String(file.name || ""))) return file;
+  return new File([file], file.name, { type: "video/mp4", lastModified: file.lastModified || Date.now() });
 }
 
 async function uploadTemplateVideoMultipart(file, upload) {
@@ -7598,8 +7606,22 @@ async function uploadTemplateVideoMultipart(file, upload) {
     const part = file.slice(offset, Math.min(offset + partSize, file.size));
     if (uploadedParts.get(partNumber) === part.size) continue;
     const authorization = await fetchJson(upload.partUrlEndpoint, { method: "POST", body: JSON.stringify({ partNumber }) });
-    const response = await fetch(authorization.upload.uploadUrl, { method: "PUT", headers: authorization.upload.requiredHeaders || {}, body: part, credentials: "omit" });
-    if (!response.ok) throw new Error("SIGNED_UPLOAD_FAILED");
+    let uploaded = false;
+    let lastStatus = "";
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await fetch(authorization.upload.uploadUrl, { method: "PUT", headers: authorization.upload.requiredHeaders || {}, body: part, credentials: "omit" });
+        if (response.ok) {
+          uploaded = true;
+          break;
+        }
+        lastStatus = `_${response.status}`;
+      } catch {
+        lastStatus = "";
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+    if (!uploaded) throw new Error(`SIGNED_UPLOAD_FAILED${lastStatus}`);
   }
   const completed = await fetchJson(upload.completeEndpoint, { method: "POST", body: "{}" });
   if (!completed.upload?.completed) throw new Error("MEDIA_MULTIPART_INCOMPLETE");
@@ -7648,7 +7670,7 @@ async function uploadPersonalTemplateVideo(input) {
     navigate("/login");
     return;
   }
-  if (file.type !== "video/mp4") {
+  if (!isTemplateVideoFile(file)) {
     state.templateVideoMessage = "目前仅支持 MP4 模板视频。";
     render();
     return;
@@ -7662,25 +7684,12 @@ async function uploadPersonalTemplateVideo(input) {
   state.templateVideoMessage = "正在上传并校验模板视频。";
   render();
   try {
-    const intent = await fetchJson("/api/v1/media/upload-intents", {
-      method: "POST",
-      body: JSON.stringify({ kind: "VIDEO", label: file.name.replace(/\.[^.]+$/, "") || "我的模板", originalName: file.name, mimeType: file.type, bytes: file.size, sha256: await templateVideoSha256(file) }),
-    });
-    if (intent.upload?.transport === "COS_MULTIPART") await uploadTemplateVideoMultipart(file, intent.upload);
-    else {
-      const response = await fetch(intent.upload.uploadUrl, {
-        method: "PUT",
-        headers: templateVideoCsrfHeaders({ ...(intent.upload.requiredHeaders || {}), "x-upload-content-length": String(file.size) }),
-        body: file,
-        credentials: "same-origin",
-      });
-      if (!response.ok) throw new Error("MEDIA_UPLOAD_FAILED");
-    }
-    await fetchJson(`/api/v1/media/${intent.media.id}/complete`, { method: "POST", body: "{}" });
+    const uploadFile = normalizeTemplateVideoFile(file);
+    await uploadTemplateMediaToPrivateStore(uploadFile, uploadFile.name || "我的模板");
     await loadPersonalTemplateVideos();
     state.templateVideoMessage = "模板视频已私有入库，可以在这里直接预览。";
-  } catch {
-    state.templateVideoMessage = "模板视频未完成上传或校验，请稍后重试。";
+  } catch (error) {
+    state.templateVideoMessage = `模板视频上传失败：${cleanUiStatusText(error.message || "请稍后重试。")}`;
   } finally {
     endPendingAction();
     render();
