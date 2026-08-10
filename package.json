@@ -1,0 +1,9 @@
+{
+  "name": "dh-cauai-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "download": "node scripts/download-site.mjs",
+    "start": "node server.mjs"
+  }
+}
