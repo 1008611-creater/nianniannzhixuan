@@ -7420,7 +7420,7 @@ function renderPersonalTemplateVideoCard(item, index) {
   return `
     <article class="showcase-video-card template-personal-video ${index === 0 ? "featured" : ""}" data-preview-state="idle" data-media-id="${escapeHtml(mediaId)}">
       <div class="template-video-preview">
-        <video data-src="${escapeHtml(item.url || "")}" ${poster ? `poster="${escapeHtml(poster)}"` : ""} muted loop playsinline preload="none" controls aria-label="${escapeHtml(item.label || "我的模板视频")}"></video>
+        <video data-src="${escapeHtml(item.url || "")}" ${poster ? `poster="${escapeHtml(poster)}"` : ""} muted loop playsinline preload="none" aria-label="${escapeHtml(item.label || "我的模板视频")}"></video>
         <button class="template-video-activate" type="button" data-action="activate-personal-template-preview" aria-label="播放${escapeHtml(item.label || "模板视频")}" title="播放预览"><span aria-hidden="true">&#9654;</span></button>
         <div class="template-video-failure" role="status" hidden>视频不可用 <button class="small-button" type="button" data-action="retry-personal-template-preview">重试</button></div>
       </div>
@@ -7435,7 +7435,7 @@ function markPersonalTemplateVideoPreview(video, status) {
   card.dataset.previewState = status;
   const failure = card.querySelector(".template-video-failure");
   const activate = card.querySelector('[data-action="activate-personal-template-preview"]');
-  if (activate) activate.hidden = status !== "idle";
+  if (activate) activate.hidden = status !== "idle" && status !== "poster";
   if (status === "failed") {
     if (failure) failure.hidden = false;
   } else {
@@ -7443,27 +7443,130 @@ function markPersonalTemplateVideoPreview(video, status) {
   }
 }
 
+function personalTemplatePosterTime(duration, index = 0) {
+  const candidates = [
+    Math.min(5, Math.max(0.2, duration * 0.12)),
+    Math.min(12, Math.max(0.4, duration * 0.3)),
+    Math.min(25, Math.max(0.6, duration * 0.55)),
+  ];
+  return Math.min(candidates[Math.min(index, candidates.length - 1)], Math.max(0, duration - 0.05));
+}
+
+function capturePersonalTemplatePoster(video) {
+  if (!video || video.seeking || video.dataset.previewIntent !== "poster" || video.videoWidth < 1 || video.videoHeight < 1) return;
+  try {
+    const maxWidth = 360;
+    const width = Math.min(maxWidth, video.videoWidth);
+    const height = Math.max(1, Math.round(width * video.videoHeight / video.videoWidth));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context?.drawImage(video, 0, 0, width, height);
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = 16;
+    sampleCanvas.height = 16;
+    const sampleContext = sampleCanvas.getContext("2d", { willReadFrequently: true });
+    sampleContext?.drawImage(video, 0, 0, 16, 16);
+    const pixels = sampleContext?.getImageData(0, 0, 16, 16).data || [];
+    let brightness = 0;
+    for (let index = 0; index < pixels.length; index += 4) brightness += (pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3;
+    brightness /= Math.max(1, pixels.length / 4);
+    const sampleIndex = Number(video.dataset.previewSampleIndex || 0);
+    if (brightness < 12 && sampleIndex < 2 && Number.isFinite(video.duration)) {
+      video.dataset.previewSampleIndex = String(sampleIndex + 1);
+      video.currentTime = personalTemplatePosterTime(video.duration, sampleIndex + 1);
+      return;
+    }
+    const poster = canvas.toDataURL("image/jpeg", 0.72);
+    if (poster.startsWith("data:image/jpeg")) {
+      video.poster = poster;
+      video.dataset.previewCaptured = "true";
+      video.removeAttribute("src");
+      video.preload = "none";
+      video.load();
+    }
+  } catch {
+    // Keep the decoded video frame when canvas export is unavailable.
+  }
+  video.dataset.previewIntent = "";
+  markPersonalTemplateVideoPreview(video, "poster");
+}
+
 function armPersonalTemplateVideoPreview(video) {
   if (!video || video.dataset.previewBound === "true") return;
   video.dataset.previewBound = "true";
   video.addEventListener("loadedmetadata", () => {
+    if (video.dataset.previewIntent === "poster") {
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) capturePersonalTemplatePoster(video);
+      else if (Number.isFinite(video.duration) && video.duration > 0) {
+        video.dataset.previewSampleIndex = "0";
+        video.currentTime = personalTemplatePosterTime(video.duration);
+      }
+      return;
+    }
     if (video.videoWidth > 0 && video.videoHeight > 0) markPersonalTemplateVideoPreview(video, "ready");
   });
-  video.addEventListener("canplay", () => markPersonalTemplateVideoPreview(video, "ready"));
+  video.addEventListener("loadeddata", () => {
+    if (video.dataset.previewIntent === "poster") capturePersonalTemplatePoster(video);
+    else markPersonalTemplateVideoPreview(video, "ready");
+  });
+  video.addEventListener("seeked", () => {
+    if (video.dataset.previewIntent === "poster") capturePersonalTemplatePoster(video);
+  });
+  video.addEventListener("canplay", () => {
+    if (video.dataset.previewIntent === "poster") capturePersonalTemplatePoster(video);
+    else if (video.controls) markPersonalTemplateVideoPreview(video, "ready");
+  });
   video.addEventListener("error", () => markPersonalTemplateVideoPreview(video, "failed"));
 }
 
+let personalTemplatePosterObserver;
+
 function setupPersonalTemplateVideoPreviews() {
-  document.querySelectorAll(".template-personal-video video").forEach(armPersonalTemplateVideoPreview);
+  const videos = [...document.querySelectorAll(".template-personal-video video")];
+  videos.forEach(armPersonalTemplateVideoPreview);
+  if (!("IntersectionObserver" in window)) {
+    if (videos[0]) loadPersonalTemplatePoster(videos[0]);
+    return;
+  }
+  if (!personalTemplatePosterObserver) {
+    personalTemplatePosterObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const video = entry.target.querySelector("video");
+        loadPersonalTemplatePoster(video);
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: "240px 0px" });
+  }
+  videos.forEach((video) => {
+    if (!video.poster && !video.getAttribute("src")) personalTemplatePosterObserver.observe(video.closest(".template-personal-video"));
+  });
+}
+
+function loadPersonalTemplatePoster(video) {
+  const source = String(video?.dataset?.src || "");
+  if (!video || !source || video.poster || video.getAttribute("src")) return;
+  video.dataset.previewIntent = "poster";
+  video.preload = "metadata";
+  video.src = source;
+  video.load();
 }
 
 function loadPersonalTemplatePreview(video, autoplay = false) {
   const source = String(video?.dataset?.src || "");
   if (!video || !source) return;
+  video.dataset.previewIntent = "play";
+  video.controls = true;
+  video.preload = "auto";
   markPersonalTemplateVideoPreview(video, "loading");
-  if (!video.getAttribute("src")) video.src = source;
-  video.load();
-  if (autoplay) video.play().catch(() => {});
+  if (!video.getAttribute("src")) {
+    video.src = source;
+    video.load();
+  }
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) markPersonalTemplateVideoPreview(video, "ready");
+  if (autoplay) video.play().then(() => markPersonalTemplateVideoPreview(video, "ready")).catch(() => {});
 }
 
 function activatePersonalTemplatePreview(trigger) {
