@@ -7,5 +7,8 @@ assert.match(workspace, /function privateMediaUrl\(media\)/);
 assert.match(workspace, /\/api\/v1\/media\/\$\{encodeURIComponent\(id\)\}\/content/);
 assert.match(workspace, /const mediaUrl = privateMediaUrl\(media\);/);
 assert.match(workspace, /input\.value = "";[\s\S]{0,80}upload\(target, file\);/);
+assert.match(workspace, /function bindMaterialVideoPreviews\(\)/);
+assert.match(workspace, /closest\("\[data-v206-media\]\[data-v206-media-id\]"\)/);
+assert.doesNotMatch(workspace, /closest\("\[data-v206-media-id\]"\)/);
 
 console.log("OK private media uses authenticated content URLs and retryable inputs");

@@ -752,7 +752,7 @@
     const mediaId = asset?.mediaId ? ` data-v206-media-id="${esc(asset.mediaId)}"` : "";
     if (asset?.kind === "video" || hasVideo(src)) {
       if (asset.preview) return `<img src="${esc(asset.preview)}"${mediaId} alt="${esc(alt)}">`;
-      return `<video src="${esc(src)}"${mediaId} aria-label="${esc(alt)}" muted playsinline preload="metadata"></video>`;
+      return `<i class="v206-video-card-fallback" aria-hidden="true">视频</i><video src="${esc(src)}"${mediaId} aria-label="${esc(alt)}" muted playsinline preload="metadata"></video>`;
     }
     return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}">`;
   }
@@ -1140,6 +1140,20 @@
       if (state.chat.length) chatHistory.scrollTop = chatHistory.scrollHeight;
     });
     bindStageMedia();
+    bindMaterialVideoPreviews();
+  }
+  function bindMaterialVideoPreviews() {
+    root.querySelectorAll(".v206-material-media video").forEach((video) => {
+      const holder = video.closest(".v206-material-media");
+      const ready = () => holder?.classList.add("is-video-ready");
+      video.addEventListener("loadeddata", ready, { once: true });
+      video.addEventListener("seeked", ready, { once: true });
+      video.addEventListener("loadedmetadata", () => {
+        if (Number.isFinite(video.duration) && video.duration > 0.2) video.currentTime = Math.min(0.1, video.duration / 2);
+        else ready();
+      }, { once: true });
+      video.addEventListener("error", () => holder?.classList.add("is-video-unavailable"), { once: true });
+    });
   }
   function bindStageMedia() {
     const media = root.querySelector("[data-v206-media]");
@@ -1945,7 +1959,7 @@
     if (switcher?.value && UUID_PATTERN.test(switcher.value)) window.location.assign(`/workspace?projectId=${encodeURIComponent(switcher.value)}`);
   });
   document.addEventListener("error", (event) => {
-    const media = event.target instanceof Element ? event.target.closest("[data-v206-media-id]") : null;
+    const media = event.target instanceof Element ? event.target.closest("[data-v206-media][data-v206-media-id]") : null;
     if (media?.dataset.v206MediaId) {
       const mediaId = media.dataset.v206MediaId;
       refreshPrivateMedia(mediaId);

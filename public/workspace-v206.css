@@ -374,6 +374,11 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-material:hover, .v206-template-card:hover, .v206-material.selected, .v206-template-card.active { border-color: var(--coral); }
 .v206-material .v206-material-media { position: relative; width: 100%; height: auto; aspect-ratio: 4 / 3; display: block; overflow: hidden; padding: 0; background: rgba(232, 240, 231, .34); color: var(--forest); }
 .v206-material-media img, .v206-material-media video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
+.v206-material-media video { opacity: 0; }
+.v206-material-media.is-video-ready video { opacity: 1; }
+.v206-video-card-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; font-style: normal; }
+.v206-material-media.is-video-ready .v206-video-card-fallback { display: none; }
+.v206-material-media.is-video-unavailable .v206-video-card-fallback::after { content: "暂时无预览"; margin-left: 4px; }
 .v206-material span { display: block; padding: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
 .v206-template-grid { grid-template-columns: repeat(2, 1fr); }
 .v206-template-card img { width: 100%; height: 150px; display: block; object-fit: cover; }
@@ -590,13 +595,21 @@ html:has(.v206-canonical-slot), body:has(.v206-canonical-slot) { height: 100%; m
   opacity: 1 !important;
 }
 
-.v206-material-media img,
-.v206-material-media video {
+.v206-material-media img {
   object-fit: contain !important;
   object-position: center !important;
   opacity: 1 !important;
   background: #f5f6f2 !important;
 }
+
+.v206-material-media video {
+  object-fit: contain !important;
+  object-position: center !important;
+  opacity: 0 !important;
+  background: #f5f6f2 !important;
+}
+
+.v206-material-media.is-video-ready video { opacity: 1 !important; }
 
 .v206-template-card img {
   aspect-ratio: 1 / 1 !important;
