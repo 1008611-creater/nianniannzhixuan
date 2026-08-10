@@ -6679,6 +6679,7 @@ focusAiAssistantPanel();
 if (action === "mention-chat-material") selectChatMaterialMention(actionTarget.dataset.material);
   if (action === "remove-chat-material-mention") removeChatMaterialMention(actionTarget.dataset.material);
   if (action === "play-showcase-video") playShowcaseVideo(actionTarget);
+  if (action === "activate-personal-template-preview") activatePersonalTemplatePreview(actionTarget);
   if (action === "retry-personal-template-preview") retryPersonalTemplatePreview(actionTarget);
   if (action === "activate-node-video") activateNodeVideo(actionTarget);
    if (action === "select-template") selectTemplate(actionTarget.dataset.template, normalizePath() === "/templates");
@@ -7417,36 +7418,28 @@ function renderPersonalTemplateVideoCard(item, index) {
   const useLabel = isPendingAction(useAction) ? "进入中..." : "做这个";
   const poster = item.posterUrl || item.previewUrl || item.thumbnailUrl || "";
   return `
-    <article class="showcase-video-card template-personal-video ${index === 0 ? "featured" : ""}" data-preview-state="pending" data-media-id="${escapeHtml(mediaId)}">
-      <video src="${escapeHtml(item.url || "")}" ${poster ? `poster="${escapeHtml(poster)}"` : ""} muted loop playsinline preload="metadata" controls aria-label="${escapeHtml(item.label || "我的模板视频")}"></video>
-      <div class="template-video-failure" role="status" hidden>视频不可用 <button class="small-button" type="button" data-action="retry-personal-template-preview">重试</button></div>
+    <article class="showcase-video-card template-personal-video ${index === 0 ? "featured" : ""}" data-preview-state="idle" data-media-id="${escapeHtml(mediaId)}">
+      <div class="template-video-preview">
+        <video data-src="${escapeHtml(item.url || "")}" ${poster ? `poster="${escapeHtml(poster)}"` : ""} muted loop playsinline preload="none" controls aria-label="${escapeHtml(item.label || "我的模板视频")}"></video>
+        <button class="template-video-activate" type="button" data-action="activate-personal-template-preview" aria-label="播放${escapeHtml(item.label || "模板视频")}" title="播放预览"><span aria-hidden="true">&#9654;</span></button>
+        <div class="template-video-failure" role="status" hidden>视频不可用 <button class="small-button" type="button" data-action="retry-personal-template-preview">重试</button></div>
+      </div>
       <div class="showcase-video-caption"><div><span>我的模板${duration > 0 ? ` · ${duration.toFixed(1)} 秒` : ""}</span><h2>${escapeHtml(item.label || item.originalName || "未命名模板")}</h2></div><div class="template-card-actions"><button class="generate-button compact" type="button" data-action="use-personal-template-video" data-media="${escapeHtml(mediaId)}" ${state.isBusy ? "disabled" : ""}${pendingAttrs(useAction)}${disabledReason({ condition: state.isBusy && !isPendingAction(useAction), text: "另一个模板操作正在进行" })}>${useLabel}</button><button class="small-button" type="button" data-action="delete-personal-template-video" data-media="${escapeHtml(mediaId)}" aria-label="删除${escapeHtml(item.label || item.originalName || "模板视频")}" ${state.isBusy ? "disabled" : ""}>删除</button></div></div>
     </article>
   `;
 }
 
-const personalTemplatePreviewTimers = new WeakMap();
-
 function markPersonalTemplateVideoPreview(video, status) {
   const card = video?.closest?.(".template-personal-video");
   if (!card) return;
-  const timer = personalTemplatePreviewTimers.get(video);
-  if (timer) window.clearTimeout(timer);
   card.dataset.previewState = status;
   const failure = card.querySelector(".template-video-failure");
-  const useButton = card.querySelector('[data-action="use-personal-template-video"]');
+  const activate = card.querySelector('[data-action="activate-personal-template-preview"]');
+  if (activate) activate.hidden = status !== "idle";
   if (status === "failed") {
     if (failure) failure.hidden = false;
-    if (useButton) {
-      useButton.disabled = true;
-      useButton.dataset.disabledReason = "这个模板视频暂时无法播放，请重试或重新上传";
-    }
   } else {
     if (failure) failure.hidden = true;
-    if (useButton) {
-      useButton.disabled = false;
-      delete useButton.dataset.disabledReason;
-    }
   }
 }
 
@@ -7458,30 +7451,33 @@ function armPersonalTemplateVideoPreview(video) {
   });
   video.addEventListener("canplay", () => markPersonalTemplateVideoPreview(video, "ready"));
   video.addEventListener("error", () => markPersonalTemplateVideoPreview(video, "failed"));
-  const timer = window.setTimeout(() => {
-    if (video.readyState < HTMLMediaElement.HAVE_METADATA || video.videoWidth < 1 || video.videoHeight < 1) {
-      markPersonalTemplateVideoPreview(video, "failed");
-    }
-  }, 12000);
-  personalTemplatePreviewTimers.set(video, timer);
 }
 
 function setupPersonalTemplateVideoPreviews() {
   document.querySelectorAll(".template-personal-video video").forEach(armPersonalTemplateVideoPreview);
 }
 
+function loadPersonalTemplatePreview(video, autoplay = false) {
+  const source = String(video?.dataset?.src || "");
+  if (!video || !source) return;
+  markPersonalTemplateVideoPreview(video, "loading");
+  if (!video.getAttribute("src")) video.src = source;
+  video.load();
+  if (autoplay) video.play().catch(() => {});
+}
+
+function activatePersonalTemplatePreview(trigger) {
+  const video = trigger?.closest?.(".template-personal-video")?.querySelector?.("video");
+  loadPersonalTemplatePreview(video, true);
+}
+
 function retryPersonalTemplatePreview(trigger) {
   const card = trigger?.closest?.(".template-personal-video");
   const video = card?.querySelector?.("video");
   if (!video) return;
-  markPersonalTemplateVideoPreview(video, "pending");
+  video.removeAttribute("src");
   video.load();
-  const timer = window.setTimeout(() => {
-    if (video.readyState < HTMLMediaElement.HAVE_METADATA || video.videoWidth < 1 || video.videoHeight < 1) {
-      markPersonalTemplateVideoPreview(video, "failed");
-    }
-  }, 12000);
-  personalTemplatePreviewTimers.set(video, timer);
+  loadPersonalTemplatePreview(video, true);
 }
 
 function safeAccountDisplayName(user) {

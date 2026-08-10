@@ -1,11 +1,12 @@
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
-import { proxyHeaders } from "./proxy-headers.mjs";
+import { proxyHeaders, proxyResponseHeaders } from "./proxy-headers.mjs";
 
 const port = Number(process.env.PORT || 18890);
 const remoteOrigin = process.env.REMOTE_ORIGIN || "https://dh.cauai.fun";
 const csrfOrigin = process.env.CSRF_ORIGIN || "http://127.0.0.1:18890";
+const mediaProxyDebug = process.env.MEDIA_PROXY_DEBUG === "1";
 const publicDir = resolve("public");
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const mimeTypes = {
@@ -26,7 +27,8 @@ async function serveIndex(response) {
   const index = join(publicDir, "index.html");
   const html = readFileSync(index, "utf8");
   const currentAssets = html
-    .replaceAll("/app.compat.js?v=20260802-unified-web-53", "/app.compat.js?v=20260811-workspace-stable-02")
+    .replaceAll("/app.compat.js?v=20260802-unified-web-53", "/app.compat.js?v=20260811-media-delivery-03")
+    .replaceAll("/front-v208-product-system.css?v=20260802-unified-web-48", "/front-v208-product-system.css?v=20260811-media-delivery-03")
     .replaceAll("/workspace-v206.js?v=20260802-unified-web-48", "/workspace-v206.js?v=20260811-workspace-stable-02")
     .replaceAll("/workspace-v206.css?v=20260802-unified-web-48", "/workspace-v206.css?v=20260811-workspace-stable-02");
   const withUploadHash = currentAssets.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
@@ -63,6 +65,7 @@ async function logProxyResult(request, url, upstream) {
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
   const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin);
+  const startedAt = Date.now();
   const upstream = await fetch(url, {
     method: request.method,
     headers,
@@ -70,10 +73,11 @@ async function proxy(request, response) {
     duplex: "half",
     redirect: "manual",
   });
+  if (mediaProxyDebug && /\/api\/v1\/media\/[0-9a-f-]{36}\/content$/i.test(url.pathname)) {
+    console.log(`[media] range=${request.headers.range || "-"} status=${upstream.status} ttfbMs=${Date.now() - startedAt} length=${upstream.headers.get("content-length") || "-"} contentRange=${upstream.headers.get("content-range") || "-"} acceptRanges=${upstream.headers.get("accept-ranges") || "-"}`);
+  }
   await logProxyResult(request, url, upstream);
-  const upstreamHeaders = new Headers(upstream.headers);
-  upstreamHeaders.delete("content-encoding");
-  upstreamHeaders.delete("content-length");
+  const upstreamHeaders = proxyResponseHeaders(upstream.headers);
   const setCookie = upstreamHeaders.get("set-cookie");
   if (setCookie) upstreamHeaders.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
   response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));

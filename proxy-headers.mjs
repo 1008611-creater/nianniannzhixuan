@@ -26,3 +26,14 @@ export function proxyHeaders(headers, upstreamOrigin, csrfOrigin = upstreamOrigi
   }
   return result;
 }
+
+export function proxyResponseHeaders(headers) {
+  const result = new Headers(headers);
+  result.delete("connection");
+  result.delete("transfer-encoding");
+  if (result.has("content-encoding")) {
+    result.delete("content-encoding");
+    result.delete("content-length");
+  }
+  return result;
+}

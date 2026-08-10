@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { proxyHeaders } from "../proxy-headers.mjs";
+import { proxyHeaders, proxyResponseHeaders } from "../proxy-headers.mjs";
 
 const rewritten = proxyHeaders(new Headers({
   host: "127.0.0.1:18893",
@@ -19,4 +19,20 @@ const untrusted = proxyHeaders(new Headers({ origin: "https://attacker.example",
 assert.equal(untrusted.get("origin"), "https://attacker.example");
 assert.equal(untrusted.get("referer"), "https://attacker.example/form");
 
-console.log("OK local proxy rewrites trusted CSRF origins only");
+const rangeResponse = proxyResponseHeaders(new Headers({
+  "accept-ranges": "bytes",
+  "content-length": "1024",
+  "content-range": "bytes 0-1023/4096",
+  "content-type": "video/mp4",
+  "transfer-encoding": "chunked",
+}));
+assert.equal(rangeResponse.get("content-length"), "1024");
+assert.equal(rangeResponse.get("content-range"), "bytes 0-1023/4096");
+assert.equal(rangeResponse.get("accept-ranges"), "bytes");
+assert.equal(rangeResponse.has("transfer-encoding"), false);
+
+const compressedResponse = proxyResponseHeaders(new Headers({ "content-encoding": "gzip", "content-length": "2048" }));
+assert.equal(compressedResponse.has("content-encoding"), false);
+assert.equal(compressedResponse.has("content-length"), false);
+
+console.log("OK local proxy preserves media ranges and rewrites trusted CSRF origins only");
