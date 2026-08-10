@@ -366,6 +366,9 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-asset-target span { color: var(--muted); font-size: 12px; }
 .v206-upload-zone { display: block; margin-top: 17px; border: 1px dashed rgba(40, 76, 56, .48); padding: 22px; background: rgba(232, 241, 231, .3); color: var(--forest); cursor: pointer; text-align: center; }
 .v206-upload-zone input { display: none; }
+.v206-source-status { margin: 9px 0 0; color: var(--forest); font-size: 12px; font-weight: 700; }
+.v206-sheet[aria-busy="true"] .v206-upload-zone { cursor: wait; opacity: .68; }
+.v206-sheet[aria-busy="true"] .v206-material { pointer-events: none; opacity: .62; }
 .v206-library-nav { display: flex; gap: 16px; margin: 20px 0 12px; border-bottom: 1px solid var(--line); }
 .v206-library-nav button { padding: 0 0 9px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .v206-library-nav button.active { border-bottom: 2px solid var(--coral); color: var(--ink); }

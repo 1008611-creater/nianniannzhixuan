@@ -29,7 +29,11 @@ function proxyHeaders(headers) {
 async function serveIndex(response) {
   const index = join(publicDir, "index.html");
   const html = readFileSync(index, "utf8");
-  const withUploadHash = html.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
+  const currentAssets = html
+    .replaceAll("/app.compat.js?v=20260802-unified-web-53", "/app.compat.js?v=20260811-workspace-stable-02")
+    .replaceAll("/workspace-v206.js?v=20260802-unified-web-48", "/workspace-v206.js?v=20260811-workspace-stable-02")
+    .replaceAll("/workspace-v206.css?v=20260802-unified-web-48", "/workspace-v206.css?v=20260811-workspace-stable-02");
+  const withUploadHash = currentAssets.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
   response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
   response.end(withUploadHash);
 }

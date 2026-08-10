@@ -5,6 +5,6 @@
   "scripts": {
     "download": "node scripts/download-site.mjs",
     "start": "node server.mjs",
-    "verify": "node --check server.mjs && node --check scripts/download-site.mjs && node --check scripts/verify.mjs && node --check scripts/test-media-upload-hash.mjs && node --check scripts/test-workspace-state-ownership.mjs && node --check scripts/test-private-media-access.mjs && node -e \"new (require('node:vm').Script)(require('node:fs').readFileSync('public/app.compat.js','utf8'))\" && node --check public/workspace-v206.js && node scripts/test-media-upload-hash.mjs && node scripts/test-workspace-state-ownership.mjs && node scripts/test-private-media-access.mjs && node scripts/verify.mjs"
+    "verify": "node --check server.mjs && node --check scripts/download-site.mjs && node --check scripts/verify.mjs && node --check scripts/test-media-upload-hash.mjs && node --check scripts/test-workspace-state-ownership.mjs && node --check scripts/test-private-media-access.mjs && node --check scripts/test-workspace-source-stability.mjs && node -e \"new (require('node:vm').Script)(require('node:fs').readFileSync('public/app.compat.js','utf8'))\" && node --check public/workspace-v206.js && node scripts/test-media-upload-hash.mjs && node scripts/test-workspace-state-ownership.mjs && node scripts/test-private-media-access.mjs && node scripts/test-workspace-source-stability.mjs && node scripts/verify.mjs"
   }
 }

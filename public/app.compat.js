@@ -2150,6 +2150,7 @@ function renderTurnstileWidgets() {
 }
 
 function renderAppHtml(path, html) {
+  if (path === "/workspace" && app.querySelector("#v206-app") && window.NianNianWorkspaceV206) return;
   const peerPaths = new Set(["/templates", "/workspace", "/pricing", "/billing"]);
   const currentHeader = app.querySelector(":scope > .site-header");
   const currentMain = app.querySelector(":scope > main");
@@ -2438,6 +2439,8 @@ function navigate(path) {
       state.lastWorkspaceProjectId = projectId;
       localStorage.setItem("lastWorkspaceProjectId", projectId);
     }
+    window.location.assign(`${nextPath}${target.search || ""}`);
+    return;
   }
   window.history.pushState({}, "", `${nextPath}${target.search || ""}`);
   render();
@@ -4712,6 +4715,10 @@ function currentPendingTask() {
 
 function startTaskFeedbackTicker() {
   window.clearInterval(taskFeedbackTimer);
+  if (normalizePath() === "/workspace") {
+    state.taskFeedbackModal = null;
+    return;
+  }
   taskFeedbackTimer = window.setInterval(() => {
     if (!state.taskFeedbackModal) {
       window.clearInterval(taskFeedbackTimer);

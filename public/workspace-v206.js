@@ -501,17 +501,10 @@
     if (Date.now() - lastRefresh < 30_000) return;
     mediaRefreshAt.set(mediaId, Date.now());
     try {
-      const [projects, media, jobs] = await Promise.all([
-        mediaRequest("/api/v1/projects"),
-        mediaRequest("/api/v1/media"),
-        mediaRequest("/api/v1/jobs"),
-      ]);
-      state.canonicalProjects = projects.projects || [];
+      const media = await mediaRequest("/api/v1/media");
       hydrateCanonicalMedia(media.media || []);
-      state.jobs = jobs.jobs || [];
-      hydrateCanonicalProject(canonicalProject());
       state.unavailableMedia?.delete(mediaId);
-      render();
+      renderUnlessSourcesOpen();
     } catch {
       flash("私有素材地址刷新失败，请重新登录后再试。", "warning");
     }
@@ -568,7 +561,7 @@
     state.assistantThreads = assistantThreads.threads || [];
     state.notifications = notificationData.notifications || [];
     state.unreadNotifications = Number(notificationData.unreadCount || 0);
-    render();
+    renderUnlessSourcesOpen();
     scheduleTaskRefresh();
     const thread = state.assistantThreads.find((item) => item.id === state.assistantThreadId && item.projectId === projectId)
       || state.assistantThreads.find((item) => item.projectId === projectId);
@@ -577,7 +570,7 @@
       const detail = await mediaRequest(`/api/v1/assistant/threads/${thread.id}/messages`).catch(() => ({ thread: { messages: [] } }));
       state.chat = detail.thread?.messages || [];
     } else state.chat = [];
-    render();
+    if (state.view === "assistant-thread") render();
   }
 
   function currentFirstFrameDraftPayload() {
@@ -621,6 +614,7 @@
   async function reconcilePendingFirstFrameDraft({ poll = true, waitForMissing = false } = {}) {
     const run = ++firstFrameDraftRecoveryRun;
     const project = canonicalProject();
+    if (state.view === "sources") return { recovered: false, reason: "sources-open" };
     if (!state.session || !project?.id || !currentFirstFrameDraftPayload()) {
       state.pendingFirstFrame = null;
       state.firstFrameDraftAnalyzing = false;
@@ -629,24 +623,25 @@
     const snapshot = firstFrameRecoverySnapshot();
     const attempts = poll ? FIRST_FRAME_RECOVERY_ATTEMPTS : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      if (run !== firstFrameDraftRecoveryRun || snapshot !== firstFrameRecoverySnapshot()) return { recovered: false, reason: "superseded" };
+      if (run !== firstFrameDraftRecoveryRun || snapshot !== firstFrameRecoverySnapshot() || state.view === "sources") return { recovered: false, reason: "superseded" };
       try {
         const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/drafts`);
+        if (run !== firstFrameDraftRecoveryRun || state.view === "sources") return { recovered: false, reason: "superseded" };
         if (applyPendingFirstFrameDraft(result.draft)) {
-          render();
+          renderUnlessSourcesOpen();
           if (String(result.draft?.status || "").toLowerCase() === "ready") return { recovered: true, status: "ready" };
           if (attempt + 1 < attempts) await waitForFirstFrameDraftRecovery();
           continue;
         }
         if (waitForMissing && attempt + 1 < attempts) {
           state.firstFrameDraftAnalyzing = true;
-          render();
+          renderUnlessSourcesOpen();
           await waitForFirstFrameDraftRecovery();
           continue;
         }
         state.pendingFirstFrame = null;
         state.firstFrameDraftAnalyzing = false;
-        render();
+        renderUnlessSourcesOpen();
         return { recovered: false, reason: "missing" };
       } catch {
         if (attempt + 1 < attempts) await waitForFirstFrameDraftRecovery();
@@ -654,7 +649,7 @@
     }
     state.pendingFirstFrame = null;
     state.firstFrameDraftAnalyzing = false;
-    render();
+    renderUnlessSourcesOpen();
     return { recovered: false, reason: "timeout" };
   }
   function shouldReconcileFirstFrameDraft(error) {
@@ -703,7 +698,7 @@
     state.taskRefreshAt = Date.now();
     if (before !== taskStateFingerprint()) {
       state.taskRefreshAttempts = 0;
-      render();
+      renderUnlessSourcesOpen();
     } else state.taskRefreshAttempts = Math.min(state.taskRefreshAttempts + 1, 6);
     scheduleTaskRefresh();
   }
@@ -716,9 +711,12 @@
   function flash(text, kind = "") {
     state.toast = text;
     state.toastKind = kind;
-    render();
+    if (!syncSourceSheetToast()) render();
     window.clearTimeout(flash.timer);
-    flash.timer = window.setTimeout(() => { state.toast = ""; render(); }, 4800);
+    flash.timer = window.setTimeout(() => {
+      state.toast = "";
+      if (!syncSourceSheetToast()) render();
+    }, 4800);
   }
   const MIME_BY_EXTENSION = {
     ".jpg": "image/jpeg",
@@ -1136,6 +1134,60 @@
     const accountLabel = accountName && !accountName.includes("童装影厂") ? accountName : "账户";
     return `<header class="site-header"><a class="brand" href="/workspace" aria-label="念念 AI 工作台"><img class="brand-mark" src="/assets/niannian-ai-authority-gold.svg" alt="念念 AI"></a><nav class="top-nav" aria-label="主导航"><a href="/templates">选同款</a><a class="active" href="/workspace" aria-current="page">工作台</a><a href="/pricing">价格</a><a href="/billing">账单</a></nav><div class="header-actions"><button class="ghost-button" type="button" data-v206-action="account">${state.session ? esc(accountLabel) : "去登录"}</button></div></header>`;
   }
+  function sourceSheetMounted() {
+    return state.view === "sources" && Boolean(root?.querySelector('.v206-sheet[aria-label="素材库"]'));
+  }
+  function renderUnlessSourcesOpen() {
+    if (sourceSheetMounted()) return false;
+    render();
+    return true;
+  }
+  function syncSourceSheetToast() {
+    if (!sourceSheetMounted()) return false;
+    const workspace = root.querySelector(".v206-workspace");
+    let toast = root.querySelector(".v206-toast");
+    if (!state.toast) {
+      toast?.remove();
+      return true;
+    }
+    if (!toast) {
+      toast = document.createElement("div");
+      workspace?.appendChild(toast);
+    }
+    toast.className = `v206-toast ${state.toastKind || ""}`.trim();
+    toast.textContent = state.toast;
+    return true;
+  }
+  function syncSourceSheetBusy() {
+    if (!sourceSheetMounted()) return false;
+    const sheet = root.querySelector('.v206-sheet[aria-label="素材库"]');
+    const busy = ["upload", "assign"].includes(state.busy);
+    sheet.toggleAttribute("aria-busy", busy);
+    sheet.querySelectorAll('input[type="file"], [data-v206-action="assign"], [data-v206-action="library"]').forEach((control) => {
+      control.disabled = busy;
+    });
+    const status = sheet.querySelector("[data-v206-source-status]");
+    if (status) {
+      status.hidden = !busy;
+      status.textContent = state.busy === "upload" ? "素材上传中，请保持当前页面打开。" : state.busy === "assign" ? "正在保存到当前项目。" : "";
+    }
+    return true;
+  }
+  function openSources(target = state.target, library = state.library) {
+    if (slots[target]) setWorkflowStep(target);
+    state.library = library || "template";
+    state.view = "sources";
+    firstFrameDraftRecoveryRun += 1;
+    scheduleTaskRefresh();
+    render();
+  }
+  function closeCurrentView() {
+    const wasSources = state.view === "sources";
+    state.view = null;
+    render();
+    scheduleTaskRefresh();
+    if (wasSources) void reconcilePendingFirstFrameDraft({ poll: false });
+  }
   function render() {
     if (!root) return;
     const accountLabel = document.querySelector("[data-v206-account-label]");
@@ -1179,7 +1231,7 @@
       if (!mediaId || state.unavailableMedia?.has(mediaId)) return;
       state.unavailableMedia ||= new Set();
       state.unavailableMedia.add(mediaId);
-      render();
+      renderUnlessSourcesOpen();
       refreshPrivateMedia(mediaId);
     };
     if (media.tagName === "VIDEO") {
@@ -1245,7 +1297,7 @@
     const active = slots[state.target] || slots.person;
     const materials = state.library === "template" ? templateMaterials : state.materials;
     const compatible = materials.filter((item) => item.kind === active.type);
-    return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet wide" aria-label="素材库"><header class="v206-sheet-header"><div><h2>素材库</h2><p>正在替换：${esc(active.title)}，${esc(active.purpose)}</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭素材库">×</button></header><div class="v206-sheet-body"><div class="v206-asset-target"><b>${esc(active.title)}</b></div><label class="v206-upload-zone">上传${active.type === "video" ? "参考视频" : "图片素材"}<input type="file" data-v206-upload="${state.target}" accept="${active.type === "video" ? "video/mp4,.mp4" : "image/jpeg,image/png,image/webp,.jpg,.jpeg,.jfif,.png,.webp"}"></label><div class="v206-library-nav"><button type="button" class="${state.library === "template" ? "active" : ""}" data-v206-action="library" data-library="template">模板素材</button><button type="button" class="${state.library === "mine" ? "active" : ""}" data-v206-action="library" data-library="mine">我的素材</button></div><div class="v206-material-grid">${compatible.length ? compatible.map((item) => materialCard(item)).join("") : `<p class="v206-empty">这里还没有${active.type === "video" ? "视频" : "图片"}素材。上传后会保留在“我的素材”。</p>`}</div></div></aside>`;
+    return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet wide" aria-label="素材库"><header class="v206-sheet-header"><div><h2>素材库</h2><p>正在替换：${esc(active.title)}，${esc(active.purpose)}</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭素材库">×</button></header><div class="v206-sheet-body"><div class="v206-asset-target"><b>${esc(active.title)}</b></div><label class="v206-upload-zone">上传${active.type === "video" ? "参考视频" : "图片素材"}<input type="file" data-v206-upload="${state.target}" accept="${active.type === "video" ? "video/mp4,.mp4" : "image/jpeg,image/png,image/webp,.jpg,.jpeg,.jfif,.png,.webp"}"></label><p class="v206-source-status" data-v206-source-status hidden></p><div class="v206-library-nav"><button type="button" class="${state.library === "template" ? "active" : ""}" data-v206-action="library" data-library="template">模板素材</button><button type="button" class="${state.library === "mine" ? "active" : ""}" data-v206-action="library" data-library="mine">我的素材</button></div><div class="v206-material-grid">${compatible.length ? compatible.map((item) => materialCard(item)).join("") : `<p class="v206-empty">这里还没有${active.type === "video" ? "视频" : "图片"}素材。上传后会保留在“我的素材”。</p>`}</div></div></aside>`;
   }
   function materialCard(item) {
     const selected = item.mediaId ? assetFor(state.target)?.mediaId === item.mediaId : assetFor(state.target)?.url === item.url;
@@ -1332,7 +1384,7 @@
     if (!asset || asset.kind !== slots[target]?.type) return;
     const mutation = ++state.sourceMutation;
     state.busy = "assign";
-    render();
+    if (!syncSourceSheetBusy()) render();
     try {
       let durableAsset = asset;
       if (!durableAsset.mediaId && durableAsset.templateId && durableAsset.templateRole) {
@@ -1356,14 +1408,20 @@
       addMaterial(durableAsset);
       state.view = null;
       writeState();
+      state.busy = "";
       flash(["person", "outfit", "scene", "motion"].includes(target)
         ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
         : `${slots[target].title}已替换并保存。`);
     } catch (error) {
+      if (mutation !== state.sourceMutation) return;
+      state.busy = "";
+      syncSourceSheetBusy();
       flash(error.message || "素材没有保存到项目。", "warning");
     } finally {
-      state.busy = "";
-      render();
+      if (mutation === state.sourceMutation && state.busy === "assign") {
+        state.busy = "";
+        if (!syncSourceSheetBusy()) render();
+      }
     }
   }
   function uploadResumeKey(file, sha) {
@@ -1431,7 +1489,7 @@
     const byteLimit = kind === "VIDEO" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
     if (file.size > byteLimit) { flash(kind === "VIDEO" ? "视频不能超过 512 MB。" : "图片不能超过 25 MB。", "warning"); return; }
     state.busy = assistantReference ? "assistant-upload" : "upload";
-    render();
+    if (!syncSourceSheetBusy()) render();
     try {
       const fileSha = await sha256(file);
       const stored = readStoredMultipartUpload(file, fileSha);
@@ -1504,6 +1562,7 @@
       if (assistantReference) {
         state.assistantRefs = [...state.assistantRefs.filter((item) => item !== asset.id), asset.id].slice(-4);
         state.assistantMentionsOpen = true;
+        state.busy = "";
         flash("图片已加入念念引用；写一句修改要求即可发送。");
       } else {
         state.target = target;
@@ -1514,10 +1573,14 @@
       const transportFailure = code === "MEDIA_UPLOAD_FAILED" || code === "MEDIA_UPLOAD_CONTENT_LENGTH_MISMATCH";
       const busy = code === "MEDIA_UPLOAD_BUSY";
       const friendly = uploadErrorMessage(code);
+      state.busy = "";
+      syncSourceSheetBusy();
       flash(busy ? "当前上传任务较多，请稍后重新上传。" : (transportFailure ? "上传传输中断，请重新选择文件上传。本次未完成记录已清理。" : (friendly || code || "上传失败。")), "warning");
     } finally {
-      state.busy = "";
-      render();
+      if (state.busy === "upload" || state.busy === "assistant-upload") {
+        state.busy = "";
+        if (!syncSourceSheetBusy()) render();
+      }
     }
   }
   async function ensureProject() {
@@ -1553,7 +1616,7 @@
   async function makeFrame() {
     if (!requireLogin()) return;
     const gate = readiness();
-    if (!gate.canFrame) { state.view = "sources"; flash(gate.message, "warning"); return; }
+    if (!gate.canFrame) { openSources(gate.missing[0] || state.target, "mine"); flash(gate.message, "warning"); return; }
     state.busy = "frame";
     render();
     flash("正在分析人物、商品、背景和参考视频，准备首帧提示词。", "info");
@@ -1648,7 +1711,7 @@
   async function prepareVideo() {
     if (!requireLogin()) return;
     const gate = readiness();
-    if (!gate.canVideo) { state.view = "sources"; flash(gate.message, "warning"); return; }
+    if (!gate.canVideo) { openSources(gate.missing[0] || state.target, "mine"); flash(gate.message, "warning"); return; }
     state.busy = "video-quote";
     render();
     try {
@@ -1888,18 +1951,18 @@
   }
   function handleAction(button) {
     const action = button.dataset.v206Action;
-    if (action === "close") { state.view = null; render(); scheduleTaskRefresh(); return; }
+    if (action === "close") { closeCurrentView(); return; }
     if (action === "workflow-step") { setWorkflowStep(button.dataset.step); render(); return; }
     if (action === "workflow-next") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.min(index + 1, workflowSteps.length - 1)].id); render(); return; }
     if (action === "workflow-previous") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.max(index - 1, 0)].id); render(); return; }
     if (action === "workflow-skip") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.min(index + 1, workflowSteps.length - 1)].id); render(); return; }
     if (action === "source") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; setWorkflowStep(target); render(); return; }
-    if (action === "adjust-first-frame-material") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; setWorkflowStep(target); state.library = "mine"; state.view = "sources"; render(); return; }
+    if (action === "adjust-first-frame-material") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; openSources(target, "mine"); return; }
     if (action === "retry-first-frame-analysis") { state.pendingFirstFrame = null; state.firstFrameDraftAnalyzing = false; state.view = null; makeFrame(); return; }
     if (action === "toggle-assistant-mentions") { state.assistantMentionsOpen = !state.assistantMentionsOpen; render(); return; }
     if (action === "assistant-thread" || action === "sources" || action === "templates" || action === "tasks" || action === "settings") {
-      if (action === "sources" && slots[button.dataset.target]) setWorkflowStep(button.dataset.target);
-      state.view = action === "sources" ? "sources" : action;
+      if (action === "sources") { openSources(slots[button.dataset.target] ? button.dataset.target : state.target); return; }
+      state.view = action;
       render();
       return;
     }
@@ -1908,7 +1971,7 @@
     if (action === "choose-template") { chooseTemplate(button.dataset.template); return; }
     if (action === "make-frame") { makeFrame(); return; }
     if (action === "repair-first-frame") { repairFirstFrame(button.dataset.reviewId); return; }
-    if (action === "prepare-required-material") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; setWorkflowStep(target); state.library = "mine"; state.view = "sources"; render(); return; }
+    if (action === "prepare-required-material") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; openSources(target, "mine"); return; }
     if (action === "confirm-first-frame-inline") { confirmFirstFrame(); return; }
     if (action === "make-video") { prepareVideo(); return; }
     if (action === "confirm-video-inline") { makeVideo(state.videoMode); return; }
@@ -1996,7 +2059,7 @@
     if (form.dataset.v206Form === "rename-project") renameProject();
   });
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.view) { state.view = null; render(); scheduleTaskRefresh(); }
+    if (event.key === "Escape" && state.view) closeCurrentView();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") scheduleTaskRefresh();
