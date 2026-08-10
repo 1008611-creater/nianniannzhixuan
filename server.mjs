@@ -1,10 +1,13 @@
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
+import { proxyHeaders } from "./proxy-headers.mjs";
 
 const port = Number(process.env.PORT || 18890);
 const remoteOrigin = process.env.REMOTE_ORIGIN || "https://dh.cauai.fun";
+const csrfOrigin = process.env.CSRF_ORIGIN || "http://127.0.0.1:18890";
 const publicDir = resolve("public");
+const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const mimeTypes = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -17,13 +20,6 @@ function localFile(pathname) {
   const file = join(publicDir, safePath || "index.html");
   const withinPublic = relative(publicDir, file);
   return !isAbsolute(withinPublic) && !withinPublic.startsWith("../") && !withinPublic.startsWith("..\\") && withinPublic !== ".." ? file : null;
-}
-
-function proxyHeaders(headers) {
-  const result = new Headers(headers);
-  result.delete("host");
-  result.delete("connection");
-  return result;
 }
 
 async function serveIndex(response) {
@@ -44,21 +40,43 @@ async function serveWorkspace(response) {
   response.end(html);
 }
 
+async function logProxyResult(request, url, upstream) {
+  if (!mutatingMethods.has(request.method) || !url.pathname.startsWith("/api/")) return;
+
+  let code = "-";
+  const contentType = upstream.headers.get("content-type") || "";
+  if (!upstream.ok && contentType.includes("application/json")) {
+    try {
+      const payload = await upstream.clone().json();
+      code = payload?.error?.code
+        || (typeof payload?.error === "string" ? payload.error : "")
+        || payload?.code
+        || (payload?.ok === false ? "API_REJECTED" : "-");
+    } catch {
+      code = "INVALID_JSON";
+    }
+  }
+  const safeCode = String(code).replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 160);
+  console.log(`[proxy] ${request.method} ${url.pathname} -> ${upstream.status}${safeCode === "-" ? "" : ` ${safeCode}`}`);
+}
+
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin);
   const upstream = await fetch(url, {
     method: request.method,
-    headers: proxyHeaders(request.headers),
+    headers,
     body: ["GET", "HEAD"].includes(request.method) ? undefined : request,
     duplex: "half",
     redirect: "manual",
   });
-  const headers = new Headers(upstream.headers);
-  headers.delete("content-encoding");
-  headers.delete("content-length");
-  const setCookie = headers.get("set-cookie");
-  if (setCookie) headers.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
-  response.writeHead(upstream.status, Object.fromEntries(headers));
+  await logProxyResult(request, url, upstream);
+  const upstreamHeaders = new Headers(upstream.headers);
+  upstreamHeaders.delete("content-encoding");
+  upstreamHeaders.delete("content-length");
+  const setCookie = upstreamHeaders.get("set-cookie");
+  if (setCookie) upstreamHeaders.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
+  response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
   if (upstream.body) {
     for await (const chunk of upstream.body) response.write(chunk);
   }
