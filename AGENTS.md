@@ -17,7 +17,7 @@
 - Preserve same-origin authenticated API and private-media proxy behavior.
 - Preserve `Content-Length`, byte ranges, and soft-delete filtering across all media consumers.
 - Do not make private media public or cache session/token-authorized responses before authentication.
-- Keep the authority original for downloads; playback derivatives are a separate pending backend capability.
+- Keep the authority original for downloads; authenticated playback derivatives are implemented in the local proxy. A private-media CDN remains a separate pending capability.
 
 ## Collaboration And Delivery
 
