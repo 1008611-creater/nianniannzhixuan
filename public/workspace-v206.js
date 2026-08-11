@@ -240,7 +240,8 @@
   }
   function privateMediaUrl(media) {
     const id = String(media?.id || "");
-    if (String(media?.kind || "").toUpperCase() === "VIDEO" && UUID_PATTERN.test(id)) {
+    const mediaType = `${media?.kind || ""} ${media?.mimeType || ""} ${media?.mediaType || ""} ${media?.url || ""}`;
+    if (/(?:VIDEO|video\/|\.(?:mp4|mov|webm)(?:[?#]|$))/i.test(mediaType) && UUID_PATTERN.test(id)) {
       return `/api/v1/media/${encodeURIComponent(id)}/playback?v=${encodeURIComponent(id)}`;
     }
     return String(media?.url || "") || (UUID_PATTERN.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/content` : "");
