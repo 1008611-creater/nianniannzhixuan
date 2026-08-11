@@ -10,11 +10,19 @@ assert.match(legacy, /async function runTaskAutoSync\(\) \{[\s\S]{0,300}normaliz
 assert.match(legacy, /function startTaskAutoSync\(\) \{[\s\S]{0,200}normalizePath\(\) === "\/workspace"\) return;/);
 assert.match(workspace, /function invalidateDerivedOutputs\(\)/);
 assert.match(workspace, /function generationInputSignature\(kind\)/);
-assert.match(workspace, /if \(mutation !== state\.sourceMutation\) return;/);
+assert.match(workspace, /mutation !== state\.sourceMutation/);
 assert.match(workspace, /source\.signature !== generationInputSignature\(source\.kind\)/);
 assert.match(workspace, /state\.view === "sources" \|\| document\.visibilityState === "hidden"/);
 const refreshTaskState = workspace.match(/async function refreshTaskState\(\) \{[\s\S]*?\n  function requireLogin/);
 assert.ok(refreshTaskState, "refreshTaskState must exist");
 assert.doesNotMatch(refreshTaskState[0], /assistant\/threads\//);
+assert.match(refreshTaskState[0], /taskRefreshInFlight = true/);
+assert.match(refreshTaskState[0], /mutation !== state\.sourceMutation/);
+assert.match(refreshTaskState[0], /catch \{/);
+assert.match(refreshTaskState[0], /finally \{[\s\S]*?taskRefreshInFlight = false;[\s\S]*?scheduleTaskRefresh\(5_000\)/);
+
+assert.match(workspace, /function mediaIsActive\(media\)/);
+assert.match(workspace, /const activeMedia = \(Array\.isArray\(media\) \? media : \[\]\)\.filter\(mediaIsActive\)/);
+assert.match(workspace, /function syncProjectSwitcher\(\)/);
 
 console.log("OK workspace has one state owner and versioned derived outputs");

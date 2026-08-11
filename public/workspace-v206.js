@@ -10,6 +10,7 @@
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
   const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
   const MAX_VIDEO_BYTES = 512 * 1024 * 1024;
+  const API_REQUEST_TIMEOUT_MS = 30_000;
   const FIRST_FRAME_POST_TIMEOUT_MS = 45_000;
   const FIRST_FRAME_RECOVERY_ATTEMPTS = 6;
   const FIRST_FRAME_RECOVERY_DELAY_MS = 2_000;
@@ -129,7 +130,7 @@
     taskRefreshAttempts: 0,
     firstFrameDirection: "",
     projectNameDraft: "",
-    projectLoading: Boolean(requestedProjectId),
+    projectLoading: !previewMode,
     sourceMutation: 0,
     invalidatedDerivedByProject: stored.invalidatedDerivedByProject && typeof stored.invalidatedDerivedByProject === "object" ? stored.invalidatedDerivedByProject : {},
     generationSources: stored.generationSources && typeof stored.generationSources === "object" ? stored.generationSources : {},
@@ -160,6 +161,9 @@
     if (previewMode === "final") { state.workflowStep = "final"; state.target = "motion"; state.showFinalVideo = true; }
   }
   let taskRefreshTimer = 0;
+  let taskRefreshInFlight = false;
+  let taskRefreshRun = 0;
+  let secondaryWorkspaceRun = 0;
   let firstFrameDraftRecoveryTimer = 0;
   let firstFrameDraftRecoveryRun = 0;
   const mediaRefreshAt = new Map();
@@ -292,8 +296,12 @@
     if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
     return state.selected[id] || null;
   }
+  function mediaIsActive(media) {
+    const state = String(media?.deletionState || media?.status || "").toLowerCase();
+    return Boolean(media?.id) && !media?.deletedAt && !media?.archivedAt && !["deleted", "deleting", "archived", "purged"].includes(state);
+  }
   function assetFromMedia(media) {
-    if (!media?.id) return null;
+    if (!mediaIsActive(media)) return null;
     const kind = media.kind === "VIDEO" ? "video" : "image";
     const asset = toAsset(privateMediaUrl(media), kind, media.label || "私有素材", "", media.id);
     if (kind === "video") asset.preview = "";
@@ -319,9 +327,10 @@
     writeState();
   }
   function hydrateCanonicalMedia(media) {
-    state.canonicalMedia = media;
-    state.materials = media.map(assetFromMedia).filter(Boolean).slice(0, 60);
-    const byId = new Map(media.map((item) => [item.id, item]));
+    const activeMedia = (Array.isArray(media) ? media : []).filter(mediaIsActive);
+    state.canonicalMedia = activeMedia;
+    state.materials = activeMedia.map(assetFromMedia).filter(Boolean).slice(0, 60);
+    const byId = new Map(activeMedia.map((item) => [item.id, item]));
     Object.entries(state.selected).forEach(([slot, asset]) => {
       if (!asset?.mediaId) return;
       state.selected[slot] = assetFromMedia(byId.get(asset.mediaId));
@@ -448,7 +457,24 @@
     return { name: "make-frame", label: "生成商品首帧", note: readiness().message };
   }
   async function request(url, options = {}) {
-    const response = await fetch(url, { credentials: "same-origin", headers: { "Content-Type": "application/json", ...(options.headers || {}) }, ...options });
+    const timeoutMs = Number(options.timeoutMs || API_REQUEST_TIMEOUT_MS);
+    const fetchOptions = { ...options };
+    delete fetchOptions.timeoutMs;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const externalSignal = options.signal;
+    const abortExternal = () => controller.abort(externalSignal.reason);
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort(externalSignal.reason);
+      else externalSignal.addEventListener("abort", abortExternal, { once: true });
+    }
+    let response;
+    try {
+      response = await fetch(url, { credentials: "same-origin", headers: { "Content-Type": "application/json", ...(options.headers || {}) }, ...fetchOptions, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+      externalSignal?.removeEventListener("abort", abortExternal);
+    }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(payload.error || `请求失败：${response.status}`);
@@ -468,7 +494,24 @@
       headers.set("Content-Type", "application/json");
       headers.set("x-csrf-token", csrfToken());
     }
-    const response = await fetch(url, { ...options, headers, credentials: "same-origin" });
+    const timeoutMs = Number(options.timeoutMs || API_REQUEST_TIMEOUT_MS);
+    const fetchOptions = { ...options };
+    delete fetchOptions.timeoutMs;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const externalSignal = options.signal;
+    const abortExternal = () => controller.abort(externalSignal.reason);
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort(externalSignal.reason);
+      else externalSignal.addEventListener("abort", abortExternal, { once: true });
+    }
+    let response;
+    try {
+      response = await fetch(url, { ...fetchOptions, headers, credentials: "same-origin", signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+      externalSignal?.removeEventListener("abort", abortExternal);
+    }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `MEDIA_REQUEST_FAILED_${response.status}`);
     return payload;
@@ -476,7 +519,7 @@
   async function firstFrameDraftRequest(url, options = {}) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), FIRST_FRAME_POST_TIMEOUT_MS);
-    try { return await mediaRequest(url, { ...options, signal: controller.signal }); }
+    try { return await mediaRequest(url, { ...options, timeoutMs: FIRST_FRAME_POST_TIMEOUT_MS, signal: controller.signal }); }
     finally { window.clearTimeout(timeout); }
   }
   function firstFrameErrorMessage(error) {
@@ -543,6 +586,7 @@
     }
     else if (state.session && requestedProjectId) { window.location.replace("/workspace?notice=project-unavailable"); return; }
     else if (state.session && Object.values(state.selected).some((asset) => asset?.mediaId)) await ensureCanonicalProject();
+    state.projectLoading = false;
     const project = activeProject();
     if (project && !state.projectId) state.projectId = project.id;
     if (state.session && project?.id) mediaRequest("/api/v1/workspace/opened", { method: "POST", body: JSON.stringify({ projectId: project.id }) }).catch(() => {});
@@ -550,12 +594,14 @@
   }
 
   async function loadSecondaryWorkspaceState(projectId) {
+    const run = ++secondaryWorkspaceRun;
     const [canonicalMedia, canonicalJobs, assistantThreads, notificationData] = await Promise.all([
       mediaRequest("/api/v1/media").catch(() => ({ media: [] })),
       mediaRequest("/api/v1/jobs").catch(() => ({ jobs: [] })),
       mediaRequest("/api/v1/assistant/threads").catch(() => ({ threads: [] })),
       mediaRequest("/api/v1/notifications").catch(() => ({ notifications: [], unreadCount: 0 })),
     ]);
+    if (run !== secondaryWorkspaceRun || (projectId && projectId !== canonicalProject()?.id)) return;
     hydrateCanonicalMedia(canonicalMedia.media || []);
     state.jobs = canonicalJobs.jobs || [];
     state.assistantThreads = assistantThreads.threads || [];
@@ -672,7 +718,7 @@
   }
   function scheduleTaskRefresh(delay = 12000) {
     window.clearTimeout(taskRefreshTimer);
-    if (!state.session || state.view === "sources" || document.visibilityState === "hidden") return;
+    if (!state.session || state.view === "sources" || document.visibilityState === "hidden" || taskRefreshInFlight) return;
     const project = activeProject();
     const hasActiveImage = state.jobs.some((job) => jobBelongsToProject(job, project) && taskIsActive(job.status));
     const hasActiveVideo = taskIsActive(project?.production?.status);
@@ -683,24 +729,37 @@
   }
   async function refreshTaskState() {
     taskRefreshTimer = 0;
-    if (!state.session || state.view === "sources" || document.visibilityState === "hidden") return;
+    if (!state.session || state.view === "sources" || document.visibilityState === "hidden" || taskRefreshInFlight) return;
+    taskRefreshInFlight = true;
+    const run = ++taskRefreshRun;
+    const mutation = state.sourceMutation;
+    const projectId = canonicalProject()?.id || "";
     const before = taskStateFingerprint();
-    const [projects, media, jobs] = await Promise.all([
-      mediaRequest("/api/v1/projects"),
-      mediaRequest("/api/v1/media"),
-      mediaRequest("/api/v1/jobs"),
-    ]);
-    state.canonicalProjects = projects.projects || [];
-    hydrateCanonicalMedia(media.media || []);
-    state.jobs = jobs.jobs || [];
-    hydrateCanonicalProject(canonicalProject());
-    reconcileDerivedOutputs();
-    state.taskRefreshAt = Date.now();
-    if (before !== taskStateFingerprint()) {
-      state.taskRefreshAttempts = 0;
-      renderUnlessSourcesOpen();
-    } else state.taskRefreshAttempts = Math.min(state.taskRefreshAttempts + 1, 6);
-    scheduleTaskRefresh();
+    try {
+      const [projects, media, jobs] = await Promise.all([
+        mediaRequest("/api/v1/projects"),
+        mediaRequest("/api/v1/media"),
+        mediaRequest("/api/v1/jobs"),
+      ]);
+      if (run !== taskRefreshRun || mutation !== state.sourceMutation || projectId !== (canonicalProject()?.id || "") || state.view === "sources") return;
+      state.canonicalProjects = projects.projects || [];
+      hydrateCanonicalMedia(media.media || []);
+      state.jobs = jobs.jobs || [];
+      hydrateCanonicalProject(canonicalProject());
+      reconcileDerivedOutputs();
+      state.taskRefreshAt = Date.now();
+      if (before !== taskStateFingerprint()) {
+        state.taskRefreshAttempts = 0;
+        renderUnlessSourcesOpen();
+      } else state.taskRefreshAttempts = Math.min(state.taskRefreshAttempts + 1, 6);
+    } catch {
+      state.taskRefreshAttempts = Math.min(state.taskRefreshAttempts + 1, 6);
+    } finally {
+      if (run === taskRefreshRun) {
+        taskRefreshInFlight = false;
+        scheduleTaskRefresh(5_000);
+      }
+    }
   }
   function requireLogin() {
     if (state.session) return true;
@@ -1134,6 +1193,20 @@
     const accountLabel = accountName && !accountName.includes("童装影厂") ? accountName : "账户";
     return `<header class="site-header"><a class="brand" href="/workspace" aria-label="念念 AI 工作台"><img class="brand-mark" src="/assets/niannian-ai-authority-gold.svg" alt="念念 AI"></a><nav class="top-nav" aria-label="主导航"><a href="/templates">选同款</a><a class="active" href="/workspace" aria-current="page">工作台</a><a href="/pricing">价格</a><a href="/billing">账单</a></nav><div class="header-actions"><button class="ghost-button" type="button" data-v206-action="account">${state.session ? esc(accountLabel) : "去登录"}</button></div></header>`;
   }
+  function syncProjectSwitcher() {
+    const switcher = document.querySelector("[data-v206-project-switcher]");
+    if (!switcher) return;
+    const project = activeProject();
+    const recentProjects = state.canonicalProjects.filter((item) => !item.archivedAt && String(item.status || "").toLowerCase() !== "archived");
+    const recent = project && !recentProjects.slice(0, 8).some((item) => item.id === project.id)
+      ? [project, ...recentProjects.filter((item) => item.id !== project.id).slice(0, 7)]
+      : recentProjects.slice(0, 8);
+    const label = switcher.querySelector("[data-v206-project-switcher-label]");
+    const menu = switcher.querySelector("[data-v206-project-menu]");
+    if (label) label.textContent = recent.find((item) => item.id === project?.id)?.name || project?.name || project?.title || "选择项目";
+    if (menu) menu.innerHTML = recent.map((item) => `<button type="button" role="menuitem" class="${item.id === project?.id ? "active" : ""}" data-v206-project-switch="${esc(item.id)}"><span>${esc(item.name || item.title || "未命名项目")}</span>${item.id === project?.id ? '<b aria-hidden="true">✓</b>' : ""}</button>`).join("");
+    switcher.hidden = !state.session || !recent.length;
+  }
   function sourceSheetMounted() {
     return state.view === "sources" && Boolean(root?.querySelector('.v206-sheet[aria-label="素材库"]'));
   }
@@ -1190,6 +1263,7 @@
   }
   function render() {
     if (!root) return;
+    syncProjectSwitcher();
     const accountLabel = document.querySelector("[data-v206-account-label]");
     if (accountLabel) {
       const accountName = String(state.session?.name || "").trim();
