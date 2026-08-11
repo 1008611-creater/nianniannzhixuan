@@ -1,0 +1,25 @@
+services:
+  niannian-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: niannian-web
+    restart: unless-stopped
+    init: true
+    environment:
+      HOST: 0.0.0.0
+      PORT: 18893
+      REMOTE_ORIGIN: https://dh-origin.cauai.fun
+      CSRF_ORIGIN: http://127.0.0.1:18890
+    ports:
+      - 127.0.0.1:18893:18893
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:18893/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

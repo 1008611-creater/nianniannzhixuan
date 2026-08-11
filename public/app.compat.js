@@ -2522,7 +2522,7 @@ function layout(content) {
   return `
     <header class="site-header">
       <button class="brand" type="button" data-nav="/workspace" aria-label="念念 AI 工作台">
-        <img class="brand-mark" src="/assets/niannian-ai-logo.png" alt="念念 AI">
+        <img class="brand-mark" src="/assets/niannian-ai-logo-128.webp" alt="念念 AI">
       </button>
       <nav class="top-nav" aria-label="主导航">
         ${navItems
@@ -2539,7 +2539,7 @@ ${renderUiNotice()}
 <main>${content}</main>
 ${renderMaterialPreviewModal()}
 <footer class="site-footer">
-      <img class="site-footer-brand" src="/assets/niannian-ai-logo.png" alt="念念 AI" width="30" height="30">
+      <img class="site-footer-brand" src="/assets/niannian-ai-logo-128.webp" alt="念念 AI" width="30" height="30">
     </footer>
   `;
 }

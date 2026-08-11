@@ -882,7 +882,7 @@
     </section>`;
   }
   function chatMessagesMarkup() {
-    const assistantMessage = (message, greeting = false) => `<article class="v206-inline-message assistant${greeting ? " v206-assistant-greeting" : ""}"${greeting ? " data-v206-assistant-greeting" : ""}><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-authority-gold.svg" alt=""></span><div class="v206-message-bubble"><div class="v206-message-meta"><b>念念</b><time>${esc(greeting ? message.time : formatMessageTime(message.createdAt))}</time></div><span>${esc(message.text || message.content || "")}</span>${message.proposal ? proposalMarkup(message.proposal) : ""}</div></article>`;
+    const assistantMessage = (message, greeting = false) => `<article class="v206-inline-message assistant${greeting ? " v206-assistant-greeting" : ""}"${greeting ? " data-v206-assistant-greeting" : ""}><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-message-bubble"><div class="v206-message-meta"><b>念念</b><time>${esc(greeting ? message.time : formatMessageTime(message.createdAt))}</time></div><span>${esc(message.text || message.content || "")}</span>${message.proposal ? proposalMarkup(message.proposal) : ""}</div></article>`;
     const messages = state.chat.map((message) => String(message.role || "").toLowerCase() === "user"
       ? `<article class="v206-inline-message user"><div class="v206-message-meta"><b>你的指令</b><time>${esc(formatMessageTime(message.createdAt))}</time></div><span>${esc(message.content || message.text || "")}</span></article>`
       : assistantMessage(message)).join("");
@@ -989,7 +989,7 @@
     } else if (harness?.blocker) {
       text = `我已经检查了当前素材：${harness.blocker}。补好后我会继续帮你推进，不需要重新导入项目。`;
     }
-    return `<article class="v206-niannian-decision ${video?.url ? "is-complete" : ""}" aria-label="念念主动消息" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-authority-gold.svg" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>刚刚</time></div><p>${esc(text)}</p>${action}</div></article>`;
+    return `<article class="v206-niannian-decision ${video?.url ? "is-complete" : ""}" aria-label="念念主动消息" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>刚刚</time></div><p>${esc(text)}</p>${action}</div></article>`;
   }
   function assistantDockMarkup() {
     return `<section class="v206-assistant-dock" aria-label="念念改图对话">${assistantComposerMarkup()}</section>`;
@@ -1153,7 +1153,7 @@
   }
   function workflowQuickToolsMarkup(sourceAction) {
     const personAction = sourceAction || '<button type="button" class="v206-replace" data-v206-action="sources" data-target="person">更换人物</button>';
-    return `<div class="v206-workflow-quick-tools"><div class="v206-quick-person-assistant">${personAction}<button type="button" class="v206-niannian-launch" data-v206-action="assistant-thread" aria-label="打开念念对话"><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-authority-gold.svg" alt=""></span><strong>念念</strong><span class="v206-niannian-launch-arrow" aria-hidden="true">↗</span></button></div></div>`;
+    return `<div class="v206-workflow-quick-tools"><div class="v206-quick-person-assistant">${personAction}<button type="button" class="v206-niannian-launch" data-v206-action="assistant-thread" aria-label="打开念念对话"><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><strong>念念</strong><span class="v206-niannian-launch-arrow" aria-hidden="true">↗</span></button></div></div>`;
   }
   function controlMarkup() {
     const step = currentWorkflowStep();
@@ -1191,7 +1191,7 @@
     const projectMenu = `<details class="v206-project-switcher"><summary class="v206-project-switcher-trigger" aria-label="切换最近项目"><span>${esc(currentProjectName)}</span><i aria-hidden="true">⌄</i></summary><div class="v206-project-menu" role="menu">${recent.map((item) => `<button type="button" role="menuitem" class="${item.id === project?.id ? "active" : ""}" data-v206-project-switch="${esc(item.id)}"><span>${esc(item.name)}</span>${item.id === project?.id ? '<b aria-hidden="true">✓</b>' : ""}</button>`).join("")}</div></details>`;
     const accountName = String(state.session?.name || "").trim();
     const accountLabel = accountName && !accountName.includes("童装影厂") ? accountName : "账户";
-    return `<header class="site-header"><a class="brand" href="/workspace" aria-label="念念 AI 工作台"><img class="brand-mark" src="/assets/niannian-ai-authority-gold.svg" alt="念念 AI"></a><nav class="top-nav" aria-label="主导航"><a href="/templates">选同款</a><a class="active" href="/workspace" aria-current="page">工作台</a><a href="/pricing">价格</a><a href="/billing">账单</a></nav><div class="header-actions"><button class="ghost-button" type="button" data-v206-action="account">${state.session ? esc(accountLabel) : "去登录"}</button></div></header>`;
+    return `<header class="site-header"><a class="brand" href="/workspace" aria-label="念念 AI 工作台"><img class="brand-mark" src="/assets/niannian-ai-logo-128.webp" alt="念念 AI"></a><nav class="top-nav" aria-label="主导航"><a href="/templates">选同款</a><a class="active" href="/workspace" aria-current="page">工作台</a><a href="/pricing">价格</a><a href="/billing">账单</a></nav><div class="header-actions"><button class="ghost-button" type="button" data-v206-action="account">${state.session ? esc(accountLabel) : "去登录"}</button></div></header>`;
   }
   function syncProjectSwitcher() {
     const switcher = document.querySelector("[data-v206-project-switcher]");
