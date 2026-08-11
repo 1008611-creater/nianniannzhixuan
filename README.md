@@ -28,13 +28,13 @@ largest template videos may take longer than a normal command window timeout.
 
 ## Authoritative implementation status
 
-### Pending: playback derivative and private-media CDN
+### Playback derivative (implemented); private-media CDN pending
 
-Status: **not implemented**. The local proxy now preserves byte ranges and streams with
-backpressure, but long private videos can still start slowly because the browser consumes
-the upstream authority original. This repository contains the browser frontend and local
-proxy only; completing this item requires the upstream media backend, storage, and deploy
-configuration.
+Status: **implemented in the local proxy**. After a private video is completed or first
+played, the proxy generates a persistent H.264/AAC MP4 playback copy with `faststart` under
+the server playback volume. The signed-in page uses the playback route while the upstream
+authority original remains the source for downloads and downstream processing. A dedicated
+private-media CDN is still pending and must preserve authentication before cache lookup.
 
 Implementation contract:
 

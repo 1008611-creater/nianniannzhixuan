@@ -13,6 +13,8 @@ services:
       CSRF_ORIGIN: http://127.0.0.1:18890
     ports:
       - 127.0.0.1:18893:18893
+    volumes:
+      - /opt/niannian-web/playback:/app/playback
     healthcheck:
       test:
         - CMD

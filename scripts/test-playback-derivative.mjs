@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const server = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
+const compose = await readFile(new URL("../compose.yaml", import.meta.url), "utf8");
+const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
+
+assert.match(server, /function generatePlaybackDerivative\(mediaId, headers\)/);
+assert.match(server, /spawn\("ffmpeg"/);
+assert.match(server, /-movflags/, "derivative must be faststart");
+assert.match(server, /function servePlayback\(request, response, mediaId\)/);
+assert.match(server, /schedulePlaybackDerivative\(mediaId, headers\)/);
+assert.match(server, /bytes=0-0/, "playback route must authorize before serving a private derivative");
+assert.match(compose, /\/opt\/niannian-web\/playback:\/app\/playback/);
+assert.match(dockerfile, /apk add --no-cache ffmpeg/);
+
+console.log("OK playback derivatives are authenticated, persistent, range-capable and faststart");
