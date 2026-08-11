@@ -28,6 +28,15 @@ for (const excluded of ["/_next/static/", "/app.compat.js", "/front-20260616.css
 }
 console.log("OK workspace uses the lightweight entry");
 
+const logoPath = "/assets/niannian-ai-logo-128.webp";
+if (!workspace.includes(logoPath)) throw new Error(`workspace entry is missing ${logoPath}`);
+const logo = await fetch(`${baseUrl}${logoPath}?v=verify-logo`);
+const logoBytes = Number(logo.headers.get("content-length"));
+if (logo.status !== 200 || logo.headers.get("content-type") !== "image/webp" || !logoBytes || logoBytes > 10_000) {
+  throw new Error(`display logo delivery is invalid: status=${logo.status}, bytes=${logoBytes}`);
+}
+console.log(`OK display logo: ${logo.status}, ${logoBytes} bytes`);
+
 const homepage = await (await fetch(`${baseUrl}/templates`)).text();
 if (homepage.includes("/_next/static/")) throw new Error("legacy entry still loads captured Next.js chunks");
 for (const required of ["/app.compat.js", "/motion-v209.js", '<div id="app"></div>']) {

@@ -5,6 +5,7 @@ import { extname, isAbsolute, join, normalize, relative, resolve } from "node:pa
 import { proxyHeaders, proxyResponseHeaders } from "./proxy-headers.mjs";
 
 const port = Number(process.env.PORT || 18893);
+const host = process.env.HOST || "127.0.0.1";
 const remoteOrigin = process.env.REMOTE_ORIGIN || "https://dh.cauai.fun";
 const csrfOrigin = process.env.CSRF_ORIGIN || "http://127.0.0.1:18890";
 const mediaProxyDebug = process.env.MEDIA_PROXY_DEBUG === "1";
@@ -183,6 +184,6 @@ createServer(async (request, response) => {
     console.error(error);
     response.writeHead(502).end("Local proxy error");
   }
-}).listen(port, "127.0.0.1", () => {
-  console.log(`dh.cauai.fun local site: http://127.0.0.1:${port}`);
+}).listen(port, host, () => {
+  console.log(`dh.cauai.fun local site: http://${host}:${port}`);
 });
