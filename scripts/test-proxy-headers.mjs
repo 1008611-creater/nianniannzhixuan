@@ -15,6 +15,14 @@ assert.equal(rewritten.get("origin"), "http://127.0.0.1:18890");
 assert.equal(rewritten.get("referer"), "http://127.0.0.1:18890/workspace?projectId=test");
 assert.equal(rewritten.get("x-csrf-token"), "test-token");
 
+const production = proxyHeaders(new Headers({
+  host: "dh.cauai.fun",
+  origin: "https://dh.cauai.fun",
+  referer: "https://dh.cauai.fun/workspace?projectId=test",
+}), "https://dh-origin.cauai.fun", "http://127.0.0.1:18890", "dh.cauai.fun");
+assert.equal(production.get("origin"), "http://127.0.0.1:18890");
+assert.equal(production.get("referer"), "http://127.0.0.1:18890/workspace?projectId=test");
+
 const untrusted = proxyHeaders(new Headers({ origin: "https://attacker.example", referer: "https://attacker.example/form" }), "https://dh.cauai.fun");
 assert.equal(untrusted.get("origin"), "https://attacker.example");
 assert.equal(untrusted.get("referer"), "https://attacker.example/form");
