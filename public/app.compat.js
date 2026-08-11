@@ -495,19 +495,19 @@ const backgroundWashOptionConfig = [
 
 const workspacePresetMaterials = [
   { id: "preset-user-gloofy", targetNodeIds: ["character", "scene"], url: "/assets/references/user-store-gloofy-dress.png", fileName: "门店花裙参考", source: "精品参考" },
-  { id: "preset-person-01", targetNodeIds: ["character"], url: "/assets/asset-review/cover-04.jpg", fileName: "门店人物 01", source: "人物模板" },
-  { id: "preset-person-02", targetNodeIds: ["character"], url: "/assets/asset-review/cover-06.jpg", fileName: "门店人物 02", source: "人物模板" },
-  { id: "preset-person-03", targetNodeIds: ["character"], url: "/assets/asset-review/cover-08.jpg", fileName: "门店人物 03", source: "人物模板" },
-  { id: "preset-person-04", targetNodeIds: ["character"], url: "/assets/asset-review/image-08.png", fileName: "室内人物 01", source: "人物模板" },
+  { id: "preset-person-01", targetNodeIds: ["character"], url: "/assets/references/user-store-gloofy-dress.png", fileName: "门店人物 01", source: "人物模板" },
+  { id: "preset-person-02", targetNodeIds: ["character"], url: "/assets/references/indoor-look-cream-bow.png", fileName: "门店人物 02", source: "人物模板" },
+  { id: "preset-person-03", targetNodeIds: ["character"], url: "/assets/references/indoor-look-coral-eyelet.jpg", fileName: "门店人物 03", source: "人物模板" },
+  { id: "preset-person-04", targetNodeIds: ["character"], url: "/assets/references/indoor-look-daisy-olive.jpg", fileName: "室内人物 01", source: "人物模板" },
   { id: "preset-clothes-01", targetNodeIds: ["clothes"], url: "/assets/references/white-dress-01.png", fileName: "白底裙子 01", source: "衣服模板" },
   { id: "preset-clothes-02", targetNodeIds: ["clothes"], url: "/assets/references/white-dress-02.png", fileName: "白底裙子 02", source: "衣服模板" },
   { id: "preset-clothes-03", targetNodeIds: ["clothes"], url: "/assets/references/white-dress-03.png", fileName: "白底裙子 03", source: "衣服模板" },
   { id: "preset-clothes-04", targetNodeIds: ["clothes"], url: "/assets/references/white-dress-04.png", fileName: "白底裙子 04", source: "衣服模板" },
   { id: "preset-clothes-05", targetNodeIds: ["clothes"], url: "/assets/references/white-dress-05.png", fileName: "白底裙子 05", source: "衣服模板" },
-  { id: "preset-scene-01", targetNodeIds: ["scene"], url: "/assets/asset-review/image-01.png", fileName: "黑金门店", source: "背景模板" },
-  { id: "preset-scene-02", targetNodeIds: ["scene"], url: "/assets/asset-review/image-04.png", fileName: "云朵门店", source: "背景模板" },
-  { id: "preset-scene-03", targetNodeIds: ["scene"], url: "/assets/asset-review/image-06.png", fileName: "街边橱窗", source: "背景模板" },
-  { id: "preset-scene-04", targetNodeIds: ["scene"], url: "/assets/asset-review/image-07.png", fileName: "阳光橱窗", source: "背景模板" },
+  { id: "preset-scene-01", targetNodeIds: ["scene"], url: "/assets/references/default-store-scene-inspiration.jpg", fileName: "黑金门店", source: "背景模板" },
+  { id: "preset-scene-02", targetNodeIds: ["scene"], url: "/assets/references/indoor-scene-sunshine-01.png", fileName: "云朵门店", source: "背景模板" },
+  { id: "preset-scene-03", targetNodeIds: ["scene"], url: "/assets/references/indoor-scene-sunshine-02.png", fileName: "街边橱窗", source: "背景模板" },
+  { id: "preset-scene-04", targetNodeIds: ["scene"], url: "/assets/frosted-dress-art-bg.png", fileName: "阳光橱窗", source: "背景模板" },
 ].map((item) => ({ ...item, kind: "image", mediaType: "image/png" }));
 
 const templates = [
@@ -893,6 +893,8 @@ mediaType: asset.mediaType || "",
 
 function setNodeAssetOverride(nodeId, asset, options = {}) {
   if (!nodeId || !asset?.url) return null;
+  const previousAsset = state.uploadedNodeAssets?.[nodeId];
+  if (previousAsset?.url !== asset.url) revokeBlobUrl(previousAsset?.url);
 const nextAsset = {
 fileName: asset.fileName || "已替换素材",
 url: asset.url,
@@ -912,6 +914,7 @@ mediaType: asset.mediaType || "",
 
 function removeNodeAssetOverride(nodeId) {
   if (!nodeId || !state.uploadedNodeAssets?.[nodeId]) return;
+  revokeBlobUrl(state.uploadedNodeAssets[nodeId]?.url);
   const nextAssets = { ...state.uploadedNodeAssets };
   delete nextAssets[nodeId];
   state.uploadedNodeAssets = nextAssets;
@@ -919,6 +922,7 @@ function removeNodeAssetOverride(nodeId) {
 }
 
 function clearWorkspaceNodeAssets() {
+  Object.values(state.uploadedNodeAssets || {}).forEach((asset) => revokeBlobUrl(asset?.url));
   state.uploadedNodeAssets = {};
   localStorage.removeItem("workspaceNodeAssets");
 }
@@ -1422,6 +1426,10 @@ async function uploadFileToServer(file, nodeId, options = {}) {
     uploadSize: uploadFile.size || file.size || 0,
     compressed: uploadFile !== file || Number(uploadFile.size || 0) < Number(file.size || 0),
   };
+}
+
+function revokeBlobUrl(url) {
+  if (String(url || "").startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
 async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材") {
@@ -2335,6 +2343,9 @@ function materialCompatibleWithNode(material, node) {
 
 async function fetchJson(url, options = {}) {
   try {
+    const timeoutMs = Number(options.timeoutMs || 30_000);
+    const fetchOptions = { ...options };
+    delete fetchOptions.timeoutMs;
     const headers = new Headers(options.headers || {});
     if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     const method = String(options.method || "GET").toUpperCase();
@@ -2342,13 +2353,27 @@ async function fetchJson(url, options = {}) {
       const csrfMatch = document.cookie.match(/(?:^|;\s*)kidswear_csrf_v2=([^;]+)/);
       if (csrfMatch) headers.set("x-csrf-token", decodeURIComponent(csrfMatch[1]));
     }
-    const response = await fetch(url, {
-      credentials: "same-origin",
-      ...options,
-      headers,
-    });
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const externalSignal = options.signal;
+    const abortExternal = () => controller.abort(externalSignal.reason);
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort(externalSignal.reason);
+      else externalSignal.addEventListener("abort", abortExternal, { once: true });
+    }
+    let response;
+    try {
+      response = await fetch(url, { credentials: "same-origin", ...fetchOptions, headers, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+      externalSignal?.removeEventListener("abort", abortExternal);
+    }
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || `Request failed: ${response.status}`);
+    if (!response.ok) {
+      const requestError = new Error(payload.error || `Request failed: ${response.status}`);
+      requestError.status = response.status;
+      throw requestError;
+    }
     return payload;
   } catch (error) {
     const normalized = new Error(normalizeRequestError(error));
@@ -2414,7 +2439,8 @@ async function refreshBillingState() {
 function normalizePath(pathname = window.location.pathname) {
   const cleaned = pathname.replace(/\/+$/, "") || "/";
   if (cleaned === "/") return "/templates";
-  return routeMeta[cleaned] ? cleaned : "/workspace";
+  if (cleaned === "/access") return "/login";
+  return routeMeta[cleaned] ? cleaned : "/templates";
 }
 
 function navigate(path) {
@@ -3524,6 +3550,7 @@ kind: inferMaterialKind(payload.mediaType || payload.uploadFile?.type || file.ty
     state.workspaceMessage = error.message;
   } finally {
     if (input) input.value = "";
+    revokeBlobUrl(previewUrl);
     endPendingAction();
     render();
   }
@@ -3737,6 +3764,8 @@ function selectAssetGeneratorTarget(id) {
 }
 
 function removeAssetReference(id) {
+  const removed = state.assetGeneratorRefs.find((item) => item.id === id);
+  revokeBlobUrl(removed?.url);
   state.assetGeneratorRefs = state.assetGeneratorRefs.filter((item) => item.id !== id);
   state.assetGeneratorMessage = state.assetGeneratorRefs.length ? "" : "已清空参考图。";
   setUiNotice("参考图已移除");
@@ -3761,7 +3790,9 @@ async function uploadAssetGeneratorReference(input) {
     mediaType: file.type,
     uploading: true,
   }));
-  state.assetGeneratorRefs = [...previewRefs, ...state.assetGeneratorRefs].slice(0, 4);
+  const nextRefs = [...previewRefs, ...state.assetGeneratorRefs].slice(0, 4);
+  state.assetGeneratorRefs.filter((item) => !nextRefs.some((next) => next.id === item.id)).forEach((item) => revokeBlobUrl(item.url));
+  state.assetGeneratorRefs = nextRefs;
   state.assetGeneratorMessage = `已添加 ${previewRefs.length} 张参考图预览，正在压缩上传。`;
   render();
   try {
@@ -3769,6 +3800,7 @@ async function uploadAssetGeneratorReference(input) {
       const file = selectedFiles[index];
       const refId = previewRefs[index].id;
       const payload = await uploadFileToServer(file, "asset-reference");
+      revokeBlobUrl(state.assetGeneratorRefs.find((item) => item.id === refId)?.url);
       state.assetGeneratorRefs = state.assetGeneratorRefs.map((item) => (
         item.id === refId
 ? {
@@ -5175,7 +5207,7 @@ async function runTaskAutoSync() {
   // The v206 workspace owns its own bounded task refresh. Keeping this legacy
   // loop alive here allowed a second state store to overwrite a newer edit.
   if (normalizePath() === "/workspace") return;
-  if (normalizePath() !== "/workspace" || !state.session) return;
+  if (!state.session) return;
   if (pendingActionStartsWith("sync-asset-image") || state.pendingAction === "sync-all-asset-images") return;
   const jobs = state.imageJobs.filter(imageJobNeedsAutoSync).slice(0, 4);
   const project = latestProject();
@@ -7574,13 +7606,26 @@ function activatePersonalTemplatePreview(trigger) {
   loadPersonalTemplatePreview(video, true);
 }
 
-function retryPersonalTemplatePreview(trigger) {
+async function retryPersonalTemplatePreview(trigger) {
   const card = trigger?.closest?.(".template-personal-video");
   const video = card?.querySelector?.("video");
   if (!video) return;
-  video.removeAttribute("src");
-  video.load();
-  loadPersonalTemplatePreview(video, true);
+  const mediaId = String(card.dataset.mediaId || "");
+  markPersonalTemplateVideoPreview(video, "loading");
+  try {
+    await loadPersonalTemplateVideos();
+    const refreshed = state.personalTemplateVideos.find((item) => String(item.id || "") === mediaId);
+    if (!refreshed?.url) {
+      render();
+      return;
+    }
+    video.dataset.src = refreshed.url;
+    video.removeAttribute("src");
+    video.load();
+    loadPersonalTemplatePreview(video, true);
+  } catch {
+    markPersonalTemplateVideoPreview(video, "failed");
+  }
 }
 
 function safeAccountDisplayName(user) {
@@ -7641,7 +7686,10 @@ async function loadPersonalTemplateVideos() {
     return;
   }
   const result = await fetchJson("/api/v1/media?kind=VIDEO&library=templates");
-  state.personalTemplateVideos = Array.isArray(result.media) ? result.media : [];
+  state.personalTemplateVideos = (Array.isArray(result.media) ? result.media : []).filter((item) => {
+    const status = String(item?.deletionState || item?.status || "").toLowerCase();
+    return !item?.deletedAt && !item?.archivedAt && !["deleted", "deleting", "archived", "purged"].includes(status);
+  });
   state.personalTemplateVideosLoaded = true;
 }
 
