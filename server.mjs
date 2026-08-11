@@ -111,9 +111,10 @@ async function serveWorkspace(request, response) {
   response.end(request.method === "HEAD" ? undefined : html);
 }
 
-function serveStatic(request, response, file) {
+function serveStatic(request, response, file, cacheControl = null) {
   const stats = statSync(file);
   const versioned = new URL(request.url, "http://localhost").searchParams.has("v");
+  const staticCacheControl = cacheControl || (versioned ? "public, max-age=31536000, immutable" : "public, max-age=300, must-revalidate");
   const rangeMatch = String(request.headers.range || "").match(/^bytes=(\d*)-(\d*)$/);
   if (stats.size === 0) {
     if (rangeMatch) {
@@ -124,7 +125,7 @@ function serveStatic(request, response, file) {
     response.writeHead(200, {
       "content-type": mimeTypes[extname(file).toLowerCase()] || "application/octet-stream",
       "content-length": 0,
-      "cache-control": versioned ? "public, max-age=31536000, immutable" : "public, max-age=300, must-revalidate",
+      "cache-control": staticCacheControl,
       etag: `W/"0-${Math.floor(stats.mtimeMs).toString(16)}"`,
       "last-modified": stats.mtime.toUTCString(),
       "accept-ranges": "bytes",
@@ -147,7 +148,7 @@ function serveStatic(request, response, file) {
   const headers = {
     "content-type": mimeTypes[extname(file).toLowerCase()] || "application/octet-stream",
     "content-length": contentLength,
-    "cache-control": versioned ? "public, max-age=31536000, immutable" : "public, max-age=300, must-revalidate",
+    "cache-control": staticCacheControl,
     etag: `W/"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}"`,
     "last-modified": stats.mtime.toUTCString(),
     "accept-ranges": "bytes",
@@ -212,7 +213,7 @@ async function servePlayback(request, response, mediaId) {
   }
   if (hasDerivative) {
     try { await upstream.body?.cancel(); } catch {}
-    serveStatic(request, response, derivative);
+    serveStatic(request, response, derivative, "private, max-age=300, must-revalidate");
     return;
   }
   schedulePlaybackDerivative(mediaId, headers);

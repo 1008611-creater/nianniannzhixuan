@@ -11,6 +11,7 @@ assert.match(server, /-movflags/, "derivative must be faststart");
 assert.match(server, /function servePlayback\(request, response, mediaId\)/);
 assert.match(server, /schedulePlaybackDerivative\(mediaId, headers\)/);
 assert.match(server, /bytes=0-0/, "playback route must authorize before serving a private derivative");
+assert.match(server, /serveStatic\(request, response, derivative, "private, max-age=300, must-revalidate"\)/, "playback derivatives must never use a shared-cache policy");
 assert.match(compose, /\/opt\/niannian-web\/playback:\/app\/playback/);
 assert.match(dockerfile, /apk add --no-cache ffmpeg/);
 
