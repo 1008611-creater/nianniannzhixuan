@@ -39,7 +39,7 @@ function derivativeHeaders(headers) {
 async function generatePlaybackDerivative(mediaId, headers) {
   const output = playbackFile(mediaId);
   if (existsSync(output) && statSync(output).size > 0) return true;
-  const temporary = `${output}.part`;
+  const temporary = `${output}.part.mp4`;
   try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
   let upstream;
   try {
