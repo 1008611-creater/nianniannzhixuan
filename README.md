@@ -58,3 +58,26 @@ Completion evidence:
 - Unsigned, altered, and expired private-media requests still return `401` or `403` after the
   cache is warm.
 - Derivative creation does not duplicate provider jobs, billing events, or media records.
+
+### Delivery evidence baseline
+
+Before changing Cloudflare or the media host, collect a redacted public-route baseline:
+
+```powershell
+./scripts/collect-http-evidence.ps1 -EntryPoint https://dh.cauai.fun/workspace
+```
+
+To prove that an unauthenticated private-media route remains protected after a cache change,
+pass an unsigned same-origin media path or URL. The script strips queries and fragments before
+recording output, disables cookies, requests only headers, and uses a one-byte Range request
+for the range result. Do not pass a signed URL, session cookie, or token to the script.
+
+```powershell
+./scripts/collect-http-evidence.ps1 `
+  -EntryPoint https://dh.cauai.fun/workspace `
+  -MediaPath https://dh.cauai.fun/api/v1/media/00000000-0000-0000-0000-000000000000/playback `
+  -OutputFile evidence/media-baseline.json
+```
+
+The produced record is only a transport baseline. Browser acceptance still has to verify the
+ordinary signed-in page's image dimensions, `video.currentSrc`, playback, seeking, and download.

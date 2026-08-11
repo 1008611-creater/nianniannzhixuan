@@ -830,7 +830,14 @@
     return workflowSteps.find((step) => step.id === state.workflowStep) || workflowSteps[0];
   }
   function workflowStepStatus(step) {
-    if (step.id === "final") return activeVideoAsset()?.url ? "已完成" : (currentTaskPresentation()?.active ? "制作中" : "待制作");
+    if (step.id === "final") {
+      if (activeVideoAsset()?.url) return "已完成";
+      const project = activeProject();
+      const projectJobs = state.jobs.filter((job) => jobBelongsToProject(job, project));
+      const activeAction = projectJobs.find((job) => String(job.kind || "").toUpperCase() === "ACTION_TRANSFER" && taskIsActive(job.status));
+      const activeProduction = project?.production && taskIsActive(project.production.status);
+      return activeAction || activeProduction ? "制作中" : "待制作";
+    }
     if (step.id === "frame" && !assetFor("frame")?.url && currentTaskPresentation()?.active) return "制作中";
     const asset = assetFor(step.target);
     if (asset?.url) return step.id === "motion" ? "可播放" : "已就绪";
