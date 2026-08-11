@@ -61,7 +61,7 @@ async function generatePlaybackDerivative(mediaId, headers) {
     renameSync(temporary, output);
     return true;
   } finally {
-    try { upstream?.body?.cancel(); } catch {}
+    try { await upstream?.body?.cancel(); } catch {}
     try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
   }
 }
