@@ -2,6 +2,8 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache ffmpeg
+
 COPY --chown=node:node package.json server.mjs proxy-headers.mjs ./
 COPY --chown=node:node public ./public
 

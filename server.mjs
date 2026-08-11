@@ -1,6 +1,8 @@
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { Readable } from "node:stream";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { proxyHeaders, proxyResponseHeaders } from "./proxy-headers.mjs";
 
@@ -11,13 +13,71 @@ const csrfOrigin = process.env.CSRF_ORIGIN || "http://127.0.0.1:18890";
 const mediaProxyDebug = process.env.MEDIA_PROXY_DEBUG === "1";
 const proxyTimeoutMs = Number(process.env.PROXY_TIMEOUT_MS || 120_000);
 const publicDir = resolve("public");
+const playbackDir = resolve(process.env.PLAYBACK_DIR || "playback");
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const playbackJobs = new Map();
 const mimeTypes = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
   ".svg": "image/svg+xml", ".mp4": "video/mp4", ".woff": "font/woff", ".woff2": "font/woff2",
 };
+
+mkdirSync(playbackDir, { recursive: true });
+
+function playbackFile(mediaId) {
+  return join(playbackDir, `${mediaId}.mp4`);
+}
+
+function derivativeHeaders(headers) {
+  const result = new Headers(headers);
+  ["host", "connection", "content-length", "content-type", "range", "origin", "referer"].forEach((name) => result.delete(name));
+  result.set("accept", "video/mp4,video/*;q=0.9,*/*;q=0.8");
+  return result;
+}
+
+async function generatePlaybackDerivative(mediaId, headers) {
+  const output = playbackFile(mediaId);
+  if (existsSync(output) && statSync(output).size > 0) return true;
+  const temporary = `${output}.part`;
+  try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
+  let upstream;
+  try {
+    upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
+      headers: derivativeHeaders(headers),
+      signal: AbortSignal.timeout(proxyTimeoutMs),
+    });
+    if (!upstream.ok || !upstream.body) throw new Error(`MEDIA_SOURCE_${upstream.status}`);
+    const ffmpeg = spawn("ffmpeg", [
+      "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+      "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+      "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-y", temporary,
+    ], { stdio: ["pipe", "ignore", "pipe"] });
+    ffmpeg.stderr.on("data", () => {});
+    ffmpeg.stdin.on("error", () => {});
+    Readable.fromWeb(upstream.body).pipe(ffmpeg.stdin);
+    const [code] = await once(ffmpeg, "close");
+    if (code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) throw new Error(`FFMPEG_EXIT_${code}`);
+    renameSync(temporary, output);
+    return true;
+  } finally {
+    try { upstream?.body?.cancel(); } catch {}
+    try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
+  }
+}
+
+function schedulePlaybackDerivative(mediaId, headers) {
+  if (!/^[0-9a-f-]{36}$/i.test(mediaId) || playbackJobs.has(mediaId)) return;
+  const job = (async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        if (await generatePlaybackDerivative(mediaId, headers)) return;
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 2_000 * (attempt + 1)));
+    }
+  })().finally(() => playbackJobs.delete(mediaId));
+  playbackJobs.set(mediaId, job);
+}
 
 function localFile(pathname) {
   const safePath = normalize(pathname).replace(/^([/\\])+/, "");
@@ -32,7 +92,7 @@ async function serveIndex(request, response) {
   const currentAssets = html
     .replaceAll("/app.compat.js?v=20260802-unified-web-53", "/app.compat.js?v=20260811-media-delivery-08")
     .replaceAll("/front-v208-product-system.css?v=20260802-unified-web-48", "/front-v208-product-system.css?v=20260811-media-delivery-05")
-    .replaceAll("/workspace-v206.js?v=20260802-unified-web-48", "/workspace-v206.js?v=20260811-workspace-stable-02")
+    .replaceAll("/workspace-v206.js?v=20260802-unified-web-48", "/workspace-v206.js?v=20260812-playback-derivative-01")
     .replaceAll("/workspace-v206.css?v=20260802-unified-web-48", "/workspace-v206.css?v=20260811-workspace-stable-02");
   const withUploadHash = currentAssets.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
   response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
@@ -112,6 +172,47 @@ async function logProxyResult(request, url, upstream) {
   console.log(`[proxy] ${request.method} ${url.pathname} -> ${upstream.status}${safeCode === "-" ? "" : ` ${safeCode}`}`);
 }
 
+async function sendUpstreamResponse(response, upstream) {
+  const upstreamHeaders = proxyResponseHeaders(upstream.headers);
+  const setCookie = upstreamHeaders.get("set-cookie");
+  if (setCookie) upstreamHeaders.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
+  response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
+  if (upstream.body) {
+    for await (const chunk of upstream.body) {
+      if (!response.write(chunk)) await once(response, "drain");
+    }
+  }
+  response.end();
+}
+
+async function servePlayback(request, response, mediaId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const sourceUrl = new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin);
+  const derivative = playbackFile(mediaId);
+  const hasDerivative = existsSync(derivative) && statSync(derivative).size > 0;
+  const sourceHeaders = new Headers(headers);
+  if (hasDerivative) sourceHeaders.set("range", "bytes=0-0");
+  const upstream = await fetch(sourceUrl, {
+    method: request.method,
+    headers: sourceHeaders,
+    body: ["GET", "HEAD"].includes(request.method) ? undefined : request,
+    duplex: "half",
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!upstream.ok) {
+    await sendUpstreamResponse(response, upstream);
+    return;
+  }
+  if (hasDerivative) {
+    try { await upstream.body?.cancel(); } catch {}
+    serveStatic(request, response, derivative);
+    return;
+  }
+  schedulePlaybackDerivative(mediaId, headers);
+  await sendUpstreamResponse(response, upstream);
+}
+
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
   const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
@@ -139,16 +240,9 @@ async function proxy(request, response) {
     console.log(`[media] range=${request.headers.range || "-"} status=${upstream.status} ttfbMs=${Date.now() - startedAt} length=${upstream.headers.get("content-length") || "-"} contentRange=${upstream.headers.get("content-range") || "-"} acceptRanges=${upstream.headers.get("accept-ranges") || "-"}`);
   }
   await logProxyResult(request, url, upstream);
-  const upstreamHeaders = proxyResponseHeaders(upstream.headers);
-  const setCookie = upstreamHeaders.get("set-cookie");
-  if (setCookie) upstreamHeaders.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
-  response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
-  if (upstream.body) {
-    for await (const chunk of upstream.body) {
-      if (!response.write(chunk)) await once(response, "drain");
-    }
-  }
-  response.end();
+  const completedMedia = url.pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/complete$/i);
+  if (request.method === "POST" && completedMedia && upstream.ok) schedulePlaybackDerivative(completedMedia[1], headers);
+  await sendUpstreamResponse(response, upstream);
 }
 
 createServer(async (request, response) => {
@@ -165,6 +259,11 @@ createServer(async (request, response) => {
     }
     if (["GET", "HEAD"].includes(request.method) && (pathname === "/workspace" || pathname === "/workspace/")) {
       await serveWorkspace(request, response);
+      return;
+    }
+    const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
+    if (["GET", "HEAD"].includes(request.method) && playbackMatch) {
+      await servePlayback(request, response, playbackMatch[1]);
       return;
     }
     const file = localFile(pathname);
