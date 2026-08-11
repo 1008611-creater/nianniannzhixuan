@@ -114,7 +114,7 @@ async function logProxyResult(request, url, upstream) {
 
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
-  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin);
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
   const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), proxyTimeoutMs);

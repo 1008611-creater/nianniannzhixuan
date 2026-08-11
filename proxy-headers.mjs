@@ -9,15 +9,25 @@ function localUrl(value) {
   }
 }
 
-export function proxyHeaders(headers, upstreamOrigin, csrfOrigin = upstreamOrigin) {
+function sameHostUrl(value, host) {
+  try {
+    const url = new URL(String(value || ""));
+    return host && url.host.toLowerCase() === String(host).toLowerCase() ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+export function proxyHeaders(headers, upstreamOrigin, csrfOrigin = upstreamOrigin, requestHost = "") {
   const result = new Headers(headers);
   result.delete("host");
   result.delete("connection");
 
   const csrf = new URL(csrfOrigin);
-  if (localUrl(result.get("origin"))) result.set("origin", csrf.origin);
+  const origin = localUrl(result.get("origin")) || sameHostUrl(result.get("origin"), requestHost);
+  if (origin) result.set("origin", csrf.origin);
 
-  const referer = localUrl(result.get("referer"));
+  const referer = localUrl(result.get("referer")) || sameHostUrl(result.get("referer"), requestHost);
   if (referer) {
     const upstreamReferer = new URL(csrf.origin);
     upstreamReferer.pathname = referer.pathname;
