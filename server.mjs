@@ -53,11 +53,12 @@ async function generatePlaybackDerivative(mediaId, headers) {
       "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
       "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-y", temporary,
     ], { stdio: ["pipe", "ignore", "pipe"] });
-    ffmpeg.stderr.on("data", () => {});
+    let stderr = "";
+    ffmpeg.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-800); });
     ffmpeg.stdin.on("error", () => {});
     Readable.fromWeb(upstream.body).pipe(ffmpeg.stdin);
     const [code] = await once(ffmpeg, "close");
-    if (code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) throw new Error(`FFMPEG_EXIT_${code}`);
+    if (code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) throw new Error(`FFMPEG_EXIT_${code}${stderr ? `:${stderr.replace(/\s+/g, " ").slice(-240)}` : ""}`);
     renameSync(temporary, output);
     return true;
   } finally {
@@ -72,7 +73,12 @@ function schedulePlaybackDerivative(mediaId, headers) {
     for (let attempt = 0; attempt < 6; attempt += 1) {
       try {
         if (await generatePlaybackDerivative(mediaId, headers)) return;
-      } catch {}
+      } catch (error) {
+        if (attempt === 5) {
+          const detail = String(error?.message || "UNKNOWN").replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 300);
+          console.warn(`[playback] derivative failed ${mediaId}: ${detail}`);
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 2_000 * (attempt + 1)));
     }
   })().finally(() => playbackJobs.delete(mediaId));
