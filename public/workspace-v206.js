@@ -625,7 +625,7 @@
       state.chat = detail.thread?.messages || [];
       restorePendingAgentImageEdit();
     } else state.chat = [];
-    if (state.view === "assistant-thread") render();
+    renderUnlessSourcesOpen();
   }
 
   function currentFirstFrameDraftPayload() {
