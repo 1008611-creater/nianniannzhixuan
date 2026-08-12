@@ -50,6 +50,8 @@ assert.match(frontend, /actionId\.startsWith\("local-image-edit:"\)/);
 assert.match(frontend, /firstFrameDraftRequest\(`\/api\/v1\/projects\/\$\{project\.id\}\/first-frame\/drafts`/);
 assert.match(frontend, /mediaRequest\(`\/api\/v1\/projects\/\$\{project\.id\}\/first-frame\/drafts\/\$\{draft\.id\}\/confirm`/);
 assert.match(frontend, /mediaRequest\(`\/api\/v1\/jobs\/\$\{encodeURIComponent\(edit\.jobId\)\}`\)/);
+assert.match(frontend, /mediaRequest\("\/api\/v1\/readiness"\)[\s\S]*?imageGeneration !== true/);
+assert.match(frontend, /服务器作图通道还没有配置，当前不会创建任务或扣费/);
 assert.match(frontend, /const firstFrame = project\?\.nodes\?\.find\(\(node\) => node\.role === "FIRST_FRAME"\)\?\.media/);
 assert.match(frontend, /hydrateCanonicalProject\(project\)/);
 assert.doesNotMatch(frontend, /mediaRequest\("\/api\/image2\/(?:generate|sync)"/);
@@ -74,6 +76,6 @@ assert.match(backend, /pathname\.startsWith\("\/api\/"\)/);
 assert.match(backend, /proxyHeaders\(request\.headers, remoteOrigin, csrfOrigin/);
 assert.match(backend, /process\.env\.REMOTE_ORIGIN/);
 assert.match(workspace, /workspace-v206\.js\?v=/);
-assert.match(workspace, /workspace-v206\.js\?v=20260812-agent-first-frame-08/);
+assert.match(workspace, /workspace-v206\.js\?v=20260812-agent-provider-preflight-09/);
 
 console.log(`OK agent/frontend/backend contract: ${contract.routes.length} routes`);
