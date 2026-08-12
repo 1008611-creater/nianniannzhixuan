@@ -1863,10 +1863,29 @@
       state.chat.push(result.userMessage, result.assistantMessage);
       // The server proposal is the only source of executable actions. Never infer a billable task from chat text.
       writeState();
-      flash(result.assistantMessage?.proposal ? "制作方案已准备好，请核对素材判断和风险后逐项确认。" : "制作建议已写入当前操作区。");
       state.assistantText = "";
+      if (result.assistantMessage?.proposal) {
+        flash("制作方案已准备好，请核对素材判断和风险后逐项确认。");
+      } else if (isAssistantImageEditIntent(text)) {
+        // The upstream assistant can currently fall back to a generic chat reply.
+        // Route explicit image edits through the existing free draft analysis;
+        // generation still requires the user's separate confirmation.
+        state.firstFrameDirection = text;
+        state.view = null;
+        await makeFrame();
+      } else {
+        flash("制作建议已写入当前操作区。");
+      }
     } catch (error) { flash(error.message || "助手暂时不可用。", "warning"); }
     finally { state.busy = ""; render(); }
+  }
+  function isAssistantImageEditIntent(text) {
+    const normalized = String(text || "").trim();
+    if (!normalized) return false;
+    const imageTarget = /(改图|修图|图片|首帧|背景|人物|模特|商品|衣服|服装|场景|构图|画面)/i.test(normalized);
+    const editAction = /(改|换|调整|修改|优化|修正|保持|保留|生成|重做|去掉|删除|增加|添加|变成)/i.test(normalized);
+    const videoOnly = /(视频|成片|动作迁移)/i.test(normalized) && !/(图片|首帧|背景|人物|商品|衣服|服装|场景|构图|画面)/i.test(normalized);
+    return imageTarget && editAction && !videoOnly;
   }
   async function resolveAssistantMediaIds() {
     const ids = [];
