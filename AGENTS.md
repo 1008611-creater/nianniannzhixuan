@@ -11,6 +11,7 @@
 - Run locally with `npm start`; the default local URL is `http://127.0.0.1:18893`.
 - Run `npm run verify` after application, proxy, or deployment changes.
 - Verify the signed-in template and workspace routes in a real browser for media changes.
+- After every substantive iteration, verify the affected signed-in user path in the in-app browser and compare the observed result with the intended behavior; build success, HTTP 200, or static tests alone are not completion evidence. Record any failed real-page expectation and do not claim the iteration complete until it is retested successfully.
 
 ## Protected Boundaries
 
