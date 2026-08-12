@@ -19,6 +19,9 @@
     { "method": "POST", "path": "/api/v1/assistant/threads/:threadId/messages", "purpose": "assistant advice and proposal creation" },
     { "method": "POST", "path": "/api/v1/assistant/actions/:actionId/confirm", "purpose": "explicit assistant action confirmation" },
     { "method": "POST", "path": "/api/v1/assistant/proposals/:proposalId/conflict-choice", "purpose": "assistant media conflict resolution" },
+    { "method": "POST", "path": "/api/image2/generate", "purpose": "confirmed assistant image edit generation" },
+    { "method": "POST", "path": "/api/image2/sync", "purpose": "targeted assistant image job synchronization" },
+    { "method": "GET", "path": "/api/local/image2/jobs/:jobId/results/:resultIndex", "purpose": "owned generated result transfer into private media upload" },
     { "method": "POST", "path": "/api/v1/projects/:id/first-frame/drafts", "purpose": "first-frame analysis" },
     { "method": "POST", "path": "/api/v1/projects/:id/first-frame/drafts/:draftId/confirm", "purpose": "first-frame submission" },
     { "method": "POST", "path": "/api/v1/workspace/opened", "purpose": "workspace readback" }
