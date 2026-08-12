@@ -67,6 +67,7 @@ assert.match(backend, /new URL\("\/api\/image2\/jobs", remoteOrigin\)/);
 assert.match(backend, /function validCsrfRequest\(request\)/);
 assert.match(backend, /async function bufferOwnedImage\(request, mediaId\)/);
 assert.match(backend, /generatedImageInputs\.set\(token/);
+assert.match(backend, /inputs\/\$\{token\}\.\$\{extension\}/);
 assert.match(backend, /generatedImageInputTtlMs = 10 \* 60 \* 1000/);
 assert.match(backend, /process\.env\.PUBLIC_ORIGIN \|\| "https:\/\/dh\.cauai\.fun"/);
 assert.match(backend, /tokens\.forEach\(\(token\) => generatedImageInputs\.delete\(token\)\)/);
@@ -82,6 +83,6 @@ assert.match(backend, /pathname\.startsWith\("\/api\/"\)/);
 assert.match(backend, /proxyHeaders\(request\.headers, remoteOrigin, csrfOrigin/);
 assert.match(backend, /process\.env\.REMOTE_ORIGIN/);
 assert.match(workspace, /workspace-v206\.js\?v=/);
-assert.match(workspace, /workspace-v206\.js\?v=20260812-agent-image-durable-05/);
+assert.match(workspace, /workspace-v206\.js\?v=20260812-agent-image-durable-06/);
 
 console.log(`OK agent/frontend/backend contract: ${contract.routes.length} routes`);

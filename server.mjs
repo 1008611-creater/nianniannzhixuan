@@ -275,9 +275,10 @@ async function createGeneratedImageInputLinks(request, response) {
     for (const mediaId of mediaIds) {
       const image = await bufferOwnedImage(request, mediaId);
       const token = randomBytes(32).toString("base64url");
+      const extension = image.mimeType === "image/jpeg" ? "jpg" : image.mimeType === "image/webp" ? "webp" : "png";
       tokens.push(token);
       generatedImageInputs.set(token, { ...image, expiresAt: Date.now() + generatedImageInputTtlMs, readsLeft: 4 });
-      links.push(`${origin}/api/local/image2/inputs/${token}`);
+      links.push(`${origin}/api/local/image2/inputs/${token}.${extension}`);
     }
   } catch (error) {
     tokens.forEach((token) => generatedImageInputs.delete(token));
@@ -507,7 +508,7 @@ createServer(async (request, response) => {
       }
       return;
     }
-    const generatedInputMatch = pathname.match(/^\/api\/local\/image2\/inputs\/([A-Za-z0-9_-]{40,80})$/);
+    const generatedInputMatch = pathname.match(/^\/api\/local\/image2\/inputs\/([A-Za-z0-9_-]{40,80})\.(?:png|jpe?g|webp)$/i);
     if (["GET", "HEAD"].includes(request.method) && generatedInputMatch) {
       serveGeneratedImageInput(request, response, generatedInputMatch[1]);
       return;
