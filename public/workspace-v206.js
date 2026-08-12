@@ -117,6 +117,7 @@
     videoMode: "standard",
     pendingFirstFrame: null,
     firstFrameDraftAnalyzing: false,
+    firstFrameDraftError: "",
     motionReferenceTime: null,
     videoHistory: [],
     videoReviewEnabled: false,
@@ -640,12 +641,14 @@
     if (status === "ready" && draft.canConfirm !== false) {
       state.pendingFirstFrame = pendingFirstFrameProjection(draft);
       state.firstFrameDraftAnalyzing = false;
+      state.firstFrameDraftError = "";
       setWorkflowStep("frame");
       return true;
     }
     if (status === "analyzing") {
       state.pendingFirstFrame = null;
       state.firstFrameDraftAnalyzing = true;
+      state.firstFrameDraftError = "";
       setWorkflowStep("frame");
       return true;
     }
@@ -1134,8 +1137,10 @@
     return `<section class="v206-workflow-special" aria-label="首帧分析结果"><div class="v206-workflow-facts"><span><b>参考画面</b>${esc(pending.motionLabel)} · ${Number(draft.referenceTimeSeconds || 0).toFixed(2)} 秒</span><span><b>生成规则</b>同一人物、同一商品、同一机位与地板角度</span></div>${decision}<details class="v206-controlled-prompt"><summary>查看受控提示词</summary><p>${esc(draft.compiledPrompt || "")}</p></details></section>`;
   }
   function firstFrameDraftRecoveryMarkup() {
-    if (!state.firstFrameDraftAnalyzing || state.pendingFirstFrame?.draft) return "";
-    return '<section class="v206-workflow-special" aria-live="polite" aria-label="首帧素材分析"><div class="v206-workflow-facts"><span><b>念念仍在分析当前素材</b>分析完成后会自动显示确认，不需要重新点击生成。</span></div></section>';
+    if (state.pendingFirstFrame?.draft) return "";
+    if (state.firstFrameDraftAnalyzing) return '<section class="v206-workflow-special" aria-live="polite" aria-label="首帧素材分析"><div class="v206-workflow-facts"><span><b>念念仍在分析当前素材</b>分析完成后会自动显示确认，不需要重新点击生成。</span></div></section>';
+    if (state.firstFrameDraftError) return `<section class="v206-workflow-special" role="alert" aria-label="首帧分析失败"><div class="v206-workflow-facts"><span><b>这次分析没有完成</b>${esc(state.firstFrameDraftError)}</span></div></section>`;
+    return "";
   }
   function compactVideoQuoteMarkup() {
     const pending = state.pendingVideo;
@@ -1702,6 +1707,10 @@
     if (!requireLogin()) return;
     const gate = readiness();
     if (!gate.canFrame) { openSources(gate.missing[0] || state.target, "mine"); flash(gate.message, "warning"); return; }
+    state.pendingFirstFrame = null;
+    state.firstFrameDraftError = "";
+    state.firstFrameDraftAnalyzing = true;
+    setWorkflowStep("frame");
     state.busy = "frame";
     render();
     flash("正在分析人物、商品、背景和参考视频，准备首帧提示词。", "info");
@@ -1719,8 +1728,15 @@
         state.firstFrameDraftAnalyzing = true;
         render();
         const recovered = await reconcilePendingFirstFrameDraft({ waitForMissing: true });
-        if (!recovered.recovered) flash("没有找到可恢复的首帧分析。当前素材如未变化，可以重新分析。", "warning");
-      } else flash(firstFrameErrorMessage(error), "warning");
+        if (!recovered.recovered) {
+          state.firstFrameDraftError = "没有找到可恢复的首帧分析。当前素材如未变化，可以重新分析。";
+          flash(state.firstFrameDraftError, "warning");
+        }
+      } else {
+        state.firstFrameDraftAnalyzing = false;
+        state.firstFrameDraftError = firstFrameErrorMessage(error);
+        flash(state.firstFrameDraftError, "warning");
+      }
     } finally { state.busy = ""; render(); }
   }
   async function confirmFirstFrame() {
@@ -1855,6 +1871,7 @@
     state.assistantText = text;
     state.busy = "assistant";
     render();
+    let startImageEditDraft = false;
     try {
       await ensureCanonicalProject();
       const mediaIds = await resolveAssistantMediaIds();
@@ -1872,12 +1889,13 @@
         // generation still requires the user's separate confirmation.
         state.firstFrameDirection = text;
         state.view = null;
-        await makeFrame();
+        startImageEditDraft = true;
       } else {
         flash("制作建议已写入当前操作区。");
       }
     } catch (error) { flash(error.message || "助手暂时不可用。", "warning"); }
     finally { state.busy = ""; render(); }
+    if (startImageEditDraft) await makeFrame();
   }
   function isAssistantImageEditIntent(text) {
     const normalized = String(text || "").trim();
@@ -2062,7 +2080,7 @@
     if (action === "workflow-skip") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.min(index + 1, workflowSteps.length - 1)].id); render(); return; }
     if (action === "source") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; setWorkflowStep(target); render(); return; }
     if (action === "adjust-first-frame-material") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; openSources(target, "mine"); return; }
-    if (action === "retry-first-frame-analysis") { state.pendingFirstFrame = null; state.firstFrameDraftAnalyzing = false; state.view = null; makeFrame(); return; }
+    if (action === "retry-first-frame-analysis") { state.pendingFirstFrame = null; state.firstFrameDraftAnalyzing = false; state.firstFrameDraftError = ""; state.view = null; makeFrame(); return; }
     if (action === "toggle-assistant-mentions") { state.assistantMentionsOpen = !state.assistantMentionsOpen; render(); return; }
     if (action === "assistant-thread" || action === "sources" || action === "templates" || action === "tasks" || action === "settings") {
       if (action === "sources") { openSources(slots[button.dataset.target] ? button.dataset.target : state.target); return; }
