@@ -2041,7 +2041,12 @@
         flash("改图任务已提交；只同步本次任务，不会刷新整个素材界面。");
         window.setTimeout(resumePendingAgentImageEdit, 1500);
       }
-    } catch (error) { flash(error.message || "改图任务没有提交成功。", "warning"); }
+    } catch (error) {
+      const message = /MEDIA_REQUEST_FAILED_50[234]/.test(String(error?.message || ""))
+        ? "改图服务暂时不可用。本次没有创建任务，也不会扣费；方案已保留，可以稍后重试。"
+        : (error.message || "改图任务没有提交成功。");
+      flash(message, "warning");
+    }
     finally { state.busy = ""; render(); }
   }
   function isAssistantImageEditIntent(text) {
