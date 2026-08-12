@@ -81,3 +81,9 @@ for the range result. Do not pass a signed URL, session cookie, or token to the 
 
 The produced record is only a transport baseline. Browser acceptance still has to verify the
 ordinary signed-in page's image dimensions, `video.currentSrc`, playback, seeking, and download.
+
+### Production storage
+
+The container keeps playback derivatives at `/app/playback`, backed by
+`/srv/kidswear-data/niannian-web/playback` on Haikayun. Keep release source under
+`/opt/niannian-web`; do not put growing media data on the root filesystem.
