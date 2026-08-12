@@ -1,0 +1,16 @@
+services:
+  agent-vault:
+    image: infisical/agent-vault:latest
+    container_name: niannian-agent-vault
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:14321:14321"
+      - "127.0.0.1:14322:14322"
+    env_file:
+      - /srv/kidswear-data/niannian-agent-vault/runtime.env
+    volumes:
+      - /srv/kidswear-data/niannian-agent-vault/data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
