@@ -14,7 +14,8 @@ services:
     ports:
       - 127.0.0.1:18893:18893
     volumes:
-      - /opt/niannian-web/playback:/app/playback
+      # Media derivatives belong on the attached data disk, not the root OS disk.
+      - /srv/kidswear-data/niannian-web/playback:/app/playback
     healthcheck:
       test:
         - CMD

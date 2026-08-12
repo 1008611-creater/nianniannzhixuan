@@ -12,7 +12,7 @@ assert.match(server, /function servePlayback\(request, response, mediaId\)/);
 assert.match(server, /schedulePlaybackDerivative\(mediaId, headers\)/);
 assert.match(server, /bytes=0-0/, "playback route must authorize before serving a private derivative");
 assert.match(server, /serveStatic\(request, response, derivative, "private, max-age=300, must-revalidate"\)/, "playback derivatives must never use a shared-cache policy");
-assert.match(compose, /\/opt\/niannian-web\/playback:\/app\/playback/);
+assert.match(compose, /\/srv\/kidswear-data\/niannian-web\/playback:\/app\/playback/, "playback derivatives must use the attached data disk");
 assert.match(dockerfile, /apk add --no-cache ffmpeg/);
 
 console.log("OK playback derivatives are authenticated, persistent, range-capable and faststart");

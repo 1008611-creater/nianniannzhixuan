@@ -24,6 +24,7 @@
 - Use a `codex/` branch and Pull Request for shared source changes.
 - Upload only runtime source and deployment manifests. Exclude Git history, screenshots, temporary files, local logs, tests, and caches from production artifacts.
 - The production target is the Haikayun Ubuntu server at `38.76.193.254`, using Docker and the existing `haika-niannian-primary` Cloudflare Tunnel.
+- Persist playback derivatives and future media staging under `/srv/kidswear-data/niannian-web`; keep `/opt/niannian-web` for release source and Compose files only.
 - Run this site on host-loopback port `18893`; do not replace existing containers or public listeners on ports `80` and `443`.
 
 ## Production Authorization
