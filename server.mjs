@@ -1,7 +1,9 @@
 import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { once } from "node:events";
+import { lookup } from "node:dns/promises";
 import { Readable } from "node:stream";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { proxyHeaders, proxyResponseHeaders } from "./proxy-headers.mjs";
@@ -12,6 +14,7 @@ const remoteOrigin = process.env.REMOTE_ORIGIN || "https://dh.cauai.fun";
 const csrfOrigin = process.env.CSRF_ORIGIN || "http://127.0.0.1:18890";
 const mediaProxyDebug = process.env.MEDIA_PROXY_DEBUG === "1";
 const proxyTimeoutMs = Number(process.env.PROXY_TIMEOUT_MS || 120_000);
+const generatedImageMaxBytes = Number(process.env.GENERATED_IMAGE_MAX_BYTES || 25 * 1024 * 1024);
 const publicDir = resolve("public");
 const playbackDir = resolve(process.env.PLAYBACK_DIR || "playback");
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -22,6 +25,7 @@ const mimeTypes = {
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
   ".svg": "image/svg+xml", ".mp4": "video/mp4", ".woff": "font/woff", ".woff2": "font/woff2",
 };
+const generatedImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 mkdirSync(playbackDir, { recursive: true });
 
@@ -192,6 +196,108 @@ async function sendUpstreamResponse(response, upstream) {
   response.end();
 }
 
+function isBlockedAddress(address) {
+  const value = String(address || "").toLowerCase();
+  if (value === "::1" || value === "::" || value.startsWith("fe80:") || value.startsWith("fc") || value.startsWith("fd")) return true;
+  const parts = value.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return false;
+  return parts[0] === 10
+    || parts[0] === 127
+    || (parts[0] === 169 && parts[1] === 254)
+    || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+    || (parts[0] === 192 && parts[1] === 168)
+    || parts[0] === 0;
+}
+
+async function assertPublicHttpsUrl(value) {
+  const url = new URL(String(value || ""));
+  if (url.protocol !== "https:" || url.username || url.password || !url.hostname) throw new Error("GENERATED_IMAGE_URL_REJECTED");
+  const addresses = await lookup(url.hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some((entry) => isBlockedAddress(entry.address))) throw new Error("GENERATED_IMAGE_URL_REJECTED");
+  return { url, addresses };
+}
+
+async function requestGeneratedImage(sourceUrl) {
+  const { url, addresses } = await assertPublicHttpsUrl(sourceUrl);
+  const selected = addresses[0];
+  return await new Promise((resolveRequest, rejectRequest) => {
+    const request = httpsRequest(url, {
+      headers: { accept: "image/avif,image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.1" },
+      lookup(_hostname, options, callback) {
+        if (options?.all) callback(null, addresses);
+        else callback(null, selected.address, selected.family);
+      },
+    }, resolveRequest);
+    request.setTimeout(proxyTimeoutMs, () => request.destroy(new Error("GENERATED_IMAGE_SOURCE_TIMEOUT")));
+    request.on("error", rejectRequest);
+    request.end();
+  });
+}
+
+async function fetchGeneratedImage(sourceUrl) {
+  let url = new URL(String(sourceUrl || ""));
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    const upstream = await requestGeneratedImage(url);
+    const status = Number(upstream.statusCode || 0);
+    if ([301, 302, 303, 307, 308].includes(status)) {
+      const location = upstream.headers.location;
+      upstream.destroy();
+      if (!location || redirects === 3) throw new Error("GENERATED_IMAGE_REDIRECT_REJECTED");
+      url = new URL(location, url);
+      continue;
+    }
+    if (status < 200 || status >= 300) {
+      upstream.destroy();
+      throw new Error(`GENERATED_IMAGE_SOURCE_${status}`);
+    }
+    const mimeType = String(upstream.headers["content-type"] || "").split(";", 1)[0].trim().toLowerCase();
+    const declaredBytes = Number(upstream.headers["content-length"] || 0);
+    if (!generatedImageMimeTypes.has(mimeType)) throw new Error("GENERATED_IMAGE_TYPE_REJECTED");
+    if (declaredBytes > generatedImageMaxBytes) throw new Error("GENERATED_IMAGE_TOO_LARGE");
+    const chunks = [];
+    let bytes = 0;
+    for await (const chunk of upstream) {
+      bytes += chunk.length;
+      if (bytes > generatedImageMaxBytes) {
+        upstream.destroy();
+        throw new Error("GENERATED_IMAGE_TOO_LARGE");
+      }
+      chunks.push(chunk);
+    }
+    return { body: Buffer.concat(chunks), mimeType };
+  }
+  throw new Error("GENERATED_IMAGE_REDIRECT_REJECTED");
+}
+
+async function serveGeneratedImageResult(request, response, jobId, resultIndex) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const jobsResponse = await fetch(new URL("/api/image2/jobs", remoteOrigin), {
+    headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!jobsResponse.ok) {
+    await sendUpstreamResponse(response, jobsResponse);
+    return;
+  }
+  const payload = await jobsResponse.json();
+  const job = (Array.isArray(payload.jobs) ? payload.jobs : []).find((item) => String(item?.id || "") === jobId);
+  const resultUrl = job && Array.isArray(job.resultUrls) ? job.resultUrls[resultIndex] : "";
+  if (!resultUrl) {
+    response.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    response.end(JSON.stringify({ error: "GENERATED_IMAGE_RESULT_NOT_FOUND" }));
+    return;
+  }
+  const image = await fetchGeneratedImage(resultUrl);
+  response.writeHead(200, {
+    "content-type": image.mimeType,
+    "content-length": image.body.length,
+    "cache-control": "private, no-store",
+    "x-content-type-options": "nosniff",
+  });
+  response.end(request.method === "HEAD" ? undefined : image.body);
+}
+
 async function servePlayback(request, response, mediaId) {
   const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
   const sourceUrl = new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin);
@@ -271,6 +377,18 @@ createServer(async (request, response) => {
     const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
     if (["GET", "HEAD"].includes(request.method) && playbackMatch) {
       await servePlayback(request, response, playbackMatch[1]);
+      return;
+    }
+    const generatedImageMatch = pathname.match(/^\/api\/local\/image2\/jobs\/([A-Za-z0-9_-]{6,160})\/results\/(\d{1,2})$/);
+    if (["GET", "HEAD"].includes(request.method) && generatedImageMatch) {
+      try {
+        await serveGeneratedImageResult(request, response, generatedImageMatch[1], Number(generatedImageMatch[2]));
+      } catch (error) {
+        const code = String(error?.message || "GENERATED_IMAGE_TRANSFER_FAILED").match(/^GENERATED_IMAGE_[A-Z0-9_]+(?:_\d+)?$/)?.[0] || "GENERATED_IMAGE_TRANSFER_FAILED";
+        console.warn(`[image2-transfer] ${code}`);
+        response.writeHead(502, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        response.end(JSON.stringify({ error: code }));
+      }
       return;
     }
     const file = localFile(pathname);

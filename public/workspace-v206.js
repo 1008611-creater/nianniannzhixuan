@@ -130,6 +130,7 @@
     taskRefreshAt: 0,
     taskRefreshAttempts: 0,
     firstFrameDirection: "",
+    pendingAgentImageEdit: normalizePendingAgentImageEdit(stored.pendingAgentImageEdit),
     projectNameDraft: "",
     projectLoading: !previewMode,
     sourceMutation: 0,
@@ -163,6 +164,7 @@
   }
   let taskRefreshTimer = 0;
   let taskRefreshInFlight = false;
+  let agentImageSyncInFlight = false;
   let taskRefreshRun = 0;
   let secondaryWorkspaceRun = 0;
   let firstFrameDraftRecoveryTimer = 0;
@@ -205,6 +207,7 @@
       assistantThreadId: state.assistantThreadId,
       invalidatedDerivedByProject: state.invalidatedDerivedByProject,
       generationSources: state.generationSources,
+      pendingAgentImageEdit: state.pendingAgentImageEdit,
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
   }
@@ -620,6 +623,7 @@
       state.assistantThreadId = thread.id;
       const detail = await mediaRequest(`/api/v1/assistant/threads/${thread.id}/messages`).catch(() => ({ thread: { messages: [] } }));
       state.chat = detail.thread?.messages || [];
+      restorePendingAgentImageEdit();
     } else state.chat = [];
     if (state.view === "assistant-thread") render();
   }
@@ -929,12 +933,48 @@
       const price = estimate.tzCost != null ? `<small>成功入库后扣 ${esc(Number(estimate.tzCost).toFixed(2))} TZB</small>` : estimate.maxTzCost != null ? `<small>最高 ${esc(Number(estimate.maxTzCost).toFixed(2))} TZB${estimate.quotedMaxDurationSeconds != null ? ` · ${esc(Number(estimate.quotedMaxDurationSeconds).toFixed(1))} 秒` : ""}</small>` : "";
       const targetLabels = { PERSON: "人物素材", CLOTHES: "服装素材", SCENE: "场景素材", FIRST_FRAME: "商品首帧", FINAL_VIDEO: "当前成片" };
       const target = action.targetRole ? `<small>作用位置：${esc(targetLabels[action.targetRole] || "当前项目")}</small>` : "";
-      const confirm = String(action.status || "").toLowerCase() === "pending_confirmation" ? `<button type="button" data-v206-action="confirm-assistant-proposal" data-proposal-action="${esc(action.id)}" ${state.busy ? "disabled" : ""}>确认${esc(action.label || "制作")}</button>` : "";
+      const actionStatus = String(action.status || "").toLowerCase();
+      const isLocalImageEdit = String(action.id || "").startsWith("local-image-edit:");
+      const canConfirm = actionStatus === "pending_confirmation" || (isLocalImageEdit && actionStatus === "retryable_failed");
+      const buttonLabel = actionStatus === "retryable_failed" ? "同步改图结果" : `确认${action.label || "制作"}`;
+      const confirm = canConfirm ? `<button type="button" data-v206-action="confirm-assistant-proposal" data-proposal-action="${esc(action.id)}" ${state.busy ? "disabled" : ""}>${esc(buttonLabel)}</button>` : "";
       return `<article class="v206-proposal-action"><b>${esc(action.label || "制作动作")}</b><span>${esc(assistantActionStatus(action))}</span>${target}${price}${confirm}</article>`;
     }).join("") : `<p class="v206-proposal-empty">当前方案不需要新增制作动作。</p>`;
     const evidence = evidenceRefs.length ? `<h4>素材依据</h4><div class="v206-evidence-refs">${evidenceRefs.map((ref) => `<span><b>${esc(ref.role)}</b>${esc(ref.label)}<small>${esc(ref.reason)}</small></span>`).join("")}</div>` : "";
     const conflict = conflictChoices.length === 2 && !conflictResolved ? `<h4>素材冲突处理</h4><div class="v206-proposal-actions">${conflictChoices.map((choice) => `<button type="button" data-v206-action="choose-assistant-conflict" data-proposal-id="${esc(proposal.id)}" data-conflict-choice="${esc(choice.id)}" ${state.busy ? "disabled" : ""}>${esc(choice.label)}</button>`).join("")}</div>` : "";
     return `<section class="v206-proposal" aria-label="制作方案"><h3>${esc(content.title || "当前制作方案")}</h3><p>${esc(content.creativeDirection || "先以当前素材为准，确认可控范围后再制作。")}</p><h4>素材判断</h4>${items(materialAssessment, "ul")}${evidence}<h4>成片分镜</h4>${items(storyboard, "ol")}<h4>锁定要求</h4>${items(locks, "ul")}${risks.length ? `<h4>风险与替代</h4>${risks.map((risk) => `<p class="v206-proposal-risk">${esc(risk.issue || "存在创作风险。")} 建议：${esc(risk.alternative || "先调整素材后再确认。")}</p>`).join("")}` : ""}${conflict}<h4>待确认动作</h4><div class="v206-proposal-actions">${actionCards}</div></section>`;
+  }
+  function normalizePendingAgentImageEdit(edit) {
+    if (!edit?.id || !edit.requirement || !Array.isArray(edit.inputs)) return null;
+    const inputs = edit.inputs.map((item) => ({ slot: item.slot, role: item.role, label: item.label, mediaId: item.mediaId || "" })).filter((item) => slots[item.slot] && item.label);
+    return { id: edit.id, requirement: edit.requirement, inputs, status: edit.status || "pending_confirmation", createdAt: edit.createdAt || new Date().toISOString(), jobId: edit.jobId || "" };
+  }
+  function localAgentImageEditMessage(edit) {
+    return {
+      id: `local-agent-image-edit-message:${edit.id}`,
+      role: "assistant",
+      content: "已根据当前项目整理改图方案。确认前不会生成或扣费。",
+      createdAt: edit.createdAt,
+      proposal: {
+        id: `local-agent-image-edit-proposal:${edit.id}`,
+        content: {
+          title: "商品首帧改图方案",
+          creativeDirection: edit.requirement,
+          materialAssessment: ["使用当前项目的人物、商品和背景素材，生成新的商品首帧。"],
+          evidenceRefs: edit.inputs.map((item) => ({ role: item.role, label: item.label, reason: "当前项目已绑定素材" })),
+          storyboard: ["保持人物与商品主体一致", "按要求调整画面与背景", "生成结果私有入库并替换商品首帧"],
+          locks: ["不修改当前项目的原始人物、商品和参考视频"],
+          risks: [],
+        },
+        actions: [{ id: `local-image-edit:${edit.id}`, label: "改图（成功入库后扣费）", targetRole: "FIRST_FRAME", status: edit.status || "pending_confirmation" }],
+      },
+    };
+  }
+  function restorePendingAgentImageEdit() {
+    const edit = state.pendingAgentImageEdit;
+    if (!edit?.id || !["pending_confirmation", "queued", "running", "retryable_failed", "failed"].includes(edit.status)) return;
+    if (!state.chat.some((message) => message.id === `local-agent-image-edit-message:${edit.id}`)) state.chat.push(localAgentImageEditMessage(edit));
+    if (edit.jobId && ["queued", "running"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
   }
   function assistantComposerMarkup(thread = false) {
     const referenceButtons = availableMaterials().filter((item) => item.kind === "image").slice(0, 8).map((item) => `<button type="button" class="v206-mention ${state.assistantRefs.includes(item.id) ? "active" : ""}" data-v206-action="mention" data-material="${esc(item.id)}">@${esc(item.label)}</button>`).join("");
@@ -1502,11 +1542,13 @@
       flash(["person", "outfit", "scene", "motion"].includes(target)
         ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
         : `${slots[target].title}已替换并保存。`);
+      return true;
     } catch (error) {
       if (mutation !== state.sourceMutation) return;
       state.busy = "";
       syncSourceSheetBusy();
       flash(error.message || "素材没有保存到项目。", "warning");
+      return false;
     } finally {
       if (mutation === state.sourceMutation && state.busy === "assign") {
         state.busy = "";
@@ -1656,8 +1698,9 @@
         flash("图片已加入念念引用；写一句修改要求即可发送。");
       } else {
         state.target = target;
-        await assign(asset);
+        if (!await assign(asset)) return null;
       }
+      return asset;
     } catch (error) {
       const code = String(error?.message || "");
       const transportFailure = code === "MEDIA_UPLOAD_FAILED" || code === "MEDIA_UPLOAD_CONTENT_LENGTH_MISMATCH";
@@ -1666,6 +1709,7 @@
       state.busy = "";
       syncSourceSheetBusy();
       flash(busy ? "当前上传任务较多，请稍后重新上传。" : (transportFailure ? "上传传输中断，请重新选择文件上传。本次未完成记录已清理。" : (friendly || code || "上传失败。")), "warning");
+      return null;
     } finally {
       if (state.busy === "upload" || state.busy === "assistant-upload") {
         state.busy = "";
@@ -1871,7 +1915,6 @@
     state.assistantText = text;
     state.busy = "assistant";
     render();
-    let startImageEditDraft = false;
     try {
       await ensureCanonicalProject();
       const mediaIds = await resolveAssistantMediaIds();
@@ -1884,18 +1927,119 @@
       if (result.assistantMessage?.proposal) {
         flash("制作方案已准备好，请核对素材判断和风险后逐项确认。");
       } else if (isAssistantImageEditIntent(text)) {
-        // The upstream assistant can currently fall back to a generic chat reply.
-        // Route explicit image edits through the existing free draft analysis;
-        // generation still requires the user's separate confirmation.
-        state.firstFrameDirection = text;
-        state.view = null;
-        startImageEditDraft = true;
+        // The upstream assistant can currently fall back to a generic reply.
+        // Build a non-billable confirmation card. Generation starts only after
+        // the user confirms the card and the exact billing preflight.
+        const edit = createPendingAgentImageEdit(text);
+        state.pendingAgentImageEdit = edit;
+        state.chat.push(localAgentImageEditMessage(edit));
+        writeState();
+        flash("改图方案已准备好。确认前不会生成或扣费。");
       } else {
         flash("制作建议已写入当前操作区。");
       }
     } catch (error) { flash(error.message || "助手暂时不可用。", "warning"); }
     finally { state.busy = ""; render(); }
-    if (startImageEditDraft) await makeFrame();
+  }
+  function createPendingAgentImageEdit(requirement) {
+    const inputs = ["frame", "person", "outfit", "scene"]
+      .map((slot) => ({ slot, asset: assetFor(slot) }))
+      .filter((item) => item.asset?.url && item.asset.kind === "image")
+      .map(({ slot, asset }) => ({ slot, role: slots[slot]?.title || slot, label: asset.label || "当前素材", mediaId: asset.mediaId || "" }));
+    return { id: crypto.randomUUID(), requirement, inputs, status: "pending_confirmation", createdAt: new Date().toISOString(), jobId: "" };
+  }
+  function replaceLocalAgentImageEditAction(edit) {
+    state.chat = state.chat.map((message) => message.id === `local-agent-image-edit-message:${edit.id}` ? localAgentImageEditMessage(edit) : message);
+  }
+  async function persistAgentImageResult(edit, job) {
+    const response = await fetch(`/api/local/image2/jobs/${encodeURIComponent(job.id)}/results/0`, { credentials: "same-origin" });
+    if (!response.ok) throw new Error("生成图片暂时无法安全转存，请稍后重试。");
+    const mimeType = String(response.headers.get("content-type") || "").split(";", 1)[0];
+    if (!MEDIA_MIME_TYPES.has(mimeType) || !mimeType.startsWith("image/")) throw new Error("生成结果不是支持的图片格式。");
+    const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
+    const file = new File([await response.blob()], `agent-image-${job.id}.${extension}`, { type: mimeType });
+    const asset = await upload("frame", file, { generatedResult: true });
+    if (!asset?.mediaId) throw new Error("生成图片未能保存到私有素材库。");
+    state.pendingAgentImageEdit = null;
+    writeState();
+    flash("改图已私有入库，并替换为当前商品首帧。");
+  }
+  async function syncAgentImageEdit(edit, { attempts = 1 } = {}) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const result = await mediaRequest("/api/image2/sync", { method: "POST", body: JSON.stringify({ jobId: edit.jobId }) });
+      const job = result.job || (result.jobs || []).find((item) => item.id === edit.jobId);
+      if (job?.resultUrls?.length) { await persistAgentImageResult(edit, job); return true; }
+      if (/blocked|failed|error/i.test(String(job?.status || ""))) {
+        const error = new Error(job.statusText || "改图任务未生成可用结果，本次不会入库。");
+        error.terminal = true;
+        throw error;
+      }
+      if (attempt + 1 < attempts) await new Promise((resolve) => window.setTimeout(resolve, Math.min(30_000, 4_000 * (attempt + 1))));
+    }
+    return false;
+  }
+  async function resumePendingAgentImageEdit() {
+    const edit = state.pendingAgentImageEdit;
+    if (agentImageSyncInFlight || !edit?.jobId) return;
+    agentImageSyncInFlight = true;
+    try {
+      const completed = await syncAgentImageEdit(edit, { attempts: 12 });
+      if (!completed && state.pendingAgentImageEdit?.id === edit.id) {
+        edit.status = "retryable_failed";
+        replaceLocalAgentImageEditAction(edit);
+        writeState();
+        render();
+      }
+    } catch (error) {
+      if (state.pendingAgentImageEdit?.id === edit.id) {
+        edit.status = error.terminal ? "failed" : "retryable_failed";
+        replaceLocalAgentImageEditAction(edit);
+        writeState();
+        render();
+      }
+      flash(error.message || "改图结果暂时无法同步。", "warning");
+    } finally { agentImageSyncInFlight = false; }
+  }
+  async function confirmLocalAgentImageEdit(actionId) {
+    const edit = state.pendingAgentImageEdit;
+    if (!edit?.id || actionId !== `local-image-edit:${edit.id}`) return;
+    if (!edit.inputs.length) { flash("当前项目没有可用于改图的图片素材。", "warning"); return; }
+    state.busy = "assistant-confirm";
+    render();
+    try {
+      if (edit.jobId) {
+        edit.status = "running";
+        replaceLocalAgentImageEditAction(edit);
+        writeState();
+        const completed = await syncAgentImageEdit(edit, { attempts: 1 });
+        if (!completed) {
+          edit.status = "queued";
+          replaceLocalAgentImageEditAction(edit);
+          writeState();
+          window.setTimeout(resumePendingAgentImageEdit, 1500);
+          flash("改图仍在生成，稍后会继续同步本次任务。");
+        }
+        return;
+      }
+      const confirmed = await billing("image", { count: 1, inputs: edit.inputs });
+      if (!confirmed) return;
+      const imageUrls = edit.inputs.map((item) => assetFor(item.slot)?.url || "").filter(Boolean);
+      if (!imageUrls.length) throw new Error("当前项目的改图素材已变化，请重新生成方案。");
+      const result = await mediaRequest("/api/image2/generate", { method: "POST", body: JSON.stringify({ prompt: edit.requirement, imageUrls, aspectRatio: "9:16", resolution: "2k", targetNodeId: "firstFrame", targetLabel: "商品首帧", purpose: "agent-image-edit" }) });
+      const job = result.job || result.jobs?.[0];
+      if (!job?.id) throw new Error(result.reason || "改图任务没有成功创建。");
+      edit.jobId = job.id;
+      edit.status = job.resultUrls?.length ? "running" : "queued";
+      state.pendingAgentImageEdit = edit;
+      replaceLocalAgentImageEditAction(edit);
+      writeState();
+      if (job.resultUrls?.length) await persistAgentImageResult(edit, job);
+      else {
+        flash("改图任务已提交；只同步本次任务，不会刷新整个素材界面。");
+        window.setTimeout(resumePendingAgentImageEdit, 1500);
+      }
+    } catch (error) { flash(error.message || "改图任务没有提交成功。", "warning"); }
+    finally { state.busy = ""; render(); }
   }
   function isAssistantImageEditIntent(text) {
     const normalized = String(text || "").trim();
@@ -1925,6 +2069,7 @@
   }
   async function confirmAssistantProposalAction(actionId) {
     if (!requireLogin() || !actionId) return;
+    if (actionId.startsWith("local-image-edit:")) { await confirmLocalAgentImageEdit(actionId); return; }
     state.busy = "assistant-confirm";
     render();
     try {
