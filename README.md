@@ -97,3 +97,9 @@ owned inputs, creates the persistent job, privately ingests a successful result,
 project `FIRST_FRAME` node. A production iteration is complete only when a real signed-in test
 proves the job is created, the provider consumes the server-owned inputs, the result is privately
 stored, and the replacement survives a full reload.
+
+Production provider setup is still required while `/api/v1/readiness` reports
+`services.imageGeneration: false`. The UI checks this before the billing confirmation and keeps
+the prepared proposal retryable without creating a task or charge. Enable exactly one server-side
+image adapter (RunningHub, Windows bridge, or Image2 relay); never place its credential in browser
+code, this repository, or chat history.

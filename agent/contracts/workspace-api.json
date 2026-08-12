@@ -13,6 +13,7 @@
     { "method": "GET", "path": "/api/v1/projects", "purpose": "project hydration" },
     { "method": "GET", "path": "/api/v1/media", "purpose": "private media hydration" },
     { "method": "GET", "path": "/api/v1/jobs", "purpose": "task refresh" },
+    { "method": "GET", "path": "/api/v1/readiness", "purpose": "provider preflight before billing confirmation" },
     { "method": "GET", "path": "/api/v1/assistant/threads", "purpose": "assistant thread hydration" },
     { "method": "POST", "path": "/api/v1/assistant/threads", "purpose": "assistant thread creation" },
     { "method": "GET", "path": "/api/v1/assistant/threads/:threadId/messages", "purpose": "assistant message hydration" },
