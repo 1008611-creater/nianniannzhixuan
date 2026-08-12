@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { once } from "node:events";
@@ -19,6 +20,7 @@ const publicDir = resolve("public");
 const playbackDir = resolve(process.env.PLAYBACK_DIR || "playback");
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const playbackJobs = new Map();
+const generatedImageInputs = new Map();
 const mimeTypes = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -26,6 +28,8 @@ const mimeTypes = {
   ".svg": "image/svg+xml", ".mp4": "video/mp4", ".woff": "font/woff", ".woff2": "font/woff2",
 };
 const generatedImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const generatedImageInputTtlMs = 10 * 60 * 1000;
+const publicOrigin = new URL(process.env.PUBLIC_ORIGIN || "https://dh.cauai.fun").origin;
 
 mkdirSync(playbackDir, { recursive: true });
 
@@ -194,6 +198,119 @@ async function sendUpstreamResponse(response, upstream) {
     }
   }
   response.end();
+}
+
+function requestCookie(request, name) {
+  const pair = String(request.headers.cookie || "").split(";").map((item) => item.trim()).find((item) => item.startsWith(`${name}=`));
+  return pair ? decodeURIComponent(pair.slice(name.length + 1)) : "";
+}
+
+function validCsrfRequest(request) {
+  const cookie = requestCookie(request, "kidswear_csrf_v2");
+  return Boolean(cookie) && cookie === String(request.headers["x-csrf-token"] || "");
+}
+
+async function readJsonRequest(request, maxBytes = 64 * 1024) {
+  const chunks = [];
+  let bytes = 0;
+  for await (const chunk of request) {
+    bytes += chunk.length;
+    if (bytes > maxBytes) throw new Error("REQUEST_BODY_TOO_LARGE");
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+function publicRequestOrigin(request) {
+  const host = String(request.headers.host || "");
+  if (!host || /[\s\/]/.test(host)) throw new Error("PUBLIC_HOST_INVALID");
+  if (!/^(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(host)) return publicOrigin;
+  const forwarded = String(request.headers["x-forwarded-proto"] || "").split(",", 1)[0].trim().toLowerCase();
+  const protocol = forwarded === "https" ? "https" : "http";
+  return `${protocol}://${host}`;
+}
+
+async function bufferOwnedImage(request, mediaId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  ["content-length", "content-type", "x-csrf-token"].forEach((name) => headers.delete(name));
+  const upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
+    headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!upstream.ok || !upstream.body) {
+    await upstream.body?.cancel();
+    throw new Error(upstream.status === 401 || upstream.status === 403 ? "GENERATED_IMAGE_INPUT_FORBIDDEN" : `GENERATED_IMAGE_INPUT_${upstream.status}`);
+  }
+  const mimeType = String(upstream.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
+  const declaredBytes = Number(upstream.headers.get("content-length") || 0);
+  if (!generatedImageMimeTypes.has(mimeType)) throw new Error("GENERATED_IMAGE_INPUT_TYPE_REJECTED");
+  if (declaredBytes > generatedImageMaxBytes) throw new Error("GENERATED_IMAGE_INPUT_TOO_LARGE");
+  const chunks = [];
+  let bytes = 0;
+  for await (const chunk of upstream.body) {
+    bytes += chunk.length;
+    if (bytes > generatedImageMaxBytes) {
+      await upstream.body.cancel().catch(() => {});
+      throw new Error("GENERATED_IMAGE_INPUT_TOO_LARGE");
+    }
+    chunks.push(chunk);
+  }
+  return { body: Buffer.concat(chunks), mimeType };
+}
+
+async function createGeneratedImageInputLinks(request, response) {
+  if (!validCsrfRequest(request)) {
+    response.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    response.end(JSON.stringify({ error: "CSRF_INVALID" }));
+    return;
+  }
+  const payload = await readJsonRequest(request);
+  const mediaIds = [...new Set(Array.isArray(payload.mediaIds) ? payload.mediaIds : [])].filter((id) => /^[0-9a-f-]{36}$/i.test(String(id))).slice(0, 4);
+  if (!mediaIds.length) throw new Error("GENERATED_IMAGE_INPUT_REQUIRED");
+  const origin = publicRequestOrigin(request);
+  const links = [];
+  const tokens = [];
+  try {
+    for (const mediaId of mediaIds) {
+      const image = await bufferOwnedImage(request, mediaId);
+      const token = randomBytes(32).toString("base64url");
+      tokens.push(token);
+      generatedImageInputs.set(token, { ...image, expiresAt: Date.now() + generatedImageInputTtlMs, readsLeft: 4 });
+      links.push(`${origin}/api/local/image2/inputs/${token}`);
+    }
+  } catch (error) {
+    tokens.forEach((token) => generatedImageInputs.delete(token));
+    throw error;
+  }
+  response.writeHead(201, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+  response.end(JSON.stringify({ links, expiresInSeconds: generatedImageInputTtlMs / 1000 }));
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, input] of generatedImageInputs) if (input.expiresAt <= now || input.readsLeft <= 0) generatedImageInputs.delete(token);
+}, 60_000).unref();
+
+function serveGeneratedImageInput(request, response, token) {
+  const input = generatedImageInputs.get(token);
+  if (!input || input.expiresAt <= Date.now() || input.readsLeft <= 0) {
+    generatedImageInputs.delete(token);
+    response.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    response.end(JSON.stringify({ error: "GENERATED_IMAGE_INPUT_EXPIRED" }));
+    return;
+  }
+  if (request.method === "GET") {
+    input.readsLeft -= 1;
+    if (input.readsLeft <= 0) generatedImageInputs.delete(token);
+  }
+  response.writeHead(200, {
+    "content-type": input.mimeType,
+    "content-length": input.body.length,
+    "cache-control": "private, no-store",
+    "x-content-type-options": "nosniff",
+  });
+  response.end(request.method === "HEAD" ? undefined : input.body);
 }
 
 function isBlockedAddress(address) {
@@ -377,6 +494,22 @@ createServer(async (request, response) => {
     const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
     if (["GET", "HEAD"].includes(request.method) && playbackMatch) {
       await servePlayback(request, response, playbackMatch[1]);
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/local/image2/input-links") {
+      try {
+        await createGeneratedImageInputLinks(request, response);
+      } catch (error) {
+        const code = String(error?.message || "GENERATED_IMAGE_INPUT_FAILED").match(/^[A-Z0-9_]+(?:_\d+)?$/)?.[0] || "GENERATED_IMAGE_INPUT_FAILED";
+        console.warn(`[image2-input] ${code}`);
+        response.writeHead(code === "REQUEST_BODY_TOO_LARGE" ? 413 : 502, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        response.end(JSON.stringify({ error: code }));
+      }
+      return;
+    }
+    const generatedInputMatch = pathname.match(/^\/api\/local\/image2\/inputs\/([A-Za-z0-9_-]{40,80})$/);
+    if (["GET", "HEAD"].includes(request.method) && generatedInputMatch) {
+      serveGeneratedImageInput(request, response, generatedInputMatch[1]);
       return;
     }
     const generatedImageMatch = pathname.match(/^\/api\/local\/image2\/jobs\/([A-Za-z0-9_-]{6,160})\/results\/(\d{1,2})$/);

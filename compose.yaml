@@ -10,6 +10,7 @@ services:
       HOST: 0.0.0.0
       PORT: 18893
       REMOTE_ORIGIN: https://dh-origin.cauai.fun
+      PUBLIC_ORIGIN: https://dh.cauai.fun
       CSRF_ORIGIN: http://127.0.0.1:18890
     ports:
       - 127.0.0.1:18893:18893
