@@ -947,7 +947,7 @@
   function normalizePendingAgentImageEdit(edit) {
     if (!edit?.id || !edit.requirement || !Array.isArray(edit.inputs)) return null;
     const inputs = edit.inputs.map((item) => ({ slot: item.slot, role: item.role, label: item.label, mediaId: item.mediaId || "" })).filter((item) => slots[item.slot] && item.label);
-    return { id: edit.id, requirement: edit.requirement, inputs, status: edit.status || "pending_confirmation", createdAt: edit.createdAt || new Date().toISOString(), jobId: edit.jobId || "" };
+    return { id: edit.id, requirement: edit.requirement, inputs, status: edit.status || "pending_confirmation", createdAt: edit.createdAt || new Date().toISOString(), projectId: edit.projectId || "", jobId: edit.jobId || "" };
   }
   function localAgentImageEditMessage(edit) {
     return {
@@ -1942,41 +1942,62 @@
     finally { state.busy = ""; render(); }
   }
   function createPendingAgentImageEdit(requirement) {
-    const inputs = ["frame", "person", "outfit", "scene"]
+    const inputs = ["frame", "person", "outfit", "scene", "motion"]
       .map((slot) => ({ slot, asset: assetFor(slot) }))
-      .filter((item) => item.asset?.url && item.asset.kind === "image")
+      .filter((item) => item.asset?.mediaId)
       .map(({ slot, asset }) => ({ slot, role: slots[slot]?.title || slot, label: asset.label || "当前素材", mediaId: asset.mediaId || "" }));
-    return { id: crypto.randomUUID(), requirement, inputs, status: "pending_confirmation", createdAt: new Date().toISOString(), jobId: "" };
+    return { id: crypto.randomUUID(), requirement, inputs, status: "pending_confirmation", createdAt: new Date().toISOString(), projectId: canonicalProject()?.id || "", jobId: "" };
   }
   function replaceLocalAgentImageEditAction(edit) {
     state.chat = state.chat.map((message) => message.id === `local-agent-image-edit-message:${edit.id}` ? localAgentImageEditMessage(edit) : message);
   }
-  async function persistAgentImageResult(edit, job) {
-    const response = await fetch(`/api/local/image2/jobs/${encodeURIComponent(job.id)}/results/0`, { credentials: "same-origin" });
-    if (!response.ok) throw new Error("生成图片暂时无法安全转存，请稍后重试。");
-    const mimeType = String(response.headers.get("content-type") || "").split(";", 1)[0];
-    if (!MEDIA_MIME_TYPES.has(mimeType) || !mimeType.startsWith("image/")) throw new Error("生成结果不是支持的图片格式。");
-    const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
-    const file = new File([await response.blob()], `agent-image-${job.id}.${extension}`, { type: mimeType });
-    const asset = await upload("frame", file, { generatedResult: true });
-    if (!asset?.mediaId) throw new Error("生成图片未能保存到私有素材库。");
+  async function completeAgentImageEdit(edit) {
+    const projectId = edit.projectId || canonicalProject()?.id || "";
+    if (!UUID_PATTERN.test(projectId)) throw new Error("改图任务所属项目无效，请重新生成方案。");
+    const [projectResult, mediaResult] = await Promise.all([
+      mediaRequest(`/api/v1/projects/${projectId}`),
+      mediaRequest("/api/v1/media"),
+    ]);
+    const project = projectResult.project;
+    const firstFrame = project?.nodes?.find((node) => node.role === "FIRST_FRAME")?.media;
+    if (!firstFrame?.id) throw new Error("改图已完成，但商品首帧尚未绑定，请稍后同步。");
+    const index = state.canonicalProjects.findIndex((item) => item.id === project.id);
+    if (index >= 0) state.canonicalProjects[index] = project;
+    else state.canonicalProjects.unshift(project);
+    hydrateCanonicalMedia(mediaResult.media || []);
+    hydrateCanonicalProject(project);
+    markDerivedOutputCurrent("frame");
+    clearGenerationIdempotencyKey("agent_first_frame");
     state.pendingAgentImageEdit = null;
     writeState();
-    flash("改图已私有入库，并替换为当前商品首帧。");
+    renderUnlessSourcesOpen();
+    flash("改图已由服务器私有入库，并替换为当前商品首帧。");
   }
   async function syncAgentImageEdit(edit, { attempts = 1 } = {}) {
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const result = await mediaRequest("/api/image2/sync", { method: "POST", body: JSON.stringify({ jobId: edit.jobId }) });
-      const job = result.job || (result.jobs || []).find((item) => item.id === edit.jobId);
-      if (job?.resultUrls?.length) { await persistAgentImageResult(edit, job); return true; }
-      if (/blocked|failed|error/i.test(String(job?.status || ""))) {
-        const error = new Error(job.statusText || "改图任务未生成可用结果，本次不会入库。");
+      const result = await mediaRequest(`/api/v1/jobs/${encodeURIComponent(edit.jobId)}`);
+      const job = result.job;
+      const status = String(job?.status || "").toLowerCase();
+      if (status === "completed") { await completeAgentImageEdit(edit); return true; }
+      if (["blocked", "retryable_failed", "review_required", "cancelled"].includes(status)) {
+        const error = new Error(job.failureText || "改图任务未生成可用结果，本次不会扣费。");
         error.terminal = true;
         throw error;
       }
       if (attempt + 1 < attempts) await new Promise((resolve) => window.setTimeout(resolve, Math.min(30_000, 4_000 * (attempt + 1))));
     }
     return false;
+  }
+  async function waitForAgentFirstFrameDraft(projectId, initialDraft) {
+    let draft = initialDraft;
+    for (let attempt = 0; attempt < FIRST_FRAME_RECOVERY_ATTEMPTS; attempt += 1) {
+      const status = String(draft?.status || "").toLowerCase();
+      if (status === "ready" && draft?.canConfirm !== false) return draft;
+      if (status && status !== "analyzing") throw new Error("FIRST_FRAME_DRAFT_NOT_READY");
+      await new Promise((resolve) => window.setTimeout(resolve, FIRST_FRAME_RECOVERY_DELAY_MS));
+      draft = (await mediaRequest(`/api/v1/projects/${projectId}/first-frame/drafts`)).draft;
+    }
+    throw new Error("FIRST_FRAME_DRAFT_TIMEOUT");
   }
   async function resumePendingAgentImageEdit() {
     const edit = state.pendingAgentImageEdit;
@@ -2023,28 +2044,40 @@
       }
       const confirmed = await billing("image", { count: 1, inputs: edit.inputs });
       if (!confirmed) return;
-      const mediaIds = edit.inputs.map((item) => assetFor(item.slot)?.mediaId || item.mediaId || "").filter(Boolean);
-      if (!mediaIds.length) throw new Error("当前项目的改图素材已变化，请重新生成方案。");
-      const inputLinks = await mediaRequest("/api/local/image2/input-links", { method: "POST", body: JSON.stringify({ mediaIds }) });
-      const imageUrls = Array.isArray(inputLinks.links) ? inputLinks.links : [];
-      if (!imageUrls.length) throw new Error("当前素材暂时无法安全交给改图服务。");
-      const result = await mediaRequest("/api/image2/generate", { method: "POST", body: JSON.stringify({ prompt: edit.requirement, imageUrls, aspectRatio: "9:16", resolution: "2k", targetNodeId: "firstFrame", targetLabel: "商品首帧", purpose: "agent-image-edit" }) });
-      const job = result.job || result.jobs?.[0];
+      const project = await ensureCanonicalProject();
+      const personMediaId = assetFor("person")?.mediaId || "";
+      const clothesMediaId = assetFor("outfit")?.mediaId || "";
+      const motionMediaId = assetFor("motion")?.mediaId || "";
+      if (![personMediaId, clothesMediaId, motionMediaId].every((id) => UUID_PATTERN.test(id))) throw new Error("人物、商品或参考视频已变化，请重新生成改图方案。");
+      const prepared = await firstFrameDraftRequest(`/api/v1/projects/${project.id}/first-frame/drafts`, {
+        method: "POST",
+        body: JSON.stringify({ personMediaId, clothesMediaId, motionMediaId, requirement: edit.requirement }),
+      });
+      const draft = await waitForAgentFirstFrameDraft(project.id, prepared.draft);
+      const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/drafts/${draft.id}/confirm`, {
+        method: "POST",
+        body: JSON.stringify({ acceptMaterialRisk: Boolean(draft.softRisks?.length || draft.analysis?.conflicts?.length) }),
+      });
+      const job = result.job;
       if (!job?.id) throw new Error(result.reason || "改图任务没有成功创建。");
+      edit.projectId = project.id;
       edit.jobId = job.id;
-      edit.status = job.resultUrls?.length ? "running" : "queued";
+      edit.status = "queued";
       state.pendingAgentImageEdit = edit;
+      state.jobs = [job, ...state.jobs.filter((item) => item.id !== job.id)];
+      state.frameJobId = job.id;
+      state.generationSources[job.id] = { kind: "frame", signature: generationInputSignature("frame") };
       replaceLocalAgentImageEditAction(edit);
       writeState();
-      if (job.resultUrls?.length) await persistAgentImageResult(edit, job);
-      else {
-        flash("改图任务已提交；只同步本次任务，不会刷新整个素材界面。");
-        window.setTimeout(resumePendingAgentImageEdit, 1500);
-      }
+      flash("改图已进入服务器持久队列；只同步本次任务，不会刷新素材界面。");
+      window.setTimeout(resumePendingAgentImageEdit, 1500);
     } catch (error) {
-      const message = /MEDIA_REQUEST_FAILED_50[234]/.test(String(error?.message || ""))
-        ? "改图服务暂时不可用。本次没有创建任务，也不会扣费；方案已保留，可以稍后重试。"
-        : (error.message || "改图任务没有提交成功。");
+      const code = String(error?.message || "");
+      const message = /FIRST_FRAME_DRAFT_TIMEOUT/.test(code)
+        ? "素材分析暂未完成。本次没有创建任务，也不会扣费；方案已保留，可以稍后重试。"
+        : /MEDIA_REQUEST_FAILED_50[234]/.test(code)
+          ? "改图服务暂时不可用。本次没有创建任务，也不会扣费；方案已保留，可以稍后重试。"
+          : (error.message || "改图任务没有提交成功。");
       flash(message, "warning");
     }
     finally { state.busy = ""; render(); }
