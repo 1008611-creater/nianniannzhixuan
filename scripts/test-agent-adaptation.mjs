@@ -71,6 +71,8 @@ assert.match(backend, /inputs\/\$\{token\}\.\$\{extension\}/);
 assert.match(backend, /generatedImageInputTtlMs = 10 \* 60 \* 1000/);
 assert.match(backend, /process\.env\.PUBLIC_ORIGIN \|\| "https:\/\/dh\.cauai\.fun"/);
 assert.match(backend, /tokens\.forEach\(\(token\) => generatedImageInputs\.delete\(token\)\)/);
+assert.match(backend, /\[image2-input\] issued=\$\{links\.length\}/);
+assert.doesNotMatch(backend, /\[image2-input\][^\n]*(?:token|links\})/i, "input logs must not contain capability tokens or links");
 assert.match(frontend, /function isAssistantImageEditIntent\(text\)/);
 const imageIntentSource = frontend.match(/function isAssistantImageEditIntent\(text\) \{[\s\S]*?\n  \}/)?.[0];
 assert.ok(imageIntentSource, "image edit intent classifier is missing");
