@@ -2042,8 +2042,6 @@
         }
         return;
       }
-      const providerReadiness = await mediaRequest("/api/v1/readiness");
-      if (providerReadiness.services?.imageGeneration !== true) throw new Error("IMAGE_GENERATION_NOT_CONFIGURED");
       const confirmed = await billing("image", { count: 1, inputs: edit.inputs });
       if (!confirmed) return;
       const project = await ensureCanonicalProject();
@@ -2076,7 +2074,7 @@
     } catch (error) {
       const code = String(error?.message || "");
       const message = /IMAGE_GENERATION_NOT_CONFIGURED/.test(code)
-        ? "服务器作图通道还没有配置，当前不会创建任务或扣费。配置完成后可直接重试这张方案。"
+        ? "服务器作图通道暂不可用。本次没有创建任务，也不会扣费；方案已保留，可以稍后重试。"
         : /FIRST_FRAME_DRAFT_TIMEOUT/.test(code)
         ? "素材分析暂未完成。本次没有创建任务，也不会扣费；方案已保留，可以稍后重试。"
         : /MEDIA_REQUEST_FAILED_50[234]/.test(code)
