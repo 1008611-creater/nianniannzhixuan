@@ -2023,8 +2023,11 @@
       }
       const confirmed = await billing("image", { count: 1, inputs: edit.inputs });
       if (!confirmed) return;
-      const imageUrls = edit.inputs.map((item) => assetFor(item.slot)?.url || "").filter(Boolean);
-      if (!imageUrls.length) throw new Error("当前项目的改图素材已变化，请重新生成方案。");
+      const mediaIds = edit.inputs.map((item) => assetFor(item.slot)?.mediaId || item.mediaId || "").filter(Boolean);
+      if (!mediaIds.length) throw new Error("当前项目的改图素材已变化，请重新生成方案。");
+      const inputLinks = await mediaRequest("/api/local/image2/input-links", { method: "POST", body: JSON.stringify({ mediaIds }) });
+      const imageUrls = Array.isArray(inputLinks.links) ? inputLinks.links : [];
+      if (!imageUrls.length) throw new Error("当前素材暂时无法安全交给改图服务。");
       const result = await mediaRequest("/api/image2/generate", { method: "POST", body: JSON.stringify({ prompt: edit.requirement, imageUrls, aspectRatio: "9:16", resolution: "2k", targetNodeId: "firstFrame", targetLabel: "商品首帧", purpose: "agent-image-edit" }) });
       const job = result.job || result.jobs?.[0];
       if (!job?.id) throw new Error(result.reason || "改图任务没有成功创建。");
