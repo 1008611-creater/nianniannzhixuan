@@ -55,6 +55,7 @@ assert.match(frontend, /await upload\("frame", file, \{ generatedResult: true \}
 assert.match(frontend, /if \(!await assign\(asset\)\) return null/);
 assert.match(frontend, /window\.setTimeout\(resumePendingAgentImageEdit, 500\)/);
 assert.match(frontend, /actionStatus === "retryable_failed"/);
+assert.match(frontend, /改图服务暂时不可用。本次没有创建任务，也不会扣费/);
 assert.match(frontend, /restorePendingAgentImageEdit\(\);\s*\} else state\.chat = \[\];\s*renderUnlessSourcesOpen\(\);/);
 assert.match(frontend, /pendingAgentImageEdit: normalizePendingAgentImageEdit/);
 const pendingNormalizer = frontend.match(/function normalizePendingAgentImageEdit\(edit\) \{[\s\S]*?\n  \}/)?.[0] || "";
@@ -85,6 +86,6 @@ assert.match(backend, /pathname\.startsWith\("\/api\/"\)/);
 assert.match(backend, /proxyHeaders\(request\.headers, remoteOrigin, csrfOrigin/);
 assert.match(backend, /process\.env\.REMOTE_ORIGIN/);
 assert.match(workspace, /workspace-v206\.js\?v=/);
-assert.match(workspace, /workspace-v206\.js\?v=20260812-agent-image-durable-06/);
+assert.match(workspace, /workspace-v206\.js\?v=20260812-agent-image-durable-07/);
 
 console.log(`OK agent/frontend/backend contract: ${contract.routes.length} routes`);

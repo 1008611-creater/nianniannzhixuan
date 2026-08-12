@@ -87,3 +87,14 @@ ordinary signed-in page's image dimensions, `video.currentSrc`, playback, seekin
 The container keeps playback derivatives at `/app/playback`, backed by
 `/srv/kidswear-data/niannian-web/playback` on Haikayun. Keep release source under
 `/opt/niannian-web`; do not put growing media data on the root filesystem.
+
+### Pending upstream capability
+
+Confirmed Agent image edits now create a non-billable confirmation card, preserve it across
+reloads, and prepare owned private images through short-lived in-memory input capabilities.
+As of 2026-08-12, the external legacy `POST /api/image2/generate` endpoint returns `502` before
+reading any prepared input or creating a job. The UI must keep the proposal retryable and state
+that no job was created and no charge occurred. This item is complete only when a real signed-in
+test proves: the provider reads at least one prepared input, a job is created, its result is
+uploaded into private media, the project `FIRST_FRAME` node is replaced, and the replacement
+survives a full reload.
