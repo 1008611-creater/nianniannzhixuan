@@ -286,6 +286,7 @@ async function createGeneratedImageInputLinks(request, response) {
   }
   response.writeHead(201, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify({ links, expiresInSeconds: generatedImageInputTtlMs / 1000 }));
+  console.log(`[image2-input] issued=${links.length}`);
 }
 
 setInterval(() => {
@@ -304,6 +305,7 @@ function serveGeneratedImageInput(request, response, token) {
   if (request.method === "GET") {
     input.readsLeft -= 1;
     if (input.readsLeft <= 0) generatedImageInputs.delete(token);
+    console.log(`[image2-input] read type=${input.mimeType}`);
   }
   response.writeHead(200, {
     "content-type": input.mimeType,
