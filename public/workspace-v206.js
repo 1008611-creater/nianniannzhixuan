@@ -1,3 +1,5 @@
+import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-state.js";
+
 (() => {
   "use strict";
 
@@ -281,10 +283,11 @@
     return String(media?.url || "") || (UUID_PATTERN.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/content` : "");
   }
   function sourceSignature() {
-    return ["person", "outfit", "scene", "motion"].map((slot) => state.selected[slot]?.mediaId || "").join(":");
+    const assets = workflowBoundAssets();
+    return ["person", "outfit", "scene", "motion"].map((slot) => assets[slot]?.mediaId || "").join(":");
   }
   function generationInputSignature(kind) {
-    return kind === "final" ? `${sourceSignature()}:${state.selected.frame?.mediaId || ""}` : sourceSignature();
+    return kind === "final" ? `${sourceSignature()}:${workflowBoundAssets().frame?.mediaId || ""}` : sourceSignature();
   }
   function derivedInvalidation() {
     const projectId = canonicalProject()?.id;
@@ -337,6 +340,36 @@
     if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
     const asset = state.selected[id] || null;
     return assetUnavailable(asset) ? null : asset;
+  }
+  function workflowBoundAssets(project = canonicalProject()) {
+    if (!project?.id) return {};
+    const overrides = state.assignmentOverrides[project.id] || {};
+    const assets = {};
+    Object.keys(slots).forEach((slot) => {
+      if (overrides[slot] && (overrides[slot].mediaId || overrides[slot].url)) {
+        assets[slot] = overrides[slot];
+        return;
+      }
+      const node = project.nodes?.find((item) => item.role === NODE_ROLE_BY_SLOT[slot]);
+      assets[slot] = node ? projectInputAsset(slot, node.media) : null;
+    });
+    const finalNode = project.nodes?.find((item) => item.role === "FINAL_VIDEO");
+    assets.final = finalNode?.media ? assetFromMedia(finalNode.media) : null;
+    return assets;
+  }
+  function workflowSnapshot() {
+    const project = canonicalProject();
+    const assets = workflowBoundAssets(project);
+    return buildWorkflowSnapshot({
+      projectId: project?.id || "",
+      assets,
+      unavailableMedia: state.unavailableMedia,
+      jobs: state.jobs,
+      production: activeProject()?.production || null,
+      invalidated: derivedInvalidation() || {},
+      generationSources: state.generationSources,
+      signatures: { frame: sourceSignature(), final: `${sourceSignature()}:${assets.frame?.mediaId || ""}` },
+    });
   }
   function mediaIsActive(media) {
     const state = String(media?.deletionState || media?.status || "").toLowerCase();
@@ -440,7 +473,7 @@
     if (durable) {
       const finalNode = durable.nodes?.find((node) => node.role === "FINAL_VIDEO");
       const sourceJobId = finalNode?.metadata?.sourceJobId || "";
-      const actionJob = state.jobs.find((job) => job.id === sourceJobId) || state.jobs.find((job) => job.project?.id === durable.id && String(job.kind).toUpperCase() === "ACTION_TRANSFER");
+      const actionJob = state.jobs.find((job) => job.id === sourceJobId) || newestProjectTask(state.jobs, durable.id, "ACTION_TRANSFER");
       return {
         ...durable,
         title: durable.name,
@@ -469,13 +502,14 @@
     return url ? toAsset(url, "video", "已完成成片") : null;
   }
   function readiness() {
+    const snapshot = workflowSnapshot();
     const required = ["person", "outfit", "motion"];
-    const missing = required.filter((key) => !assetFor(key)?.url);
+    const missing = required.filter((key) => !snapshot[key].bound);
     return {
       missing,
       canFrame: missing.length === 0,
-      canVideo: missing.length === 0 && Boolean(assetFor("frame")?.url),
-      message: missing.length ? `还缺${missing.map((key) => slots[key].title).join("、")}。` : (assetFor("frame")?.url ? "首帧与动作参考已就绪。" : "人物、衣服和参考视频已齐，下一步生成商品首帧。"),
+      canVideo: missing.length === 0 && snapshot.frame.bound,
+      message: missing.length ? `还缺${missing.map((key) => slots[key].title).join("、")}。` : (snapshot.frame.bound ? "首帧与动作参考已就绪。" : "人物、衣服和参考视频已齐，下一步生成商品首帧。"),
     };
   }
   function firstFrameDirection() {
@@ -923,19 +957,7 @@
     return workflowSteps.find((step) => step.id === state.workflowStep) || workflowSteps[0];
   }
   function workflowStepStatus(step) {
-    if (step.id === "final") {
-      if (activeVideoAsset()?.url) return "已完成";
-      const project = activeProject();
-      const projectJobs = state.jobs.filter((job) => jobBelongsToProject(job, project));
-      const activeAction = projectJobs.find((job) => String(job.kind || "").toUpperCase() === "ACTION_TRANSFER" && taskIsActive(job.status));
-      const activeProduction = project?.production && taskIsActive(project.production.status);
-      return activeAction || activeProduction ? "制作中" : "待制作";
-    }
-    if (step.id === "frame" && !assetFor("frame")?.url && currentTaskPresentation()?.active) return "制作中";
-    const asset = assetFor(step.target);
-    if (asset?.url) return step.id === "motion" ? "可播放" : "已就绪";
-    if (step.optional) return "待添加";
-    return step.id === "frame" ? "待生成" : "待添加";
+    return workflowSnapshot()[step.id]?.status || (step.optional ? "待添加" : "待生成");
   }
   function setWorkflowStep(stepId) {
     const step = workflowSteps.find((item) => item.id === stepId) || workflowSteps[0];
@@ -946,17 +968,17 @@
   function reconcileWorkflowForProject(project) {
     if (!project?.id || state.workflowProjectId === project.id) return;
     state.workflowProjectId = project.id;
-    const hasFinalVideo = project.nodes?.some((node) => node.role === "FINAL_VIDEO" && node.media?.url);
-    if (hasFinalVideo) {
+    const snapshot = workflowSnapshot();
+    if (snapshot.final.bound || snapshot.final.status === "制作中") {
       setWorkflowStep("final");
       return;
     }
-    const firstMissingInput = ["person", "outfit", "motion"].find((slot) => !assetFor(slot)?.url);
+    const firstMissingInput = ["person", "outfit", "motion"].find((slot) => !snapshot[slot].bound);
     if (firstMissingInput) {
       setWorkflowStep(firstMissingInput);
       return;
     }
-    setWorkflowStep(assetFor("frame")?.url ? "final" : "frame");
+    setWorkflowStep(snapshot.frame.bound ? "final" : "frame");
   }
   function workflowTabsMarkup() {
     return `<nav class="v206-workflow-tabs" aria-label="制作步骤切换">${workflowSteps.map((step, index) => {
@@ -1166,23 +1188,11 @@
     return `<section class="v206-video-inline" aria-label="视频制作确认"><div class="v206-section-label">制作依据</div><div class="v206-lock-list"><div><span>商品首帧</span><b>${esc(pending.firstFrameLabel)}</b></div><div><span>动作参考</span><b>${esc(pending.motionLabel)}</b></div><div><span>视频规格</span><b>720P · 24 fps · ${Number(pending.maximumSeconds).toFixed(1)} 秒</b></div></div><label class="v206-mode-select"><span>制作模式</span><select data-v206-video-mode><option value="standard" ${state.videoMode === "standard" ? "selected" : ""}>标准模式（推荐）</option><option value="stable" ${state.videoMode === "stable" ? "selected" : ""}>稳定模式</option></select></label><div class="v206-cost-summary"><b>最高 ${Number(pending.quote?.maxTzCost || 0).toFixed(2)} TZB</b><span>预计 ${waitMinutes(estimate.lower)}–${waitMinutes(estimate.upper)} 分钟 · 成功后按实际时长结算 · 失败不扣费</span></div></section>`;
   }
   function currentTaskPresentation() {
-    const project = activeProject();
-    const projectJobs = state.jobs.filter((job) => jobBelongsToProject(job, project));
-    const latestAction = projectJobs.find((job) => String(job.kind || "").toUpperCase() === "ACTION_TRANSFER");
-    const latestImage = projectJobs.find((job) => String(job.kind || "").toUpperCase() !== "ACTION_TRANSFER");
-    if (latestAction && taskIsActive(latestAction.status)) return { task: latestAction, kind: "成片", active: true };
-    if (project?.production && taskIsActive(project.production.status)) return { task: project.production, kind: "成片", active: true };
-    const activeImage = projectJobs.find((job) => String(job.kind || "").toUpperCase() !== "ACTION_TRANSFER" && taskIsActive(job.status));
-    if (activeImage) return { task: activeImage, kind: String(activeImage.kind || "").toUpperCase() === "FIRST_FRAME" ? "首帧" : "图片", active: true };
-    if (latestAction && /failed|blocked|review_required|needs_review|requires_review/i.test(String(latestAction.status || ""))) {
-      return { task: latestAction, kind: "成片", failed: true };
-    }
-    if (!activeVideoAsset()?.url && project?.production && /failed|blocked|review_required|needs_review|requires_review/i.test(String(project.production.status || ""))) {
-      return { task: project.production, kind: "成片", failed: true };
-    }
-    if (latestImage && /failed|blocked|review_required|needs_review|requires_review/i.test(String(latestImage.status || ""))) {
-      return { task: latestImage, kind: String(latestImage.kind || "").toUpperCase() === "FIRST_FRAME" ? "首帧" : "图片", failed: true };
-    }
+    const snapshot = workflowSnapshot();
+    if (snapshot.final.status === "制作中") return { task: snapshot.final.task, kind: "成片", active: true };
+    if (snapshot.frame.status === "制作中") return { task: snapshot.frame.task, kind: "首帧", active: true };
+    if (snapshot.final.status === "制作失败") return { task: snapshot.final.task, kind: "成片", failed: true };
+    if (snapshot.frame.status === "生成失败") return { task: snapshot.frame.task, kind: "首帧", failed: true };
     return null;
   }
   function taskDecisionMarkup() {

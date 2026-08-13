@@ -11,6 +11,7 @@ RUN test -s public/index.html \
     && test -s public/workspace.html \
     && test -s public/app.compat.js \
     && test -s public/workspace-v206.js \
+    && test -s public/workspace-workflow-state.js \
     && test -s public/assets/niannian-ai-logo-128.webp
 
 ENV HOST=0.0.0.0 \
