@@ -1601,12 +1601,25 @@
     if (!syncSourceSheetBusy()) render();
     try {
       let durableAsset = asset;
+      let pendingTemplateImport = null;
       if (!durableAsset.mediaId && durableAsset.templateId && durableAsset.templateRole) {
-        const imported = await mediaRequest("/api/v1/media/import-workspace-template", { method: "POST", body: JSON.stringify({ templateId: durableAsset.templateId, role: durableAsset.templateRole }) });
-        const importedAsset = assetFromMedia(imported.media);
-        durableAsset = importedAsset ? { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url } : importedAsset;
+        pendingTemplateImport = mediaRequest("/api/v1/media/import-workspace-template", { method: "POST", body: JSON.stringify({ templateId: durableAsset.templateId, role: durableAsset.templateRole }), timeoutMs: 12_000 });
+        durableAsset = { ...asset, fallbackUrl: asset.url };
       }
-      if (!durableAsset.mediaId) throw new Error("MEDIA_ID_REQUIRED");
+      if (!durableAsset.mediaId && !pendingTemplateImport) throw new Error("MEDIA_ID_REQUIRED");
+      if (!durableAsset.mediaId && pendingTemplateImport) {
+        state.selected[target] = durableAsset;
+        const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
+        if (invalidatesDerived) { invalidateDerivedOutputs(); setWorkflowStep(target); }
+        state.view = null; state.busy = ""; writeState(); flash(`${slots[target].title}已替换，正在后台保存。`); render();
+        void pendingTemplateImport.then((imported) => {
+          const importedAsset = assetFromMedia(imported.media);
+          if (!importedAsset || mutation !== state.sourceMutation) return;
+          return mediaRequest(`/api/v1/projects/${(canonicalProject() || {}).id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: importedAsset.mediaId }) })
+            .then(() => { state.selected[target] = { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url }; writeState(); renderUnlessSourcesOpen(); });
+        }).catch(() => flash("素材已显示，服务器保存稍慢，请稍后刷新项目。", "warning"));
+        return true;
+      }
       const project = await ensureCanonicalProject();
       const assignmentRequest = mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }), timeoutMs: 12_000 });
       // The proxy can receive a successful upstream PUT before the upstream
