@@ -164,7 +164,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     projectNameDraft: "",
     projectLoading: !previewMode,
     sourceMutation: 0,
-    assignmentOverrides: stored.assignmentOverrides && typeof stored.assignmentOverrides === "object" ? stored.assignmentOverrides : {},
+    // Kept only until the server confirms a node PUT. Earlier releases stored
+    // permanent local overrides here, which could claim a missing asset was ready.
+    pendingAssignments: stored.pendingAssignments && typeof stored.pendingAssignments === "object" ? stored.pendingAssignments : {},
     invalidatedDerivedByProject: stored.invalidatedDerivedByProject && typeof stored.invalidatedDerivedByProject === "object" ? stored.invalidatedDerivedByProject : {},
     generationSources: stored.generationSources && typeof stored.generationSources === "object" ? stored.generationSources : {},
   };
@@ -238,7 +240,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       assistantThreadId: state.assistantThreadId,
       invalidatedDerivedByProject: state.invalidatedDerivedByProject,
       generationSources: state.generationSources,
-      assignmentOverrides: state.assignmentOverrides,
+      pendingAssignments: state.pendingAssignments,
       pendingAgentImageEdit: state.pendingAgentImageEdit,
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
@@ -273,6 +275,15 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return state.canonicalProjects.find((project) => project.id === state.canonicalProjectId)
       || state.canonicalProjects.find((project) => project.templateId === state.templateId)
       || null;
+  }
+  function mergeCanonicalProjects(incoming) {
+    const next = Array.isArray(incoming) ? incoming.filter((project) => project?.id) : [];
+    const incomingIds = new Set(next.map((project) => project.id));
+    const current = canonicalProject();
+    // The server list remains authoritative. Retain only the currently edited
+    // project while a node write is outstanding and a delayed list omits it.
+    const currentPending = current?.id && Object.keys(state.pendingAssignments[current.id] || {}).length > 0;
+    state.canonicalProjects = [...next, ...(currentPending && !incomingIds.has(current.id) ? [current] : [])];
   }
   function privateMediaUrl(media) {
     const id = String(media?.id || "");
@@ -341,17 +352,43 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const asset = state.selected[id] || null;
     return assetUnavailable(asset) ? null : asset;
   }
+  function pendingAssignmentFor(projectId, slot) {
+    const pending = state.pendingAssignments?.[projectId]?.[slot];
+    const age = Date.now() - Number(pending?.createdAt || 0);
+    return pending?.asset && age < 45_000 && ["pending", "confirmed"].includes(pending.status) ? pending : null;
+  }
+  function recordPendingAssignment(projectId, slot, asset, mutation) {
+    if (!projectId || !slots[slot] || !asset) return;
+    state.pendingAssignments[projectId] = {
+      ...(state.pendingAssignments[projectId] || {}),
+      [slot]: { asset: persistentAsset(asset), mutation, status: "pending", invalidatesDerived: ["person", "outfit", "scene", "motion"].includes(slot), createdAt: Date.now() },
+    };
+    writeState();
+  }
+  function confirmPendingAssignment(projectId, slot) {
+    const current = state.pendingAssignments?.[projectId]?.[slot];
+    if (!current) return;
+    state.pendingAssignments[projectId] = { ...state.pendingAssignments[projectId], [slot]: { ...current, status: "confirmed", confirmedAt: Date.now() } };
+    writeState();
+  }
+  function clearPendingAssignment(projectId, slot) {
+    const current = state.pendingAssignments?.[projectId];
+    if (!current || !Object.prototype.hasOwnProperty.call(current, slot)) return;
+    const next = { ...current };
+    delete next[slot];
+    if (Object.keys(next).length) state.pendingAssignments[projectId] = next;
+    else delete state.pendingAssignments[projectId];
+    writeState();
+  }
+  function projectNodeAsset(project, slot) {
+    const node = project?.nodes?.find((item) => item.role === NODE_ROLE_BY_SLOT[slot]);
+    return node ? projectInputAsset(slot, node.media) : null;
+  }
   function workflowBoundAssets(project = canonicalProject()) {
     if (!project?.id) return {};
-    const overrides = state.assignmentOverrides[project.id] || {};
     const assets = {};
     Object.keys(slots).forEach((slot) => {
-      if (overrides[slot] && (overrides[slot].mediaId || overrides[slot].url)) {
-        assets[slot] = overrides[slot];
-        return;
-      }
-      const node = project.nodes?.find((item) => item.role === NODE_ROLE_BY_SLOT[slot]);
-      assets[slot] = node ? projectInputAsset(slot, node.media) : null;
+      assets[slot] = projectNodeAsset(project, slot);
     });
     const finalNode = project.nodes?.find((item) => item.role === "FINAL_VIDEO");
     assets.final = finalNode?.media ? assetFromMedia(finalNode.media) : null;
@@ -362,13 +399,15 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const boundAssets = workflowBoundAssets(project);
     // Once a canonical project exists, its slot record is authoritative. Do
     // not resurrect a stale local selection when that project slot is empty.
-    if (project?.id && Object.prototype.hasOwnProperty.call(boundAssets, id)) return boundAssets[id] || null;
+    if (project?.id && Object.prototype.hasOwnProperty.call(boundAssets, id)) {
+      return pendingAssignmentFor(project.id, id)?.asset || boundAssets[id] || null;
+    }
     return assetFor(id);
   }
   function workflowSnapshot() {
     const project = canonicalProject();
     const assets = workflowBoundAssets(project);
-    return buildWorkflowSnapshot({
+    const snapshot = buildWorkflowSnapshot({
       projectId: project?.id || "",
       assets,
       unavailableMedia: state.unavailableMedia,
@@ -378,6 +417,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       generationSources: state.generationSources,
       signatures: { frame: sourceSignature(), final: `${sourceSignature()}:${assets.frame?.mediaId || ""}` },
     });
+    if (project?.id) {
+      Object.keys(slots).forEach((slot) => {
+        const pending = pendingAssignmentFor(project.id, slot);
+        if (pending && assets[slot]?.mediaId !== pending.asset?.mediaId) snapshot[slot] = { ...snapshot[slot], pending: true, status: "保存确认中" };
+      });
+    }
+    return snapshot;
   }
   function mediaIsActive(media) {
     const state = String(media?.deletionState || media?.status || "").toLowerCase();
@@ -415,12 +461,17 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const next = projectInputAsset(slot, node.media, { explicit: sameProject && Boolean(previousSelection[slot]) });
       if (Object.prototype.hasOwnProperty.call(node, "media")) state.selected[slot] = next;
     });
-    // A user-selected asset is authoritative while the upstream readback is
-    // catching up. Never let a delayed/template-labelled project response
-    // clear the selection that was just saved by PUT /nodes.
-    const overrides = state.assignmentOverrides[project.id] || {};
-    Object.entries(overrides).forEach(([slot, asset]) => {
-      if (slots[slot] && (asset?.mediaId || asset?.url)) state.selected[slot] = asset;
+    Object.keys(slots).forEach((slot) => {
+      const pending = pendingAssignmentFor(project.id, slot);
+      const bound = projectNodeAsset(project, slot);
+      if (pending && bound?.mediaId === pending.asset?.mediaId) {
+        clearPendingAssignment(project.id, slot);
+        if (pending.invalidatesDerived) {
+          invalidateDerivedOutputs();
+          if (slot === "motion") state.motionReferenceTime = null;
+          setWorkflowStep(slot);
+        }
+      }
     });
     reconcileWorkflowForProject(project);
     writeState();
@@ -512,12 +563,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function readiness() {
     const snapshot = workflowSnapshot();
     const required = ["person", "outfit", "motion"];
-    const missing = required.filter((key) => !snapshot[key].bound);
+    const missing = required.filter((key) => !snapshot[key].bound || snapshot[key].pending);
     return {
       missing,
       canFrame: missing.length === 0,
       canVideo: missing.length === 0 && snapshot.frame.bound,
-      message: missing.length ? `还缺${missing.map((key) => slots[key].title).join("、")}。` : (snapshot.frame.bound ? "首帧与动作参考已就绪。" : "人物、衣服和参考视频已齐，下一步生成商品首帧。"),
+      message: missing.length ? `${missing.map((key) => snapshot[key].pending ? `${slots[key].title}正在保存确认` : `还缺${slots[key].title}`).join("、")}。` : (snapshot.frame.bound ? "首帧与动作参考已就绪。" : "人物、衣服和参考视频已齐，下一步生成商品首帧。"),
     };
   }
   function firstFrameDirection() {
@@ -880,7 +931,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         mediaRequest("/api/v1/jobs"),
       ]);
       if (run !== taskRefreshRun || mutation !== state.sourceMutation || projectId !== (canonicalProject()?.id || "") || state.view === "sources") return;
-      state.canonicalProjects = projects.projects || [];
+      mergeCanonicalProjects(projects.projects || []);
       hydrateCanonicalMedia(media.media || []);
       state.jobs = jobs.jobs || [];
       hydrateCanonicalProject(canonicalProject());
@@ -1631,13 +1682,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const existingProject = canonicalProject();
       if (existingProject?.id) {
         state.selected[target] = durableAsset;
-        state.assignmentOverrides[existingProject.id] = { ...(state.assignmentOverrides[existingProject.id] || {}), [target]: durableAsset };
+        recordPendingAssignment(existingProject.id, target, durableAsset, mutation);
         writeState();
       }
       if (!durableAsset.mediaId && pendingTemplateImport) {
         const project = await ensureCanonicalProject();
         state.selected[target] = durableAsset;
-        state.assignmentOverrides[project.id] = { ...(state.assignmentOverrides[project.id] || {}), [target]: durableAsset };
+        recordPendingAssignment(project.id, target, durableAsset, mutation);
         const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
         if (invalidatesDerived) { invalidateDerivedOutputs(); setWorkflowStep(target); }
         state.view = null; state.busy = ""; writeState(); flash(`${slots[target].title}已替换，正在后台保存。`); render();
@@ -1648,11 +1699,16 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
             .then(() => {
               const savedAsset = { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url };
               state.selected[target] = savedAsset;
-              state.assignmentOverrides[project.id] = { ...(state.assignmentOverrides[project.id] || {}), [target]: savedAsset };
+              clearPendingAssignment(project.id, target);
               writeState();
               renderUnlessSourcesOpen();
             });
-        }).catch(() => flash("素材已显示，服务器保存稍慢，请稍后刷新项目。", "warning"));
+        }).catch(() => {
+          clearPendingAssignment(project.id, target);
+          state.selected[target] = projectNodeAsset(canonicalProject(), target);
+          flash("素材保存失败，已恢复为服务器实际状态。", "warning");
+          renderUnlessSourcesOpen();
+        });
         return true;
       }
       const project = await ensureCanonicalProject();
@@ -1664,7 +1720,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       // The user explicitly selected this asset. Keep it visible even when
       // the upstream project response labels template-derived media as a sample.
       state.selected[target] = durableAsset;
-      state.assignmentOverrides[project.id] = { ...(state.assignmentOverrides[project.id] || {}), [target]: durableAsset };
+      recordPendingAssignment(project.id, target, durableAsset, mutation);
       const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
       if (invalidatesDerived) {
         invalidateDerivedOutputs();
@@ -1683,14 +1739,22 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       // The source sheet is intentionally open during background refreshes,
       // but after a successful assignment the view must be re-rendered now.
       render();
-      void assignmentRequest.catch(() => flash("素材已暂存，服务器确认稍慢，请稍后刷新项目。", "warning"));
+      void assignmentRequest.then(() => {
+        confirmPendingAssignment(project.id, target);
+        renderUnlessSourcesOpen();
+      }).catch(() => {
+        clearPendingAssignment(project.id, target);
+        state.selected[target] = projectNodeAsset(canonicalProject(), target);
+        flash("素材保存失败，已恢复为服务器实际状态。", "warning");
+        renderUnlessSourcesOpen();
+      });
       // Project readback is advisory. Do not block the user on a slow upstream GET.
       void mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 }).then((result) => {
         const refreshed = result.project;
         if (!refreshed || mutation !== state.sourceMutation) return;
         state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
         hydrateCanonicalProject(refreshed);
-        state.selected[target] = durableAsset;
+        state.selected[target] = projectNodeAsset(refreshed, target) || durableAsset;
         renderUnlessSourcesOpen();
       }).catch(() => {});
       return true;

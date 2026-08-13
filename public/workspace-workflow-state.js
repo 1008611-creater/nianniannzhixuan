@@ -23,8 +23,10 @@ export function newestProjectTask(jobs, projectId, kind) {
 function taskMatchesInputs(task, outputKind, generationSources, signature) {
   if (!task) return false;
   const source = generationSources?.[task.id];
-  if (!source) return true;
-  return source.kind === outputKind && source.signature === signature;
+  // A task is only allowed to drive the current output state when this client
+  // recorded the exact inputs used to create it. Older tasks may remain in the
+  // project history after the user replaces materials.
+  return Boolean(source && source.kind === outputKind && source.signature === signature);
 }
 
 function assetState(asset, unavailableMedia) {
@@ -46,7 +48,9 @@ function outputState({ asset, unavailableMedia, invalidated, task, outputKind, s
   const currentTask = taskMatchesInputs(task, outputKind, generationSources, signature) ? task : null;
   const status = String(currentTask?.status || "");
   if (ACTIVE_TASK.test(status)) return { ...base, task: currentTask, status: "制作中" };
-  if (base.bound || COMPLETED_TASK.test(status)) return { ...base, task: currentTask, status: readyLabel };
+  // A completed job is not a usable output until its media is bound to the
+  // current project node. This prevents "completed" from outrunning ingestion.
+  if (base.bound) return { ...base, task: currentTask, status: readyLabel };
   if (FAILED_TASK.test(status)) return { ...base, task: currentTask, status: failedLabel };
   return { ...base, task: currentTask, status: pendingLabel };
 }
