@@ -336,10 +336,7 @@
   function assetFor(id) {
     if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
     const asset = state.selected[id] || null;
-    // Imported template media may be private while its browser-readable
-    // source is still available locally. Keep the assigned mediaId for the
-    // backend, but use the source fallback for the canvas if playback fails.
-    return assetUnavailable(asset) ? (asset?.fallbackUrl ? { ...asset, url: asset.fallbackUrl } : null) : asset;
+    return assetUnavailable(asset) ? null : asset;
   }
   function mediaIsActive(media) {
     const state = String(media?.deletionState || media?.status || "").toLowerCase();
@@ -508,8 +505,8 @@
       const fallback = currentTemplate().motion;
       return {
         mode: unavailable ? "video" : (selected.kind === "video" ? "video" : "image"),
-        url: unavailable ? fallback : selected.url,
-        displayUrl: unavailable ? fallback : publicPreview(selected),
+        url: unavailable ? (selected.fallbackUrl || fallback) : selected.url,
+        displayUrl: unavailable ? (selected.fallbackUrl || fallback) : publicPreview(selected),
         mediaId: unavailable ? "" : selected.mediaId,
         poster: unavailable ? "" : (selected.preview || ""),
         title: `${slot.title}素材`,
