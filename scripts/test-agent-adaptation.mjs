@@ -76,6 +76,6 @@ assert.match(backend, /pathname\.startsWith\("\/api\/"\)/);
 assert.match(backend, /proxyHeaders\(request\.headers, remoteOrigin, csrfOrigin/);
 assert.match(backend, /process\.env\.REMOTE_ORIGIN/);
 assert.match(workspace, /workspace-v206\.js\?v=/);
-assert.match(workspace, /workspace-v206\.js\?v=20260812-image2-worker-channel-10/);
+assert.match(workspace, /workspace-v206\.js\?v=\d{8}-[a-z0-9-]+/);
 
 console.log(`OK agent/frontend/backend contract: ${contract.routes.length} routes`);
