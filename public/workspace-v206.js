@@ -490,6 +490,18 @@
       };
     }
     const slot = slots[state.target] || slots.person;
+    const template = currentTemplate();
+    if (state.target === "frame" && template.cover) {
+      return {
+        mode: "image",
+        url: template.cover,
+        displayUrl: template.cover,
+        mediaId: "",
+        title: "同款模板首帧",
+        note: `当前正在使用${template.title}的首帧与动作参考。生成后会替换为你的商品首帧。`,
+        label: "同款预览",
+      };
+    }
     return { mode: "empty", target: state.target, title: `${slot.title}待添加`, note: `请先上传或选择${slot.title}素材。`, label: "待添加" };
   }
   function nextAction() {

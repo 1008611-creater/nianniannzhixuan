@@ -11,5 +11,7 @@ assert.match(workspace, /state\.templateId = normalizeTemplate\(project\.templat
 assert.match(workspace, /function assetUnavailable\(asset\)/);
 assert.match(workspace, /return assetUnavailable\(asset\) \? null : asset/);
 assert.match(workspace, /正在显示\$\{currentTemplate\(\)\.title\}模板预览/);
+assert.match(workspace, /state\.target === "frame" && template\.cover/);
+assert.match(workspace, /当前正在使用\$\{template\.title\}的首帧与动作参考/);
 
 console.log("OK workspace preserves every public same-style template and handles inaccessible private media safely");
