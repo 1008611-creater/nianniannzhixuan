@@ -898,10 +898,11 @@
     if (!src) return "<span>+</span>";
     const mediaId = asset?.mediaId ? ` data-v206-media-id="${esc(asset.mediaId)}"` : "";
     if (asset?.kind === "video" || hasVideo(src)) {
-      if (asset.preview) return `<img src="${esc(asset.preview)}"${mediaId} alt="${esc(alt)}">`;
+      if (asset.preview) return `<img src="${esc(asset.preview)}"${mediaId} alt="${esc(alt)}" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('video'),{src:'${esc(asset.url)}',muted:true,playsInline:true,preload:'metadata'}))">`;
       return `<i class="v206-video-card-fallback" aria-hidden="true">视频</i><video src="${esc(src)}"${mediaId} aria-label="${esc(alt)}" muted playsinline preload="metadata"></video>`;
     }
-    return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}">`;
+    const fallback = asset?.url && asset.url !== src ? ` onerror="this.onerror=null;this.src='${esc(asset.url)}'"` : "";
+    return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}"${fallback}>`;
   }
   function currentWorkflowStep() {
     return workflowSteps.find((step) => step.id === state.workflowStep) || workflowSteps[0];
