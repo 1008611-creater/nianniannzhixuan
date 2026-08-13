@@ -347,11 +347,11 @@
     if (kind === "video") asset.preview = "";
     return { ...asset, width: media.width || null, height: media.height || null, durationSeconds: media.durationSeconds || null, source: media.source || "", isTemplateSample: String(media.source || "").startsWith("workspace_template:") };
   }
-  function projectInputAsset(slot, media) {
+  function projectInputAsset(slot, media, options = {}) {
     const asset = assetFromMedia(media);
     // Template images establish the action style only. They must never make a
     // new same-style project look as though the customer supplied inputs.
-    return asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) ? null : asset;
+    return !options.explicit && asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) ? null : asset;
   }
   function hydrateCanonicalProject(project) {
     if (!project) return;
@@ -369,7 +369,7 @@
     (Array.isArray(project.nodes) ? project.nodes : []).forEach((node) => {
       const slot = SLOT_BY_NODE_ROLE[node.role];
       if (!slot) return;
-      const next = projectInputAsset(slot, node.media);
+      const next = projectInputAsset(slot, node.media, { explicit: sameProject && Boolean(previousSelection[slot]) });
       if (Object.prototype.hasOwnProperty.call(node, "media")) state.selected[slot] = next;
     });
     reconcileWorkflowForProject(project);
@@ -1598,6 +1598,9 @@
       if (mutation !== state.sourceMutation) return;
       state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
       hydrateCanonicalProject(refreshed);
+      // The user explicitly selected this asset. Keep it visible even when
+      // the upstream project response labels template-derived media as a sample.
+      state.selected[target] = durableAsset;
       if (["person", "outfit", "scene", "motion"].includes(target)) {
         invalidateDerivedOutputs();
         if (target === "motion") state.motionReferenceTime = null;

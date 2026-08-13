@@ -12,7 +12,7 @@ assert.match(workspace, /function assetUnavailable\(asset\)/);
 assert.match(workspace, /return assetUnavailable\(asset\) \? null : asset/);
 assert.match(workspace, /state\.target === "frame" && template\.cover/);
 assert.match(workspace, /当前正在使用\$\{template\.title\}的首帧与动作参考/);
-assert.match(workspace, /function projectInputAsset\(slot, media\)/);
+assert.match(workspace, /function projectInputAsset\(slot, media, options = \{\}\)/);
 assert.match(workspace, /asset\?\.isTemplateSample && \["person", "outfit", "scene"\]\.includes\(slot\) \? null : asset/);
 assert.match(workspace, /const previousSelection = sameProject \? \{ \.\.\.state\.selected \} : \{\}/);
 assert.match(workspace, /if \(Object\.prototype\.hasOwnProperty\.call\(node, "media"\)\) state\.selected\[slot\] = next/);
