@@ -379,7 +379,11 @@
     const byId = new Map(activeMedia.map((item) => [item.id, item]));
     Object.entries(state.selected).forEach(([slot, asset]) => {
       if (!asset?.mediaId) return;
-      state.selected[slot] = assetFromMedia(byId.get(asset.mediaId));
+      // Project hydration is authoritative for assigned nodes. The personal
+      // media list may omit template references, so only replace an existing
+      // node asset when this refresh actually contains its media record.
+      const refreshed = byId.get(asset.mediaId);
+      if (refreshed) state.selected[slot] = assetFromMedia(refreshed);
     });
   }
   async function ensureCanonicalProject() {
