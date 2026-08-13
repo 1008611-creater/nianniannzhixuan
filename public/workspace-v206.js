@@ -336,7 +336,10 @@
   function assetFor(id) {
     if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
     const asset = state.selected[id] || null;
-    return assetUnavailable(asset) ? null : asset;
+    // Imported template media may be private while its browser-readable
+    // source is still available locally. Keep the assigned mediaId for the
+    // backend, but use the source fallback for the canvas if playback fails.
+    return assetUnavailable(asset) ? (asset?.fallbackUrl ? { ...asset, url: asset.fallbackUrl } : null) : asset;
   }
   function mediaIsActive(media) {
     const state = String(media?.deletionState || media?.status || "").toLowerCase();
@@ -1598,7 +1601,8 @@
       let durableAsset = asset;
       if (!durableAsset.mediaId && durableAsset.templateId && durableAsset.templateRole) {
         const imported = await mediaRequest("/api/v1/media/import-workspace-template", { method: "POST", body: JSON.stringify({ templateId: durableAsset.templateId, role: durableAsset.templateRole }) });
-        durableAsset = assetFromMedia(imported.media);
+        const importedAsset = assetFromMedia(imported.media);
+        durableAsset = importedAsset ? { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url } : importedAsset;
       }
       if (!durableAsset.mediaId) throw new Error("MEDIA_ID_REQUIRED");
       const project = await ensureCanonicalProject();
