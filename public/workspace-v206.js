@@ -355,7 +355,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function pendingAssignmentFor(projectId, slot) {
     const pending = state.pendingAssignments?.[projectId]?.[slot];
     const age = Date.now() - Number(pending?.createdAt || 0);
-    return pending?.asset && age < 45_000 && ["pending", "confirmed"].includes(pending.status) ? pending : null;
+    const ttl = pending?.status === "confirmed" ? 5 * 60_000 : 45_000;
+    return pending?.asset && age < ttl && ["pending", "confirmed"].includes(pending.status) ? pending : null;
   }
   function recordPendingAssignment(projectId, slot, asset, mutation) {
     if (!projectId || !slots[slot] || !asset) return;
