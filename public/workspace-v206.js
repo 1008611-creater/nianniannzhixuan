@@ -1594,14 +1594,12 @@
       if (!durableAsset.mediaId) throw new Error("MEDIA_ID_REQUIRED");
       const project = await ensureCanonicalProject();
       await mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }) });
-      const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
       if (mutation !== state.sourceMutation) return;
-      state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-      hydrateCanonicalProject(refreshed);
       // The user explicitly selected this asset. Keep it visible even when
       // the upstream project response labels template-derived media as a sample.
       state.selected[target] = durableAsset;
-      if (["person", "outfit", "scene", "motion"].includes(target)) {
+      const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
+      if (invalidatesDerived) {
         invalidateDerivedOutputs();
         if (target === "motion") state.motionReferenceTime = null;
         setWorkflowStep(target);
@@ -1615,6 +1613,16 @@
       flash(["person", "outfit", "scene", "motion"].includes(target)
         ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
         : `${slots[target].title}已替换并保存。`);
+      renderUnlessSourcesOpen();
+      // Project readback is advisory. Do not block the user on a slow upstream GET.
+      void mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 }).then((result) => {
+        const refreshed = result.project;
+        if (!refreshed || mutation !== state.sourceMutation) return;
+        state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
+        hydrateCanonicalProject(refreshed);
+        state.selected[target] = durableAsset;
+        renderUnlessSourcesOpen();
+      }).catch(() => {});
       return true;
     } catch (error) {
       if (mutation !== state.sourceMutation) return;
