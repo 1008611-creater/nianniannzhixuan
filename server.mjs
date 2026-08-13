@@ -196,6 +196,15 @@ async function sendUpstreamResponse(response, upstream) {
   const upstreamHeaders = proxyResponseHeaders(upstream.headers);
   const setCookie = upstreamHeaders.get("set-cookie");
   if (setCookie) upstreamHeaders.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
+  const contentType = upstreamHeaders.get("content-type") || "";
+  if (contentType.toLowerCase().includes("application/json") && upstream.body) {
+    const body = Buffer.from(await upstream.arrayBuffer());
+    upstreamHeaders.set("content-length", String(body.length));
+    upstreamHeaders.delete("transfer-encoding");
+    response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
+    response.end(body);
+    return;
+  }
   response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
   if (upstream.body) {
     for await (const chunk of upstream.body) {
