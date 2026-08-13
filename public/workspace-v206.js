@@ -357,6 +357,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     assets.final = finalNode?.media ? assetFromMedia(finalNode.media) : null;
     return assets;
   }
+  function displayAssetFor(id) {
+    const bound = workflowBoundAssets()[id];
+    return bound || assetFor(id);
+  }
   function workflowSnapshot() {
     const project = canonicalProject();
     const assets = workflowBoundAssets(project);
@@ -519,7 +523,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     // The active node is the user's current editing context. Keep its private
     // media on the canvas after replacement instead of leaving an old motion
     // preview in place, which made a successful replacement look ineffective.
-    const selected = state.selected[state.target] || null;
+    const selected = displayAssetFor(state.target);
     const finished = activeVideoAsset();
     if (state.showFinalVideo && finished?.url) return { mode: "video", url: finished.url, mediaId: finished.mediaId, title: "成片已返回", note: activeProject()?.production?.sampleInputRoles?.length ? "本成片包含模板示例素材，正式商用前建议替换为自有素材。" : "可直接查看或导出成片。", label: "成片" };
     if (state.target === "final") {
@@ -580,7 +584,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function nextAction() {
     const stage = mainStage();
     if (stage.mode === "video" && stage.label === "成片") return { name: "open-result", label: "查看成片", note: stage.note };
-    if (assetFor("frame")?.url) return { name: "make-video", label: "开始动作迁移", note: readiness().canVideo ? "视频任务成功后才扣 TZB。" : readiness().message };
+    if (displayAssetFor("frame")?.url) return { name: "make-video", label: "开始动作迁移", note: readiness().canVideo ? "视频任务成功后才扣 TZB。" : readiness().message };
     return { name: "make-frame", label: "生成商品首帧", note: readiness().message };
   }
   async function request(url, options = {}) {
@@ -748,14 +752,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
 
   function currentFirstFrameDraftPayload() {
-    const person = assetFor("person"); const clothes = assetFor("outfit"); const motion = assetFor("motion");
+    const person = displayAssetFor("person"); const clothes = displayAssetFor("outfit"); const motion = displayAssetFor("motion");
     if (!person?.mediaId || !clothes?.mediaId || !motion?.mediaId) return null;
     const payload = { personMediaId: person.mediaId, clothesMediaId: clothes.mediaId, motionMediaId: motion.mediaId, requirement: firstFrameDirection() || "" };
     if (Number.isFinite(state.motionReferenceTime) && state.motionReferenceTime >= 0) payload.referenceTimeSeconds = state.motionReferenceTime;
     return payload;
   }
   function pendingFirstFrameProjection(draft) {
-    const person = assetFor("person"); const clothes = assetFor("outfit"); const motion = assetFor("motion");
+    const person = displayAssetFor("person"); const clothes = displayAssetFor("outfit"); const motion = displayAssetFor("motion");
     return { draft, personLabel: person?.label || "人物", clothesLabel: clothes?.label || "衣服", motionLabel: motion?.label || "参考视频", sampleInputs: [person?.isTemplateSample ? "人物" : "", clothes?.isTemplateSample ? "衣服" : "", motion?.isTemplateSample ? "动作" : ""].filter(Boolean) };
   }
   function applyPendingFirstFrameDraft(draft) {
@@ -785,7 +789,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function firstFrameRecoverySnapshot() {
     const project = canonicalProject();
-    return JSON.stringify({ projectId: project?.id || "", person: assetFor("person")?.mediaId || "", clothes: assetFor("outfit")?.mediaId || "", motion: assetFor("motion")?.mediaId || "", scene: assetFor("scene")?.mediaId || "", referenceTimeSeconds: state.motionReferenceTime, requirement: firstFrameDirection() });
+    return JSON.stringify({ projectId: project?.id || "", person: displayAssetFor("person")?.mediaId || "", clothes: displayAssetFor("outfit")?.mediaId || "", motion: displayAssetFor("motion")?.mediaId || "", scene: displayAssetFor("scene")?.mediaId || "", referenceTimeSeconds: state.motionReferenceTime, requirement: firstFrameDirection() });
   }
   async function reconcilePendingFirstFrameDraft({ poll = true, waitForMissing = false } = {}) {
     const run = ++firstFrameDraftRecoveryRun;
@@ -1118,7 +1122,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return null;
   }
   function materialJudgment() {
-    const selected = assetFor(state.target);
+    const selected = displayAssetFor(state.target);
     if (state.target === "frame") {
       if (selected?.url) return "首帧已进入当前项目，可以继续核对动作参考并制作视频。";
       return readiness().canFrame ? "人物、商品和参考视频已准备好，可以生成商品首帧。" : readiness().message;
@@ -1235,14 +1239,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const assistantAction = pendingAssistantAction();
     if (assistantAction) return { name: "confirm-assistant-proposal", label: `确认${assistantAction.label || "制作"}`, proposalAction: assistantAction.id };
     if (["person", "outfit", "motion"].includes(step.id)) {
-      if (!assetFor(step.target)?.url) return { name: "prepare-required-material", label: `添加${step.title}`, target: step.target };
+      if (!displayAssetFor(step.target)?.url) return { name: "prepare-required-material", label: `添加${step.title}`, target: step.target };
       return { name: "workflow-next", label: `下一步：${workflowSteps[workflowSteps.indexOf(step) + 1]?.title || "继续"}` };
     }
-    if (step.id === "scene") return assetFor("scene")?.url
+    if (step.id === "scene") return displayAssetFor("scene")?.url
       ? { name: "workflow-next", label: "使用当前背景，下一步" }
       : { name: "sources", label: "添加背景图片" };
     if (step.id === "frame") {
-      if (assetFor("frame")?.url) return { name: "workflow-next", label: "下一步：制作成片" };
+      if (displayAssetFor("frame")?.url) return { name: "workflow-next", label: "下一步：制作成片" };
       const missing = readiness().missing[0];
       if (missing) return { name: "prepare-required-material", label: `先补充${slots[missing].title}`, target: missing };
       return { name: "make-frame", label: "生成商品首帧" };
@@ -1251,7 +1255,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       if (activeVideoAsset()?.url) return { name: "open-result", label: "播放当前成片" };
       const missing = readiness().missing[0];
       if (missing) return { name: "prepare-required-material", label: `先补充${slots[missing].title}`, target: missing };
-      if (!assetFor("frame")?.url) return { name: "workflow-step", label: "先生成商品首帧", step: "frame" };
+      if (!displayAssetFor("frame")?.url) return { name: "workflow-step", label: "先生成商品首帧", step: "frame" };
       return { name: "make-video", label: "核对费用并制作视频" };
     }
     return null;
@@ -1297,7 +1301,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const currentTarget = ["person", "outfit", "motion", "scene"].includes(step.id) ? step.id : null;
     const target = currentTarget || (["frame", "final"].includes(step.id) ? "person" : null);
     if (!target) return "";
-    const selected = assetFor(target);
+    const selected = displayAssetFor(target);
     const label = target === "scene" ? "背景" : slots[target]?.title || "人物";
     const targetAttr = currentTarget ? "" : ` data-target="${target}"`;
     return `<button type="button" class="v206-replace" data-v206-action="sources"${targetAttr}>${selected?.url ? `更换${label}` : `添加${label}`}</button>`;
@@ -1508,7 +1512,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function assistantThreadSheet() {
     const project = activeProject();
-    const context = Object.entries(slots).map(([id, meta]) => `<span class="v206-thread-context-item"><b>${esc(meta.title)}</b>${esc(assetFor(id)?.label || "待补充")}</span>`).join("");
+    const context = Object.entries(slots).map(([id, meta]) => `<span class="v206-thread-context-item"><b>${esc(meta.title)}</b>${esc(displayAssetFor(id)?.label || "待补充")}</span>`).join("");
     return `<section class="v206-thread" data-v206-thread role="dialog" aria-modal="true" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
         <header class="v206-thread-header"><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1></div><div class="v206-thread-header-actions"><button type="button" data-v206-action="close" aria-label="收起念念完整对话">收起会话</button></div></header>
@@ -1525,7 +1529,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet wide" aria-label="素材库"><header class="v206-sheet-header"><div><h2>素材库</h2><p>正在替换：${esc(active.title)}，${esc(active.purpose)}</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭素材库">×</button></header><div class="v206-sheet-body"><div class="v206-asset-target"><b>${esc(active.title)}</b></div><label class="v206-upload-zone">上传${active.type === "video" ? "参考视频" : "图片素材"}<input type="file" data-v206-upload="${state.target}" accept="${active.type === "video" ? "video/mp4,.mp4" : "image/jpeg,image/png,image/webp,.jpg,.jpeg,.jfif,.png,.webp"}"></label><p class="v206-source-status" data-v206-source-status hidden></p><div class="v206-library-nav"><button type="button" class="${state.library === "template" ? "active" : ""}" data-v206-action="library" data-library="template">模板素材</button><button type="button" class="${state.library === "mine" ? "active" : ""}" data-v206-action="library" data-library="mine">我的素材</button></div><div class="v206-material-grid">${compatible.length ? compatible.map((item) => materialCard(item)).join("") : `<p class="v206-empty">这里还没有${active.type === "video" ? "视频" : "图片"}素材。上传后会保留在“我的素材”。</p>`}</div></div></aside>`;
   }
   function materialCard(item) {
-    const selected = item.mediaId ? assetFor(state.target)?.mediaId === item.mediaId : assetFor(state.target)?.url === item.url;
+    const selected = item.mediaId ? displayAssetFor(state.target)?.mediaId === item.mediaId : displayAssetFor(state.target)?.url === item.url;
     return `<button type="button" class="v206-material ${selected ? "selected" : ""}" data-v206-action="assign" data-material="${esc(item.id)}"><span class="v206-material-media">${imageMarkup(item, item.label)}</span><span>${esc(item.label)}</span></button>`;
   }
   function templateSheet() {
@@ -1997,7 +2001,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     render();
     try {
       const project = await ensureProject();
-      const frame = assetFor("frame"); const motion = assetFor("motion");
+    const frame = displayAssetFor("frame"); const motion = displayAssetFor("motion");
       if (!frame?.mediaId || !motion?.mediaId) throw new Error("ACTION_TRANSFER_MEDIA_NOT_READY");
       const maximumSeconds = Math.min(Math.max(Number(motion.durationSeconds || 15), 0.1), 120);
       const [summary, quote] = await Promise.all([
@@ -2079,7 +2083,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function createPendingAgentImageEdit(requirement) {
     const inputs = ["frame", "person", "outfit", "scene", "motion"]
-      .map((slot) => ({ slot, asset: assetFor(slot) }))
+      .map((slot) => ({ slot, asset: displayAssetFor(slot) }))
       .filter((item) => item.asset?.mediaId)
       .map(({ slot, asset }) => ({ slot, role: slots[slot]?.title || slot, label: asset.label || "当前素材", mediaId: asset.mediaId || "" }));
     return { id: crypto.randomUUID(), requirement, inputs, status: "pending_confirmation", createdAt: new Date().toISOString(), projectId: canonicalProject()?.id || "", jobId: "" };
@@ -2181,9 +2185,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const confirmed = await billing("image", { count: 1, inputs: edit.inputs });
       if (!confirmed) return;
       const project = await ensureCanonicalProject();
-      const personMediaId = assetFor("person")?.mediaId || "";
-      const clothesMediaId = assetFor("outfit")?.mediaId || "";
-      const motionMediaId = assetFor("motion")?.mediaId || "";
+      const personMediaId = displayAssetFor("person")?.mediaId || "";
+      const clothesMediaId = displayAssetFor("outfit")?.mediaId || "";
+      const motionMediaId = displayAssetFor("motion")?.mediaId || "";
       if (![personMediaId, clothesMediaId, motionMediaId].every((id) => UUID_PATTERN.test(id))) throw new Error("人物、商品或参考视频已变化，请重新生成改图方案。");
       const prepared = await firstFrameDraftRequest(`/api/v1/projects/${project.id}/first-frame/drafts`, {
         method: "POST",
