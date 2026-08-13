@@ -285,6 +285,16 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const currentPending = current?.id && Object.keys(state.pendingAssignments[current.id] || {}).length > 0;
     state.canonicalProjects = [...next, ...(currentPending && !incomingIds.has(current.id) ? [current] : [])];
   }
+  function mergeCanonicalProject(incoming) {
+    if (!incoming?.id) return null;
+    const existing = state.canonicalProjects.find((project) => project.id === incoming.id);
+    if (!existing) return incoming;
+    const incomingNodes = new Map((Array.isArray(incoming.nodes) ? incoming.nodes : []).map((node) => [node.role, node]));
+    const existingNodes = new Map((Array.isArray(existing.nodes) ? existing.nodes : []).map((node) => [node.role, node]));
+    const roles = new Set([...incomingNodes.keys(), ...existingNodes.keys()]);
+    const nodes = [...roles].map((role) => incomingNodes.get(role) || existingNodes.get(role)).filter(Boolean);
+    return { ...existing, ...incoming, nodes };
+  }
   function privateMediaUrl(media) {
     const id = String(media?.id || "");
     const mediaType = `${media?.kind || ""} ${media?.mimeType || ""} ${media?.mediaType || ""} ${media?.url || ""}`;
@@ -1714,8 +1724,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
             })
             .then((result) => {
               if (mutation !== state.sourceMutation || !result?.project) return;
-              state.canonicalProjects = [result.project, ...state.canonicalProjects.filter((item) => item.id !== result.project.id)];
-              hydrateCanonicalProject(result.project);
+              const mergedProject = mergeCanonicalProject(result.project);
+              state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+              hydrateCanonicalProject(mergedProject);
               renderUnlessSourcesOpen();
             });
         }).catch(() => {
@@ -1768,9 +1779,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       void mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 }).then((result) => {
         const refreshed = result.project;
         if (!refreshed || mutation !== state.sourceMutation) return;
-        state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-        hydrateCanonicalProject(refreshed);
-        state.selected[target] = projectNodeAsset(refreshed, target) || durableAsset;
+        const mergedProject = mergeCanonicalProject(refreshed);
+        state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+        hydrateCanonicalProject(mergedProject);
+        state.selected[target] = projectNodeAsset(mergedProject, target) || durableAsset;
         renderUnlessSourcesOpen();
       }).catch(() => {});
       return true;
@@ -2410,8 +2422,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     try {
       await mediaRequest(`/api/v1/projects/${project.id}/nodes/FINAL_VIDEO`, { method: "PUT", body: JSON.stringify({ mediaId }) });
       const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
-      state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-      hydrateCanonicalProject(refreshed);
+      const mergedProject = mergeCanonicalProject(refreshed);
+      state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+      hydrateCanonicalProject(mergedProject);
       await openVideoHistory();
       flash("当前成片已切换，没有重新生成或扣费。");
     } catch (error) { flash(error.message || "当前成片切换失败。", "warning"); }
@@ -2447,8 +2460,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const project = canonicalProject();
       if (project) {
         const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
-        state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-        hydrateCanonicalProject(refreshed);
+        const mergedProject = mergeCanonicalProject(refreshed);
+        state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+        hydrateCanonicalProject(mergedProject);
       }
       await openVideoHistory();
       flash("成片已进入恢复期，历史版本未被自动重新生成。");
@@ -2480,8 +2494,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     render();
     try {
       const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`, { method: "PATCH", body: JSON.stringify({ name }) })).project;
-      state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-      hydrateCanonicalProject(refreshed);
+      const mergedProject = mergeCanonicalProject(refreshed);
+      state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+      hydrateCanonicalProject(mergedProject);
       state.view = null;
       flash("项目名称已保存。");
     } catch (error) {
