@@ -19,5 +19,7 @@ assert.match(workspace, /state\.selected\[slot\] = projectInputAsset\(slot, node
 assert.match(workspace, /function inputGuide\(target\)/);
 assert.match(workspace, /制作教程/);
 assert.match(workspace, /背景是可选项；不添加时会沿用模板视频的门店空间和机位。/);
+assert.match(workspace, /if \(unavailable && state\.target !== "motion"\)/);
+assert.match(workspace, /当前\$\{slot\.title\}暂时无法读取，正在播放\$\{currentTemplate\(\)\.title\}的同款参考视频。/);
 
 console.log("OK workspace preserves every public same-style template and handles inaccessible private media safely");
