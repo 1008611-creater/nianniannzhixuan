@@ -1609,6 +1609,7 @@
       }
       if (!durableAsset.mediaId && !pendingTemplateImport) throw new Error("MEDIA_ID_REQUIRED");
       if (!durableAsset.mediaId && pendingTemplateImport) {
+        const project = await ensureCanonicalProject();
         state.selected[target] = durableAsset;
         const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
         if (invalidatesDerived) { invalidateDerivedOutputs(); setWorkflowStep(target); }
@@ -1616,8 +1617,14 @@
         void pendingTemplateImport.then((imported) => {
           const importedAsset = assetFromMedia(imported.media);
           if (!importedAsset || mutation !== state.sourceMutation) return;
-          return mediaRequest(`/api/v1/projects/${(canonicalProject() || {}).id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: importedAsset.mediaId }) })
-            .then(() => { state.selected[target] = { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url }; writeState(); renderUnlessSourcesOpen(); });
+          return mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: importedAsset.mediaId }) })
+            .then(() => {
+              const savedAsset = { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url };
+              state.selected[target] = savedAsset;
+              state.assignmentOverrides[project.id] = { ...(state.assignmentOverrides[project.id] || {}), [target]: savedAsset };
+              writeState();
+              renderUnlessSourcesOpen();
+            });
         }).catch(() => flash("素材已显示，服务器保存稍慢，请稍后刷新项目。", "warning"));
         return true;
       }
