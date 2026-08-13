@@ -5,6 +5,7 @@
 1. Read the repository `AGENTS.md` before editing.
 2. Load `agent/skills/i-have-adhd/SKILL.md` for every user-facing turn in this project.
 3. State the current step, the smallest next action, and one concrete handoff action.
+4. After each substantive stage, report the concrete result first, then name the single most valuable next action and offer three mutually exclusive directions (A/B/C) when a decision is needed.
 
 ## Product Boundary
 
