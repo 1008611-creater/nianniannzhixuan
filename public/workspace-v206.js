@@ -73,6 +73,34 @@
       },
     },
   ];
+  const STORE_DANCE_TEMPLATE_IDS = ["03", "04", "05", "06", "07"];
+  const INDOOR_SEGMENT_TEMPLATE_IDS = ["01", "02", "03", "04", "05", "06"];
+  templates.push(...STORE_DANCE_TEMPLATE_IDS.map((number) => ({
+    id: `store-dance-${number}`,
+    title: `门店舞蹈 ${number}`,
+    note: "门店童装动作与机位参考",
+    cover: `/assets/references/store-dance-${number}.jpg`,
+    motion: `/assets/references/store-dance-${number}.mp4`,
+    prompt: "精品童装门店内，儿童模特自然舞动展示服装，保持模板动作、机位与竖版带货质感。",
+    starter: {
+      person: "/assets/references/user-store-gloofy-dress.png",
+      outfit: "/assets/references/white-dress-01.png",
+      scene: "/assets/references/default-store-scene-inspiration.jpg",
+    },
+  })));
+  templates.push(...INDOOR_SEGMENT_TEMPLATE_IDS.map((number) => ({
+    id: `indoor-style-01-seg-${number}`,
+    title: `室内风格 01-${Number(number)}`,
+    note: "室内童装动作与机位参考",
+    cover: `/assets/references/indoor-style-01-segments/indoor-style-01-seg-${number}-first.jpg`,
+    motion: `/assets/references/indoor-style-01-segments/indoor-style-01-seg-${number}.mp4`,
+    prompt: "室内自然柔光下的童装生活方式视频，保持模板动作、机位、光线与真实展示感。",
+    starter: {
+      person: "/assets/references/indoor-look-cream-bow.png",
+      outfit: "/assets/references/white-dress-03.png",
+      scene: "/assets/references/indoor-scene-sunshine-01.png",
+    },
+  })));
   const templateMaterials = [
     { id: "default-person", label: "门店小模特", kind: "image", url: "/assets/references/user-store-gloofy-dress.png", preview: "/assets/references/user-store-gloofy-dress-thumb.jpg", templateId: "store-dance-01", templateRole: "PERSON" },
     { id: "default-outfit-01", label: "白色连衣裙", kind: "image", url: "/assets/references/white-dress-01.png", preview: "/assets/references/white-dress-01-thumb.jpg", templateId: "store-dance-01", templateRole: "CLOTHES" },
@@ -213,7 +241,7 @@
   }
   function validAsset(item) { return Boolean(item && (item.url || item.mediaId) && item.kind); }
   function normalizeTemplate(value) {
-    const aliases = { "store-action-reference": "store-dance-01", "store-window": "store-dance-01", "indoor-style-01-seg-01": "indoor-style-01" };
+    const aliases = { "store-action-reference": "store-dance-01", "store-window": "store-dance-01" };
     const requested = aliases[String(value || "")] || String(value || "");
     return templates.some((item) => item.id === requested) ? requested : FALLBACK_TEMPLATE;
   }
@@ -300,9 +328,13 @@
     }
     if (changed) writeState();
   }
+  function assetUnavailable(asset) {
+    return Boolean(asset?.mediaId && state.unavailableMedia?.has(asset.mediaId));
+  }
   function assetFor(id) {
     if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
-    return state.selected[id] || null;
+    const asset = state.selected[id] || null;
+    return assetUnavailable(asset) ? null : asset;
   }
   function mediaIsActive(media) {
     const state = String(media?.deletionState || media?.status || "").toLowerCase();
@@ -318,7 +350,7 @@
   function hydrateCanonicalProject(project) {
     if (!project) return;
     state.canonicalProjectId = project.id;
-    if (templates.some((template) => template.id === project.templateId)) state.templateId = normalizeTemplate(project.templateId);
+    state.templateId = normalizeTemplate(project.templateId || state.templateId);
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.set("projectId", project.id);
     window.history.replaceState(null, "", nextUrl);
@@ -431,7 +463,7 @@
     // The active node is the user's current editing context. Keep its private
     // media on the canvas after replacement instead of leaving an old motion
     // preview in place, which made a successful replacement look ineffective.
-    const selected = assetFor(state.target);
+    const selected = state.selected[state.target] || null;
     const finished = activeVideoAsset();
     if (state.showFinalVideo && finished?.url) return { mode: "video", url: finished.url, mediaId: finished.mediaId, title: "成片已返回", note: activeProject()?.production?.sampleInputRoles?.length ? "本成片包含模板示例素材，正式商用前建议替换为自有素材。" : "可直接查看或导出成片。", label: "成片" };
     if (state.target === "final") {
@@ -444,15 +476,17 @@
     }
     if (selected?.url) {
       const slot = slots[state.target] || slots.person;
+      const unavailable = assetUnavailable(selected);
+      const fallback = currentTemplate().cover;
       return {
-        mode: selected.kind === "video" ? "video" : "image",
-        url: selected.url,
-        displayUrl: publicPreview(selected),
-        mediaId: selected.mediaId,
-        poster: selected.preview || "",
+        mode: unavailable ? "image" : (selected.kind === "video" ? "video" : "image"),
+        url: unavailable ? fallback : selected.url,
+        displayUrl: unavailable ? fallback : publicPreview(selected),
+        mediaId: unavailable ? "" : selected.mediaId,
+        poster: unavailable ? "" : (selected.preview || ""),
         title: `${slot.title}素材`,
-        note: `${slot.title}已绑定当前项目。`,
-        label: slot.title,
+        note: unavailable ? `正在显示${currentTemplate().title}模板预览，请重新选择${slot.title}素材后继续制作。` : `${slot.title}已绑定当前项目。`,
+        label: unavailable ? `${slot.title}待修复` : slot.title,
       };
     }
     const slot = slots[state.target] || slots.person;
@@ -881,12 +915,9 @@
   }
   function stageMarkup() {
     const stage = mainStage();
-    const unavailable = state.unavailableMedia && stage.mediaId && state.unavailableMedia.has(stage.mediaId);
     const emptyTarget = ["person", "outfit", "motion", "scene"].includes(stage.target || state.target) ? (stage.target || state.target) : "";
     const media = stage.mode === "empty"
       ? `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
-      : unavailable
-        ? `<div class="v206-stage-placeholder v206-stage-media-error" role="status"><strong>${stage.mode === "video" ? "视频暂时无法播放" : "素材暂时不可用"}</strong>${stage.mode === "video" ? "请更换参考视频后继续制作。" : "请在素材库中重新选择一张图片后继续制作。"}</div>`
       : stage.mode === "image"
         ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览"></div>`
         : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.url)}" ${stage.poster ? `poster="${esc(stage.poster)}"` : ""} controls playsinline preload="metadata"></video>`;
