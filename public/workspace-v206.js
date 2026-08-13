@@ -379,7 +379,7 @@
     // clear the selection that was just saved by PUT /nodes.
     const overrides = state.assignmentOverrides[project.id] || {};
     Object.entries(overrides).forEach(([slot, asset]) => {
-      if (slots[slot] && asset?.mediaId) state.selected[slot] = asset;
+      if (slots[slot] && (asset?.mediaId || asset?.url)) state.selected[slot] = asset;
     });
     reconcileWorkflowForProject(project);
     writeState();
@@ -1611,6 +1611,7 @@
       if (!durableAsset.mediaId && pendingTemplateImport) {
         const project = await ensureCanonicalProject();
         state.selected[target] = durableAsset;
+        state.assignmentOverrides[project.id] = { ...(state.assignmentOverrides[project.id] || {}), [target]: durableAsset };
         const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
         if (invalidatesDerived) { invalidateDerivedOutputs(); setWorkflowStep(target); }
         state.view = null; state.busy = ""; writeState(); flash(`${slots[target].title}已替换，正在后台保存。`); render();
