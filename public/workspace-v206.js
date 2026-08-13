@@ -304,6 +304,22 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     }).filter(Boolean);
     return { ...existing, ...incoming, nodes };
   }
+  function jobTimestamp(job) {
+    return [job?.updatedAt, job?.createdAt, job?.submittedAt].map((value) => Date.parse(String(value || ""))).find(Number.isFinite) || 0;
+  }
+  function mergeCanonicalJobs(incoming) {
+    const next = Array.isArray(incoming) ? incoming.filter((job) => job?.id) : [];
+    const ids = new Set(next.map((job) => job.id));
+    const projectId = canonicalProject()?.id || requestedProjectId || "";
+    const retained = state.jobs.filter((job) => {
+      if (!job?.id || ids.has(job.id)) return false;
+      const belongs = job?.project?.id === projectId || job?.projectId === projectId;
+      const active = taskIsActive(job.status);
+      const recent = Date.now() - jobTimestamp(job) < 10 * 60_000;
+      return belongs && (active || recent);
+    });
+    state.jobs = [...next, ...retained];
+  }
   function privateMediaUrl(media) {
     const id = String(media?.id || "");
     const mediaType = `${media?.kind || ""} ${media?.mimeType || ""} ${media?.mediaType || ""} ${media?.url || ""}`;
@@ -812,7 +828,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     ]);
     if (run !== secondaryWorkspaceRun || (projectId && projectId !== canonicalProject()?.id)) return;
     hydrateCanonicalMedia(canonicalMedia.media || []);
-    state.jobs = canonicalJobs.jobs || [];
+    mergeCanonicalJobs(canonicalJobs.jobs || []);
     state.assistantThreads = assistantThreads.threads || [];
     state.notifications = notificationData.notifications || [];
     state.unreadNotifications = Number(notificationData.unreadCount || 0);
@@ -956,7 +972,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       if (run !== taskRefreshRun || mutation !== state.sourceMutation || projectId !== (canonicalProject()?.id || "") || state.view === "sources") return;
       mergeCanonicalProjects(projects.projects || []);
       hydrateCanonicalMedia(media.media || []);
-      state.jobs = jobs.jobs || [];
+      mergeCanonicalJobs(jobs.jobs || []);
       hydrateCanonicalProject(canonicalProject());
       reconcileDerivedOutputs();
       state.taskRefreshAt = Date.now();
