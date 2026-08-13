@@ -1695,12 +1695,22 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         void pendingTemplateImport.then((imported) => {
           const importedAsset = assetFromMedia(imported.media);
           if (!importedAsset || mutation !== state.sourceMutation) return;
+          const savedAsset = { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url };
+          state.selected[target] = savedAsset;
+          // Replace the provisional template record with the durable media id
+          // before PUT, so a stale project read cannot erase the pending choice.
+          recordPendingAssignment(project.id, target, savedAsset, mutation);
           return mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: importedAsset.mediaId }) })
             .then(() => {
-              const savedAsset = { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url };
-              state.selected[target] = savedAsset;
-              clearPendingAssignment(project.id, target);
+              confirmPendingAssignment(project.id, target);
               writeState();
+              renderUnlessSourcesOpen();
+              return mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 });
+            })
+            .then((result) => {
+              if (mutation !== state.sourceMutation || !result?.project) return;
+              state.canonicalProjects = [result.project, ...state.canonicalProjects.filter((item) => item.id !== result.project.id)];
+              hydrateCanonicalProject(result.project);
               renderUnlessSourcesOpen();
             });
         }).catch(() => {
