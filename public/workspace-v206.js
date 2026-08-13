@@ -911,7 +911,7 @@
     if (step.id === "frame" && !assetFor("frame")?.url && currentTaskPresentation()?.active) return "制作中";
     const asset = assetFor(step.target);
     if (asset?.url) return step.id === "motion" ? "可播放" : "已就绪";
-    if (step.optional) return "可跳过";
+    if (step.optional) return "待添加";
     return step.id === "frame" ? "待生成" : "待添加";
   }
   function setWorkflowStep(stepId) {

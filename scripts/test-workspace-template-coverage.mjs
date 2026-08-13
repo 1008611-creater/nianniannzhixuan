@@ -20,5 +20,6 @@ assert.match(workspace, /制作教程/);
 assert.match(workspace, /背景是可选项；不添加时会沿用模板视频的门店空间和机位。/);
 assert.match(workspace, /if \(unavailable && state\.target !== "motion"\)/);
 assert.match(workspace, /当前\$\{slot\.title\}暂时无法读取，正在播放\$\{currentTemplate\(\)\.title\}的同款参考视频。/);
+assert.match(workspace, /if \(step\.optional\) return "待添加"/);
 
 console.log("OK workspace preserves every public same-style template and handles inaccessible private media safely");
