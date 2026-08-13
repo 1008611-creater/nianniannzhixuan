@@ -355,6 +355,8 @@
   }
   function hydrateCanonicalProject(project) {
     if (!project) return;
+    const sameProject = state.canonicalProjectId === project.id;
+    const previousSelection = sameProject ? { ...state.selected } : {};
     state.canonicalProjectId = project.id;
     state.templateId = normalizeTemplate(project.templateId || state.templateId);
     const nextUrl = new URL(window.location.href);
@@ -363,11 +365,12 @@
     state.firstFrameDirection = "";
     state.motionReferenceTime = null;
     state.projectNameDraft = project.name || "";
-    Object.keys(slots).forEach((slot) => { state.selected[slot] = null; });
-    project.nodes.forEach((node) => {
+    Object.keys(slots).forEach((slot) => { state.selected[slot] = sameProject ? (previousSelection[slot] || null) : null; });
+    (Array.isArray(project.nodes) ? project.nodes : []).forEach((node) => {
       const slot = SLOT_BY_NODE_ROLE[node.role];
       if (!slot) return;
-      state.selected[slot] = projectInputAsset(slot, node.media);
+      const next = projectInputAsset(slot, node.media);
+      if (Object.prototype.hasOwnProperty.call(node, "media")) state.selected[slot] = next;
     });
     reconcileWorkflowForProject(project);
     writeState();
