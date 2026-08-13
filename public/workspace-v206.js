@@ -1603,7 +1603,10 @@
       }
       if (!durableAsset.mediaId) throw new Error("MEDIA_ID_REQUIRED");
       const project = await ensureCanonicalProject();
-      await mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }) });
+      const assignmentRequest = mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }), timeoutMs: 12_000 });
+      // The proxy can receive a successful upstream PUT before the upstream
+      // response body finishes. Commit the visible selection immediately and
+      // let the request confirm in the background.
       if (mutation !== state.sourceMutation) return;
       // The user explicitly selected this asset. Keep it visible even when
       // the upstream project response labels template-derived media as a sample.
@@ -1625,6 +1628,7 @@
         ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
         : `${slots[target].title}已替换并保存。`);
       renderUnlessSourcesOpen();
+      void assignmentRequest.catch(() => flash("素材已暂存，服务器确认稍慢，请稍后刷新项目。", "warning"));
       // Project readback is advisory. Do not block the user on a slow upstream GET.
       void mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 }).then((result) => {
         const refreshed = result.project;
