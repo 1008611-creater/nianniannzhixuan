@@ -1,0 +1,34 @@
+services:
+  worker:
+    env_file:
+      - /srv/kidswear-data/runtime-config-upload/.env.beta
+      - /srv/kidswear-data/niannian-agent-vault/worker.env
+    environment:
+      AGENT_VAULT_ADDR: "http://niannian-agent-vault:14321"
+      AGENT_VAULT_VAULT: "niannian-production"
+      NO_PROXY: "localhost,127.0.0.1,redis,postgres,object-storage,niannian-agent-vault"
+      NODE_USE_ENV_PROXY: "1"
+      NODE_EXTRA_CA_CERTS: "/etc/agent-vault/ca.pem"
+      IMAGE2_BASE_URL: "https://img.yunfei.best/v1"
+      IMAGE2_MODEL: "gpt-image-2"
+      IMAGE2_RELAY_ADAPTER_MODE: "enabled"
+      RUNNINGHUB_IMAGE_ADAPTER_MODE: "disabled"
+      WINDOWS_IMAGE_BRIDGE_MODE: "disabled"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        test -n "$${AGENT_VAULT_TOKEN}"
+        export HTTPS_PROXY="http://$${AGENT_VAULT_TOKEN}:niannian-production@niannian-agent-vault:14322"
+        export HTTP_PROXY="$${HTTPS_PROXY}"
+        exec npm run worker
+    volumes:
+      - /srv/kidswear-data/niannian-agent-vault/data/.agent-vault/ca/ca.crt.pem:/etc/agent-vault/ca.pem:ro
+    networks:
+      default: {}
+      agent-vault:
+
+networks:
+  agent-vault:
+    name: niannian-agent-vault_default
+    external: true

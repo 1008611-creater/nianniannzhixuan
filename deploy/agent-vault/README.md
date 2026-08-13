@@ -19,3 +19,15 @@ The first owner and every credential are created in the Vault UI through a local
 port forward. Do not commit `runtime.env`, exported vault data, agent tokens, or any
 provider credential. Each consumer receives a dedicated agent token and only service
 rules it needs; no consumer is given the vault master password.
+
+## Worker Image2 access
+
+Use `worker-image2-vault.override.yml` with the application's existing Compose files
+to let the worker access `yunfei-image` through the Vault proxy. The token remains in
+`/srv/kidswear-data/niannian-agent-vault/worker.env`; the Compose file constructs the
+proxy URL only at worker startup and never contains the token value.
+
+For a new or rotated worker token, run `scripts/build-agent-vault-token-tool.ps1` on
+the operator workstation. It first verifies the SSH input path without a real token,
+then opens a masked native input form. The tool validates the token format and writes
+the server file atomically with `root:root` ownership and `0600` permissions.
