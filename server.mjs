@@ -471,6 +471,7 @@ async function proxy(request, response) {
     body = await readUploadChunk(request);
     headers.delete("transfer-encoding");
     headers.set("content-length", String(body.length));
+    console.log(`[upload] bytes=${body.length} declared=${headers.get("x-upload-content-length") || "-"} offset=${headers.get("x-upload-offset") || "-"} chunk=${headers.get("x-upload-chunk-length") || "-"} type=${headers.get("content-type") || "-"} origin=${headers.get("origin") || "-"} referer=${headers.get("referer") || "-"}`);
   }
   const startedAt = Date.now();
   const controller = new AbortController();
