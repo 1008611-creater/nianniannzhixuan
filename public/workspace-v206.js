@@ -1705,6 +1705,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
           recordPendingAssignment(project.id, target, savedAsset, mutation);
           return mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: importedAsset.mediaId }) })
             .then(() => {
+              if (mutation !== state.sourceMutation) return null;
               confirmPendingAssignment(project.id, target);
               writeState();
               renderUnlessSourcesOpen();
@@ -1717,6 +1718,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
               renderUnlessSourcesOpen();
             });
         }).catch(() => {
+          if (mutation !== state.sourceMutation) return;
           clearPendingAssignment(project.id, target);
           state.selected[target] = projectNodeAsset(canonicalProject(), target);
           flash("素材保存失败，已恢复为服务器实际状态。", "warning");
