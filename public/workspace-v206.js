@@ -347,6 +347,12 @@
     if (kind === "video") asset.preview = "";
     return { ...asset, width: media.width || null, height: media.height || null, durationSeconds: media.durationSeconds || null, source: media.source || "", isTemplateSample: String(media.source || "").startsWith("workspace_template:") };
   }
+  function projectInputAsset(slot, media) {
+    const asset = assetFromMedia(media);
+    // Template images establish the action style only. They must never make a
+    // new same-style project look as though the customer supplied inputs.
+    return asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) ? null : asset;
+  }
   function hydrateCanonicalProject(project) {
     if (!project) return;
     state.canonicalProjectId = project.id;
@@ -361,7 +367,7 @@
     project.nodes.forEach((node) => {
       const slot = SLOT_BY_NODE_ROLE[node.role];
       if (!slot) return;
-      state.selected[slot] = assetFromMedia(node.media);
+      state.selected[slot] = projectInputAsset(slot, node.media);
     });
     reconcileWorkflowForProject(project);
     writeState();
@@ -502,7 +508,15 @@
         label: "同款预览",
       };
     }
-    return { mode: "empty", target: state.target, title: `${slot.title}待添加`, note: `请先上传或选择${slot.title}素材。`, label: "待添加" };
+    return { mode: "empty", target: state.target, title: `${slot.title}待添加`, note: `请先上传或选择${slot.title}素材。`, label: "待添加", guide: inputGuide(state.target) };
+  }
+  function inputGuide(target) {
+    const guides = {
+      person: { title: "添加人物图", detail: "使用一张清晰的儿童全身正面照片，脸部、手脚和服装轮廓完整可见。", checks: ["单人入镜，不要拼图或遮挡", "自然光或均匀室内光，避免过曝", "JPG、PNG 或 WebP，大小不超过 25 MB"] },
+      outfit: { title: "添加商品图", detail: "使用本次要展示的单件童装图，正面、平铺或白底图都可以。", checks: ["衣服主体完整，不要裁掉下摆或袖口", "避开模糊、反光和大面积文字", "商品颜色与花型尽量接近真实款"] },
+      scene: { title: "添加背景图", detail: "背景是可选项；不添加时会沿用模板视频的门店空间和机位。", checks: ["优先用同一门店的干净空景", "保留地面、墙面和拍摄角度", "不需要背景时可直接跳过"] },
+    };
+    return guides[target] || null;
   }
   function nextAction() {
     const stage = mainStage();
@@ -929,7 +943,9 @@
     const stage = mainStage();
     const emptyTarget = ["person", "outfit", "motion", "scene"].includes(stage.target || state.target) ? (stage.target || state.target) : "";
     const media = stage.mode === "empty"
-      ? `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
+      ? stage.guide
+        ? `<section class="v206-stage-guide" aria-label="${esc(stage.guide.title)}教程"><span>制作教程</span><h2>${esc(stage.guide.title)}</h2><p>${esc(stage.guide.detail)}</p><ol>${stage.guide.checks.map((item) => `<li>${esc(item)}</li>`).join("")}</ol><button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button></section>`
+        : `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
       : stage.mode === "image"
         ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览"></div>`
         : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.url)}" ${stage.poster ? `poster="${esc(stage.poster)}"` : ""} controls playsinline preload="metadata"></video>`;

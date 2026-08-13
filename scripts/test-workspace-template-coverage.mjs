@@ -13,5 +13,11 @@ assert.match(workspace, /return assetUnavailable\(asset\) \? null : asset/);
 assert.match(workspace, /正在显示\$\{currentTemplate\(\)\.title\}模板预览/);
 assert.match(workspace, /state\.target === "frame" && template\.cover/);
 assert.match(workspace, /当前正在使用\$\{template\.title\}的首帧与动作参考/);
+assert.match(workspace, /function projectInputAsset\(slot, media\)/);
+assert.match(workspace, /asset\?\.isTemplateSample && \["person", "outfit", "scene"\]\.includes\(slot\) \? null : asset/);
+assert.match(workspace, /state\.selected\[slot\] = projectInputAsset\(slot, node\.media\)/);
+assert.match(workspace, /function inputGuide\(target\)/);
+assert.match(workspace, /制作教程/);
+assert.match(workspace, /背景是可选项；不添加时会沿用模板视频的门店空间和机位。/);
 
 console.log("OK workspace preserves every public same-style template and handles inaccessible private media safely");
