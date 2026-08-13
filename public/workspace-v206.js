@@ -358,8 +358,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return assets;
   }
   function displayAssetFor(id) {
-    const bound = workflowBoundAssets()[id];
-    return bound || assetFor(id);
+    const project = canonicalProject();
+    const boundAssets = workflowBoundAssets(project);
+    // Once a canonical project exists, its slot record is authoritative. Do
+    // not resurrect a stale local selection when that project slot is empty.
+    if (project?.id && Object.prototype.hasOwnProperty.call(boundAssets, id)) return boundAssets[id] || null;
+    return assetFor(id);
   }
   function workflowSnapshot() {
     const project = canonicalProject();

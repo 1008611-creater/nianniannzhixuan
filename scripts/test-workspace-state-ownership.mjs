@@ -17,6 +17,8 @@ assert.match(workspace, /function workflowSnapshot\(\)/);
 assert.match(workspace, /return workflowSnapshot\(\)\[step\.id\]\?\.status/);
 assert.match(workspace, /state\.assignmentOverrides\[project\.id\] = \{ \.\.\.\(state\.assignmentOverrides\[project\.id\] \|\| \{\}\), \[target\]: savedAsset \}/);
 assert.match(workspace, /function displayAssetFor\(id\)/);
+assert.match(workspace, /project\?\.id && Object\.prototype\.hasOwnProperty\.call\(boundAssets, id\)/);
+assert.match(workspace, /return boundAssets\[id\] \|\| null;/);
 assert.match(workspace, /const selected = displayAssetFor\(state\.target\)/);
 const refreshTaskState = workspace.match(/async function refreshTaskState\(\) \{[\s\S]*?\n  function requireLogin/);
 assert.ok(refreshTaskState, "refreshTaskState must exist");
