@@ -169,6 +169,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     pendingAssignments: stored.pendingAssignments && typeof stored.pendingAssignments === "object" ? stored.pendingAssignments : {},
     invalidatedDerivedByProject: stored.invalidatedDerivedByProject && typeof stored.invalidatedDerivedByProject === "object" ? stored.invalidatedDerivedByProject : {},
     generationSources: stored.generationSources && typeof stored.generationSources === "object" ? stored.generationSources : {},
+    currentJobSnapshots: stored.currentJobSnapshots && typeof stored.currentJobSnapshots === "object" ? stored.currentJobSnapshots : {},
   };
   if (previewMode) {
     const previewProjectId = "00000000-0000-4000-8000-000000000001";
@@ -240,6 +241,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       assistantThreadId: state.assistantThreadId,
       invalidatedDerivedByProject: state.invalidatedDerivedByProject,
       generationSources: state.generationSources,
+      currentJobSnapshots: state.currentJobSnapshots,
       pendingAssignments: state.pendingAssignments,
       pendingAgentImageEdit: state.pendingAgentImageEdit,
     }));
@@ -318,7 +320,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const recent = Date.now() - jobTimestamp(job) < 10 * 60_000;
       return belongs && (active || recent);
     });
-    state.jobs = [...next, ...retained];
+    const merged = [...next, ...retained];
+    Object.values(state.currentJobSnapshots || {}).forEach((snapshot) => {
+      if (!snapshot?.id || merged.some((job) => job.id === snapshot.id)) return;
+      if (Date.now() - jobTimestamp(snapshot) < 10 * 60_000) merged.push(snapshot);
+    });
+    state.jobs = merged;
   }
   function privateMediaUrl(media) {
     const id = String(media?.id || "");
@@ -2089,7 +2096,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const job = result.job;
       state.jobs = job ? [job, ...state.jobs.filter((item) => item.id !== job.id)] : state.jobs;
       state.frameJobId = job?.id || state.frameJobId;
-      if (job?.id) state.generationSources[job.id] = { kind: "frame", signature: generationInputSignature("frame") };
+      if (job?.id) {
+        state.generationSources[job.id] = { kind: "frame", signature: generationInputSignature("frame") };
+        state.currentJobSnapshots.frame = job;
+      }
       state.pendingFirstFrame = null;
       setWorkflowStep("frame");
       writeState();
@@ -2161,7 +2171,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         body: JSON.stringify({ kind: "action_transfer", input: { firstFrameMediaId: pending.firstFrameMediaId, motionMediaId: pending.motionMediaId, quotedMaxDurationSeconds: pending.maximumSeconds, fps: 24, frameLoadCap: stable ? 360 : pending.standardFrames, resolution: "720p", actionVariant: "standard", cameraMotion: false, stableRetry: stable } }),
       });
       if (result.job) state.jobs = [result.job, ...state.jobs.filter((item) => item.id !== result.job.id)];
-      if (result.job?.id) state.generationSources[result.job.id] = { kind: "final", signature: generationInputSignature("final") };
+      if (result.job?.id) {
+        state.generationSources[result.job.id] = { kind: "final", signature: generationInputSignature("final") };
+        state.currentJobSnapshots.final = result.job;
+      }
       clearGenerationIdempotencyKey("action_transfer");
       state.pendingVideo = null;
       scheduleTaskRefresh();
