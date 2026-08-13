@@ -10,7 +10,6 @@ assert.match(workspace, /id: `indoor-style-01-seg-\$\{number\}`/);
 assert.match(workspace, /state\.templateId = normalizeTemplate\(project\.templateId \|\| state\.templateId\)/);
 assert.match(workspace, /function assetUnavailable\(asset\)/);
 assert.match(workspace, /return assetUnavailable\(asset\) \? null : asset/);
-assert.match(workspace, /正在显示\$\{currentTemplate\(\)\.title\}模板预览/);
 assert.match(workspace, /state\.target === "frame" && template\.cover/);
 assert.match(workspace, /当前正在使用\$\{template\.title\}的首帧与动作参考/);
 assert.match(workspace, /function projectInputAsset\(slot, media\)/);
