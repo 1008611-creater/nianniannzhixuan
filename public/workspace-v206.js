@@ -162,6 +162,7 @@
     projectNameDraft: "",
     projectLoading: !previewMode,
     sourceMutation: 0,
+    assignmentOverrides: stored.assignmentOverrides && typeof stored.assignmentOverrides === "object" ? stored.assignmentOverrides : {},
     invalidatedDerivedByProject: stored.invalidatedDerivedByProject && typeof stored.invalidatedDerivedByProject === "object" ? stored.invalidatedDerivedByProject : {},
     generationSources: stored.generationSources && typeof stored.generationSources === "object" ? stored.generationSources : {},
   };
@@ -235,6 +236,7 @@
       assistantThreadId: state.assistantThreadId,
       invalidatedDerivedByProject: state.invalidatedDerivedByProject,
       generationSources: state.generationSources,
+      assignmentOverrides: state.assignmentOverrides,
       pendingAgentImageEdit: state.pendingAgentImageEdit,
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
@@ -371,6 +373,13 @@
       if (!slot) return;
       const next = projectInputAsset(slot, node.media, { explicit: sameProject && Boolean(previousSelection[slot]) });
       if (Object.prototype.hasOwnProperty.call(node, "media")) state.selected[slot] = next;
+    });
+    // A user-selected asset is authoritative while the upstream readback is
+    // catching up. Never let a delayed/template-labelled project response
+    // clear the selection that was just saved by PUT /nodes.
+    const overrides = state.assignmentOverrides[project.id] || {};
+    Object.entries(overrides).forEach(([slot, asset]) => {
+      if (slots[slot] && asset?.mediaId) state.selected[slot] = asset;
     });
     reconcileWorkflowForProject(project);
     writeState();
@@ -1598,6 +1607,7 @@
       // The user explicitly selected this asset. Keep it visible even when
       // the upstream project response labels template-derived media as a sample.
       state.selected[target] = durableAsset;
+      state.assignmentOverrides[project.id] = { ...(state.assignmentOverrides[project.id] || {}), [target]: durableAsset };
       const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
       if (invalidatesDerived) {
         invalidateDerivedOutputs();
