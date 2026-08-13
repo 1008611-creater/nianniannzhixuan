@@ -508,15 +508,16 @@
         }
       }
       const fallback = currentTemplate().motion;
+      const hasSourceFallback = unavailable && Boolean(selected.fallbackUrl);
       return {
-        mode: unavailable ? "video" : (selected.kind === "video" ? "video" : "image"),
+        mode: hasSourceFallback ? (selected.kind === "video" ? "video" : "image") : (unavailable ? "video" : (selected.kind === "video" ? "video" : "image")),
         url: unavailable ? (selected.fallbackUrl || fallback) : selected.url,
         displayUrl: unavailable ? (selected.fallbackUrl || fallback) : publicPreview(selected),
         mediaId: unavailable ? "" : selected.mediaId,
         poster: unavailable ? "" : (selected.preview || ""),
         title: `${slot.title}素材`,
-        note: unavailable ? `当前${slot.title}暂时无法读取，正在播放${currentTemplate().title}的同款参考视频。` : `${slot.title}已绑定当前项目。`,
-        label: unavailable ? "同款视频" : slot.title,
+        note: hasSourceFallback ? `${slot.title}已绑定当前项目，正在使用模板原图预览。` : (unavailable ? `当前${slot.title}暂时无法读取，正在播放${currentTemplate().title}的同款参考视频。` : `${slot.title}已绑定当前项目。`),
+        label: hasSourceFallback ? slot.title : (unavailable ? "同款视频" : slot.title),
       };
     }
     const slot = slots[state.target] || slots.person;
