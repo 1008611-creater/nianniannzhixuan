@@ -313,7 +313,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const projectId = canonicalProject()?.id || requestedProjectId || "";
     const retained = state.jobs.filter((job) => {
       if (!job?.id || ids.has(job.id)) return false;
-      const belongs = job?.project?.id === projectId || job?.projectId === projectId;
+      const belongs = job?.project?.id === projectId || job?.projectId === projectId || job.id === state.frameJobId;
       const active = taskIsActive(job.status);
       const recent = Date.now() - jobTimestamp(job) < 10 * 60_000;
       return belongs && (active || recent);

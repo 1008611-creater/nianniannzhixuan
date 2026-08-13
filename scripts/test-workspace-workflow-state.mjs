@@ -21,6 +21,7 @@ const jobs = [
   { id: "other-project", projectId: "project-other", kind: "FIRST_FRAME", status: "running", createdAt: "2026-08-15T00:00:00Z" },
 ];
 assert.equal(newestProjectTask(jobs, projectId, "FIRST_FRAME")?.id, "new", "latest matching task must win");
+assert.equal(newestProjectTask([{ id: "current", kind: "FIRST_FRAME", status: "validating" }], projectId, "FIRST_FRAME", "current")?.id, "current", "current task id must survive a response without project metadata");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs, generationSources: { new: { kind: "frame", signature: base.signatures.frame } } }).frame.status, "生成失败", "only the latest FIRST_FRAME task controls frame state");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs: [jobs[1]] }).frame.status, "待生成", "non-FIRST_FRAME image tasks must not mark frame as active");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs: [jobs[3]] }).frame.status, "待生成", "another project's active task must not leak into this project");

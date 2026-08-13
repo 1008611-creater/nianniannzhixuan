@@ -10,12 +10,13 @@ function taskTime(task) {
   return 0;
 }
 
-export function newestProjectTask(jobs, projectId, kind) {
+export function newestProjectTask(jobs, projectId, kind, currentJobId = "") {
   return (Array.isArray(jobs) ? jobs : [])
     .map((task, index) => ({ task, index }))
     .filter(({ task }) => {
       const taskProjectId = task?.project?.id || task?.projectId || "";
-      return taskProjectId === projectId && String(task?.kind || "").toUpperCase() === kind;
+      const sameKind = String(task?.kind || "").toUpperCase() === kind;
+      return sameKind && (taskProjectId === projectId || task.id === currentJobId);
     })
     .sort((left, right) => taskTime(right.task) - taskTime(left.task) || left.index - right.index)[0]?.task || null;
 }
@@ -56,8 +57,8 @@ function outputState({ asset, unavailableMedia, invalidated, task, outputKind, s
 }
 
 export function buildWorkflowSnapshot({ projectId = "", assets = {}, unavailableMedia = new Set(), jobs = [], production = null, invalidated = {}, generationSources = {}, signatures = {}, currentJobIds = {} } = {}) {
-  const firstFrameTask = newestProjectTask(jobs, projectId, "FIRST_FRAME");
-  const actionTask = newestProjectTask(jobs, projectId, "ACTION_TRANSFER");
+  const firstFrameTask = newestProjectTask(jobs, projectId, "FIRST_FRAME", currentJobIds.frame);
+  const actionTask = newestProjectTask(jobs, projectId, "ACTION_TRANSFER", currentJobIds.final);
   const frame = outputState({ asset: assets.frame, unavailableMedia, invalidated: invalidated.frame, task: firstFrameTask, outputKind: "frame", signature: signatures.frame, generationSources, currentJobId: currentJobIds.frame, readyLabel: "已就绪", failedLabel: "生成失败", pendingLabel: "待生成" });
   let final = outputState({ asset: assets.final, unavailableMedia, invalidated: invalidated.final, task: actionTask, outputKind: "final", signature: signatures.final, generationSources, currentJobId: currentJobIds.final, readyLabel: "已完成", failedLabel: "制作失败", pendingLabel: "待制作" });
   if (!final.task && !final.bound && ACTIVE_TASK.test(String(production?.status || ""))) final = { ...final, task: production, status: "制作中" };
