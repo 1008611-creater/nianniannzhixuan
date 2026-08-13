@@ -1626,6 +1626,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         durableAsset = { ...asset, fallbackUrl: asset.url };
       }
       if (!durableAsset.mediaId && !pendingTemplateImport) throw new Error("MEDIA_ID_REQUIRED");
+      // Persist an existing project's pending choice before any async import
+      // or project readback. A user can refresh immediately after clicking.
+      const existingProject = canonicalProject();
+      if (existingProject?.id) {
+        state.selected[target] = durableAsset;
+        state.assignmentOverrides[existingProject.id] = { ...(state.assignmentOverrides[existingProject.id] || {}), [target]: durableAsset };
+        writeState();
+      }
       if (!durableAsset.mediaId && pendingTemplateImport) {
         const project = await ensureCanonicalProject();
         state.selected[target] = durableAsset;
