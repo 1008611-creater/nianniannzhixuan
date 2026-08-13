@@ -5958,11 +5958,22 @@ return;
   render();
 
   try {
-    const result = await fetchJson("/api/v1/projects/import-template", {
+    // A template import must start a new customer project. The legacy
+    // import-template route can resolve to an existing project, which leaks
+    // its private inputs into the new same-style workflow. Import only the
+    // public motion sample, then create a fresh project with that node.
+    const motion = await fetchJson("/api/v1/media/import-workspace-template", {
+      method: "POST",
+      body: JSON.stringify({ templateId: reference.id, role: "MOTION" }),
+    });
+    const motionId = String(motion?.media?.id || "");
+    if (!motionId) throw new Error("TEMPLATE_MOTION_IMPORT_REJECTED");
+    const result = await fetchJson("/api/v1/projects", {
       method: "POST",
       body: JSON.stringify({
-        templateId: reference.id,
         name: reference.title,
+        templateId: reference.id,
+        nodes: { MOTION: motionId },
       }),
     });
     replaceProject(result.project);
