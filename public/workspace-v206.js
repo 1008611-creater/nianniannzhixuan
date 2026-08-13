@@ -499,7 +499,7 @@
     if (selected?.url) {
       const slot = slots[state.target] || slots.person;
       const unavailable = assetUnavailable(selected);
-      if (unavailable && state.target !== "motion") {
+      if (unavailable && state.target !== "motion" && !selected.fallbackUrl) {
         return { mode: "empty", target: state.target, title: `${slot.title}待添加`, note: `当前${slot.title}素材无法读取，请重新选择或上传。`, label: "待添加", guide: inputGuide(state.target) };
       }
       const fallback = currentTemplate().motion;
