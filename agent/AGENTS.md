@@ -17,6 +17,7 @@
 - `agent/contracts/workspace-api.json` is the shared route and transport contract.
 - `public/workspace-v206.js` must use same-origin credentials and the declared CSRF header for mutating API requests.
 - `server.mjs` must forward `/api/` requests to `REMOTE_ORIGIN` through `proxyHeaders`, preserving the authenticated response contract.
+- Every public `做同款` template ID must resolve to its own V206 template context (cover, motion, and prompt). When a private project asset is temporarily unreadable, keep the project state authoritative but show that template's static preview and mark the affected input unavailable; do not retain another template's context or report the input ready.
 - Run `npm run verify` after changing either side of the contract.
 
 ## Delivery
