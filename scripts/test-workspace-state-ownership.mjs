@@ -19,6 +19,7 @@ assert.match(workspace, /state\.assignmentOverrides\[project\.id\] = \{ \.\.\.\(
 assert.match(workspace, /function displayAssetFor\(id\)/);
 assert.match(workspace, /project\?\.id && Object\.prototype\.hasOwnProperty\.call\(boundAssets, id\)/);
 assert.match(workspace, /return boundAssets\[id\] \|\| null;/);
+assert.match(workspace, /return asset\?\.isTemplateSample && \["person", "outfit", "scene"\]\.includes\(slot\) \? null : asset;/);
 assert.match(workspace, /const selected = displayAssetFor\(state\.target\)/);
 const refreshTaskState = workspace.match(/async function refreshTaskState\(\) \{[\s\S]*?\n  function requireLogin/);
 assert.ok(refreshTaskState, "refreshTaskState must exist");

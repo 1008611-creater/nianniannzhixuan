@@ -394,7 +394,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const asset = assetFromMedia(media);
     // Template images establish the action style only. They must never make a
     // new same-style project look as though the customer supplied inputs.
-    return !options.explicit && asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) ? null : asset;
+    return asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) ? null : asset;
   }
   function hydrateCanonicalProject(project) {
     if (!project) return;
