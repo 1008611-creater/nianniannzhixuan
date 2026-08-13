@@ -185,6 +185,11 @@ async function logProxyResult(request, url, upstream) {
   }
   const safeCode = String(code).replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 160);
   console.log(`[proxy] ${request.method} ${url.pathname} -> ${upstream.status}${safeCode === "-" ? "" : ` ${safeCode}`}`);
+  if (upstream.status >= 500 && /\/api\/v1\/media\/[^/]+\/content$/i.test(url.pathname)) {
+    const detail = (await upstream.clone().text().catch(() => ""))
+      .replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 240);
+    if (detail) console.warn(`[proxy] media upload upstream detail ${detail}`);
+  }
 }
 
 async function sendUpstreamResponse(response, upstream) {
@@ -219,6 +224,17 @@ async function readJsonRequest(request, maxBytes = 64 * 1024) {
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+async function readUploadChunk(request, maxBytes = 2 * 1024 * 1024) {
+  const chunks = [];
+  let bytes = 0;
+  for await (const chunk of request) {
+    bytes += chunk.length;
+    if (bytes > maxBytes) throw new Error("UPLOAD_CHUNK_TOO_LARGE");
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 function publicRequestOrigin(request) {
@@ -449,6 +465,13 @@ async function servePlayback(request, response, mediaId) {
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
   const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const mediaUpload = request.method === "PUT" && /^\/api\/v1\/media\/[0-9a-f-]{36}\/content$/i.test(url.pathname);
+  let body;
+  if (mediaUpload) {
+    body = await readUploadChunk(request);
+    headers.delete("transfer-encoding");
+    headers.set("content-length", String(body.length));
+  }
   const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), proxyTimeoutMs);
@@ -457,7 +480,7 @@ async function proxy(request, response) {
     upstream = await fetch(url, {
       method: request.method,
       headers,
-      body: ["GET", "HEAD"].includes(request.method) ? undefined : request,
+      body: ["GET", "HEAD"].includes(request.method) ? undefined : (mediaUpload ? body : request),
       duplex: "half",
       redirect: "manual",
       signal: controller.signal,
