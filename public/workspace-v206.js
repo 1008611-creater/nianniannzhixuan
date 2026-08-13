@@ -1627,7 +1627,9 @@
       flash(["person", "outfit", "scene", "motion"].includes(target)
         ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
         : `${slots[target].title}已替换并保存。`);
-      renderUnlessSourcesOpen();
+      // The source sheet is intentionally open during background refreshes,
+      // but after a successful assignment the view must be re-rendered now.
+      render();
       void assignmentRequest.catch(() => flash("素材已暂存，服务器确认稍慢，请稍后刷新项目。", "warning"));
       // Project readback is advisory. Do not block the user on a slow upstream GET.
       void mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 }).then((result) => {
