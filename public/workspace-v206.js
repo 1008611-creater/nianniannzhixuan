@@ -280,10 +280,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const next = Array.isArray(incoming) ? incoming.filter((project) => project?.id) : [];
     const incomingIds = new Set(next.map((project) => project.id));
     const current = canonicalProject();
+    const mergedNext = next.map((project) => project.id === current?.id ? mergeCanonicalProject(project) : project);
     // The server list remains authoritative. Retain only the currently edited
     // project while a node write is outstanding and a delayed list omits it.
     const currentPending = current?.id && Object.keys(state.pendingAssignments[current.id] || {}).length > 0;
-    state.canonicalProjects = [...next, ...(currentPending && !incomingIds.has(current.id) ? [current] : [])];
+    state.canonicalProjects = [...mergedNext, ...(currentPending && !incomingIds.has(current.id) ? [current] : [])];
   }
   function mergeCanonicalProject(incoming) {
     if (!incoming?.id) return null;
@@ -292,7 +293,15 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const incomingNodes = new Map((Array.isArray(incoming.nodes) ? incoming.nodes : []).map((node) => [node.role, node]));
     const existingNodes = new Map((Array.isArray(existing.nodes) ? existing.nodes : []).map((node) => [node.role, node]));
     const roles = new Set([...incomingNodes.keys(), ...existingNodes.keys()]);
-    const nodes = [...roles].map((role) => incomingNodes.get(role) || existingNodes.get(role)).filter(Boolean);
+    const nodes = [...roles].map((role) => {
+      const incomingNode = incomingNodes.get(role);
+      const existingNode = existingNodes.get(role);
+      // Some upstream project reads are sparse and return a role with media
+      // omitted/null while the node write is already accepted. Treat that as
+      // an incomplete readback, never as an implicit user deletion.
+      if (incomingNode && existingNode?.media && !incomingNode.media) return existingNode;
+      return incomingNode || existingNode;
+    }).filter(Boolean);
     return { ...existing, ...incoming, nodes };
   }
   function privateMediaUrl(media) {
