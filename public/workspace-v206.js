@@ -1729,6 +1729,7 @@
           const chunkHeaders = new Headers(uploadHeaders);
           chunkHeaders.set("x-upload-offset", String(offset));
           chunkHeaders.set("x-upload-chunk-length", String(chunk.size));
+          chunkHeaders.set("content-range", `bytes ${offset}-${offset + chunk.size - 1}/${file.size}`);
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
