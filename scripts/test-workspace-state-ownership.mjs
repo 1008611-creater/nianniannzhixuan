@@ -19,7 +19,7 @@ assert.match(workspace, /function recordPendingAssignment\(projectId, slot, asse
 assert.match(workspace, /function displayAssetFor\(id\)/);
 assert.match(workspace, /project\?\.id && Object\.prototype\.hasOwnProperty\.call\(boundAssets, id\)/);
 assert.match(workspace, /return pendingAssignmentFor\(project\.id, id\)\?\.asset \|\| boundAssets\[id\] \|\| null;/);
-assert.match(workspace, /return asset\?\.isTemplateSample && \["person", "outfit", "scene"\]\.includes\(slot\) \? null : asset;/);
+assert.match(workspace, /return asset\?\.isTemplateSample && \["person", "outfit", "scene"\]\.includes\(slot\) && !options\.explicit \? null : asset;/);
 assert.match(workspace, /const existingProject = canonicalProject\(\);[\s\S]{0,500}recordPendingAssignment\(existingProject\.id, target, durableAsset, mutation\)/);
 assert.match(workspace, /const selected = displayAssetFor\(state\.target\)/);
 const refreshTaskState = workspace.match(/async function refreshTaskState\(\) \{[\s\S]*?\n  function requireLogin/);

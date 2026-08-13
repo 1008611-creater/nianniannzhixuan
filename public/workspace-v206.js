@@ -382,7 +382,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function projectNodeAsset(project, slot) {
     const node = project?.nodes?.find((item) => item.role === NODE_ROLE_BY_SLOT[slot]);
-    return node ? projectInputAsset(slot, node.media) : null;
+    if (!node) return null;
+    const selected = state.selected?.[slot];
+    const explicit = Boolean(selected?.mediaId && selected.mediaId === node.media?.id);
+    return projectInputAsset(slot, node.media, { explicit });
   }
   function workflowBoundAssets(project = canonicalProject()) {
     if (!project?.id) return {};
@@ -440,7 +443,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const asset = assetFromMedia(media);
     // Template images establish the action style only. They must never make a
     // new same-style project look as though the customer supplied inputs.
-    return asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) ? null : asset;
+    return asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) && !options.explicit ? null : asset;
   }
   function hydrateCanonicalProject(project) {
     if (!project) return;
