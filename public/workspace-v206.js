@@ -455,6 +455,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       invalidated: derivedInvalidation() || {},
       generationSources: state.generationSources,
       signatures: { frame: sourceSignature(), final: `${sourceSignature()}:${assets.frame?.mediaId || ""}` },
+      currentJobIds: {
+        frame: state.frameJobId,
+        final: project?.nodes?.find((node) => node.role === "FINAL_VIDEO")?.metadata?.sourceJobId || "",
+      },
     });
     if (project?.id) {
       Object.keys(slots).forEach((slot) => {
