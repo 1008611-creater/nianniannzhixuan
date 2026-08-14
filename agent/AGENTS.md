@@ -25,3 +25,4 @@
 
 - Verify the signed-in `/workspace?projectId=...` path in a real browser for media or task changes.
 - Production deployment remains explicitly authorized only; never place credentials in this directory.
+- The user has explicitly authorized direct production deployment for this site because it currently has no customers; after each verified iteration, deploy the runtime source to the online server instead of stopping at local preview.
