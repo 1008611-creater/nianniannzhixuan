@@ -1,0 +1,8 @@
+services:
+  worker:
+    image: kidswear-studio-worker:haika-yunfei-retry-20260814
+    environment:
+      IMAGE2_RELAY_ADAPTER_MODE: "enabled"
+      IMAGE2_MODEL: "gpt-image-2"
+      RUNNINGHUB_IMAGE_ADAPTER_MODE: "disabled"
+      WINDOWS_IMAGE_BRIDGE_MODE: "disabled"
