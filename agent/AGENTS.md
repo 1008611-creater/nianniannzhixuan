@@ -21,6 +21,12 @@
 - Every public `做同款` template ID must resolve to its own V206 template context (cover, motion, and prompt). When a private project asset is temporarily unreadable, keep the project state authoritative but show that template's static preview and mark the affected input unavailable; do not retain another template's context or report the input ready.
 - Run `npm run verify` after changing either side of the contract.
 
+## Image2 Execution
+
+- This project uses Yunfei as its only selected Image2 channel. A generic `gpt-image-2` request must not route to Krill or any other provider.
+- Treat provider `429` and `503` as a bounded, visible recovery path. Fix retry budget, request ownership, and user feedback before considering an additional channel or credential.
+- Do not open credential-entry work, request a key, or create a provider fallback unless the user has selected that provider for this project.
+
 ## Delivery
 
 - Verify the signed-in `/workspace?projectId=...` path in a real browser for media or task changes.

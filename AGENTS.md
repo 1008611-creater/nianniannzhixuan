@@ -23,6 +23,12 @@
 - Legacy web and worker media readers must accept Node streams, Web Streams, and async iterables returned by the S3 SDK. Verify an actual signed-in private image after either container is rebuilt.
 - The legacy Next 16 media-route overlay must use the installed Turbo runtime module names and must not eagerly import image-rendition code into the GET path when the production image lacks the optional `sharp` runtime.
 
+## Image2 Channel Policy
+
+- The authorized production Image2 channel is Yunfei. Do not select Krill, RunningHub, or any other provider from a generic model name, a local Skill default, or a missing-key diagnosis.
+- For Yunfei `429` or `503`, keep the failure user-visible, apply the bounded retry policy, and record the sanitized category. Do not ask for another credential or offer a provider switch unless the user explicitly requests that provider.
+- Before changing a provider, credential, model, or paid routing policy, verify the selected channel in the deployed configuration and obtain the required explicit authorization. A missing credential for an unselected provider is not a current blocker.
+
 ## Collaboration And Delivery
 
 - Use a `codex/` branch and Pull Request for shared source changes.
