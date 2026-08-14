@@ -473,6 +473,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         if (pending && assets[slot]?.mediaId !== pending.asset?.mediaId) snapshot[slot] = { ...snapshot[slot], pending: true, status: "保存确认中" };
       });
     }
+    // A current draft is newer than any historical failed task. Keep the
+    // confirmation state visible until the user accepts it or starts over.
+    if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) {
+      snapshot.frame = { ...snapshot.frame, task: null, status: state.firstFrameDraftAnalyzing ? "分析中" : "待确认" };
+    }
     return snapshot;
   }
   function mediaIsActive(media) {
@@ -1297,6 +1302,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return `<section class="v206-video-inline" aria-label="视频制作确认"><div class="v206-section-label">制作依据</div><div class="v206-lock-list"><div><span>商品首帧</span><b>${esc(pending.firstFrameLabel)}</b></div><div><span>动作参考</span><b>${esc(pending.motionLabel)}</b></div><div><span>视频规格</span><b>720P · 24 fps · ${Number(pending.maximumSeconds).toFixed(1)} 秒</b></div></div><label class="v206-mode-select"><span>制作模式</span><select data-v206-video-mode><option value="standard" ${state.videoMode === "standard" ? "selected" : ""}>标准模式（推荐）</option><option value="stable" ${state.videoMode === "stable" ? "selected" : ""}>稳定模式</option></select></label><div class="v206-cost-summary"><b>最高 ${Number(pending.quote?.maxTzCost || 0).toFixed(2)} TZB</b><span>预计 ${waitMinutes(estimate.lower)}–${waitMinutes(estimate.upper)} 分钟 · 成功后按实际时长结算 · 失败不扣费</span></div></section>`;
   }
   function currentTaskPresentation() {
+    if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) return null;
     const snapshot = workflowSnapshot();
     if (snapshot.final.status === "制作中") return { task: snapshot.final.task, kind: "成片", active: true };
     if (snapshot.frame.status === "制作中") return { task: snapshot.frame.task, kind: "首帧", active: true };
@@ -1305,6 +1311,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return null;
   }
   function taskDecisionMarkup() {
+    if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) return "";
     const presentation = currentTaskPresentation();
     if (!presentation) return "";
     if (presentation.active) {
@@ -1333,7 +1340,6 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if ((step.id === "frame" || step.id === "final") && String(quality?.status || "").toLowerCase() === "repair_recommended") return { name: "repair-first-frame", label: "一键修正首帧", reviewId: quality.id };
     if (step.id === "final" && ["queued", "running"].includes(String(quality?.status || "").toLowerCase())) return { name: "tasks", label: "等待首帧核验完成" };
     if (currentTaskPresentation()?.active && (step.id === "frame" || step.id === "final")) return { name: "tasks", label: "查看制作进度" };
-    if (currentTaskPresentation()?.failed && step.id === "frame") return { name: "make-frame", label: "重新生成商品首帧" };
     const draft = state.pendingFirstFrame?.draft;
     if (step.id === "frame" && draft) {
       const hardBlocks = Array.isArray(draft.hardBlocks) ? draft.hardBlocks : [];
@@ -1341,6 +1347,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       if (draft.canConfirm === true || String(draft.status || "").toLowerCase() === "ready") return { name: "confirm-first-frame-inline", label: draft.softRisks?.length ? "素材没问题，继续生成" : "确认并生成一张首帧" };
       return { name: "retry-first-frame-analysis", label: "重新分析素材" };
     }
+    if (currentTaskPresentation()?.failed && step.id === "frame") return { name: "make-frame", label: "重新生成商品首帧" };
     if (step.id === "final" && state.pendingVideo) return { name: "confirm-video-inline", label: "确认并制作视频" };
     const assistantAction = pendingAssistantAction();
     if (assistantAction) return { name: "confirm-assistant-proposal", label: `确认${assistantAction.label || "制作"}`, proposalAction: assistantAction.id };
