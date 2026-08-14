@@ -19,6 +19,9 @@
 - Preserve `Content-Length`, byte ranges, and soft-delete filtering across all media consumers.
 - Do not make private media public or cache session/token-authorized responses before authentication.
 - Keep the authority original for downloads; authenticated playback derivatives are implemented in the local proxy. A private-media CDN remains a separate pending capability.
+- `dh-origin.cauai.fun` is the legacy authenticated backend on port `8791`; `dh.cauai.fun` is the local frontend/proxy on `18893`. Never point `REMOTE_ORIGIN` at the public frontend domain, which creates a proxy loop.
+- Legacy web and worker media readers must accept Node streams, Web Streams, and async iterables returned by the S3 SDK. Verify an actual signed-in private image after either container is rebuilt.
+- The legacy Next 16 media-route overlay must use the installed Turbo runtime module names and must not eagerly import image-rendition code into the GET path when the production image lacks the optional `sharp` runtime.
 
 ## Collaboration And Delivery
 
