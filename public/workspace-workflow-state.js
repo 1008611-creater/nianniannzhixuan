@@ -1,6 +1,6 @@
 const ACTIVE_TASK = /^(queued|validating|submitted|pending|submitting|running|processing|ingesting)$/i;
 const COMPLETED_TASK = /^(completed|finished|succeeded|success|ready)$/i;
-const FAILED_TASK = /^(failed|blocked|review_required|needs_review|requires_review)$/i;
+const FAILED_TASK = /^(failed|retryable_failed|blocked|review_required|needs_review|requires_review)$/i;
 
 function taskTime(task) {
   for (const value of [task?.updatedAt, task?.completedAt, task?.createdAt, task?.submittedAt]) {
@@ -46,7 +46,13 @@ function inputState(asset, unavailableMedia, readyLabel) {
 
 function outputState({ asset, unavailableMedia, invalidated, task, outputKind, signature, generationSources, currentJobId, readyLabel, failedLabel, pendingLabel }) {
   const base = assetState(invalidated ? null : asset, unavailableMedia);
-  const currentTask = taskMatchesInputs(task, outputKind, generationSources, signature, currentJobId) ? task : null;
+  const taskStatus = String(task?.status || "");
+  const trackedTask = taskMatchesInputs(task, outputKind, generationSources, signature, currentJobId);
+  // A failed task never creates an output. When current materials have not
+  // changed, keep the newest project failure visible even after a reload that
+  // has lost the client-only input signature. An invalidated output still
+  // suppresses failures from replaced materials.
+  const currentTask = trackedTask || (!invalidated && FAILED_TASK.test(taskStatus)) ? task : null;
   const status = String(currentTask?.status || "");
   if (ACTIVE_TASK.test(status)) return { ...base, task: currentTask, status: "制作中" };
   // A completed job is not a usable output until its media is bound to the

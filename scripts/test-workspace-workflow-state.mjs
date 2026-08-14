@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { buildWorkflowSnapshot, newestProjectTask } from "../public/workspace-workflow-state.js";
+
+const workspaceSource = await readFile(new URL("../public/workspace-v206.js", import.meta.url), "utf8");
+assert.match(workspaceSource, /from "\.\/workspace-workflow-state\.js\?v=[^"]+"/, "workspace state module must be versioned with its entry script");
 
 const projectId = "project-current";
 const asset = (mediaId, url = `/api/v1/media/${mediaId}/content`) => ({ mediaId, url, kind: "image" });
@@ -23,6 +27,9 @@ const jobs = [
 assert.equal(newestProjectTask(jobs, projectId, "FIRST_FRAME")?.id, "new", "latest matching task must win");
 assert.equal(newestProjectTask([{ id: "current", kind: "FIRST_FRAME", status: "validating" }], projectId, "FIRST_FRAME", "current")?.id, "current", "current task id must survive a response without project metadata");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs, generationSources: { new: { kind: "frame", signature: base.signatures.frame } } }).frame.status, "生成失败", "only the latest FIRST_FRAME task controls frame state");
+assert.equal(buildWorkflowSnapshot({ ...base, jobs: [{ id: "retryable", projectId, kind: "FIRST_FRAME", status: "retryable_failed", createdAt: "2026-08-14T00:00:00Z" }], generationSources: { retryable: { kind: "frame", signature: base.signatures.frame } } }).frame.status, "生成失败", "retryable provider failures must remain visible to the user");
+assert.equal(buildWorkflowSnapshot({ ...base, jobs: [{ id: "reloaded-failure", projectId, kind: "FIRST_FRAME", status: "retryable_failed", createdAt: "2026-08-14T00:00:00Z" }] }).frame.status, "生成失败", "a current project failure must remain visible after reload without client state");
+assert.equal(buildWorkflowSnapshot({ ...base, invalidated: { frame: true }, jobs: [{ id: "replaced-inputs-failure", projectId, kind: "FIRST_FRAME", status: "retryable_failed", createdAt: "2026-08-14T00:00:00Z" }] }).frame.status, "待生成", "a failure from replaced inputs must not block the new generation path");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs: [jobs[1]] }).frame.status, "待生成", "non-FIRST_FRAME image tasks must not mark frame as active");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs: [jobs[3]] }).frame.status, "待生成", "another project's active task must not leak into this project");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs: [{ id: "current", projectId, kind: "FIRST_FRAME", status: "validating" }], currentJobIds: { frame: "current" } }).frame.status, "制作中", "the persisted current task must survive a sparse refresh before source metadata is rehydrated");

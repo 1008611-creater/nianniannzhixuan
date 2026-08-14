@@ -1,4 +1,4 @@
-import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-state.js";
+import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-state.js?v=20260814-retryable-failure-reload-23";
 
 (() => {
   "use strict";
@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260725-firstframe-live-status-01";
+  const VERSION = "20260814-retryable-failure-reload-23";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -1333,6 +1333,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if ((step.id === "frame" || step.id === "final") && String(quality?.status || "").toLowerCase() === "repair_recommended") return { name: "repair-first-frame", label: "一键修正首帧", reviewId: quality.id };
     if (step.id === "final" && ["queued", "running"].includes(String(quality?.status || "").toLowerCase())) return { name: "tasks", label: "等待首帧核验完成" };
     if (currentTaskPresentation()?.active && (step.id === "frame" || step.id === "final")) return { name: "tasks", label: "查看制作进度" };
+    if (currentTaskPresentation()?.failed && step.id === "frame") return { name: "make-frame", label: "重新生成商品首帧" };
     const draft = state.pendingFirstFrame?.draft;
     if (step.id === "frame" && draft) {
       const hardBlocks = Array.isArray(draft.hardBlocks) ? draft.hardBlocks : [];
