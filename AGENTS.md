@@ -29,6 +29,12 @@
 - For Yunfei `429` or `503`, keep the failure user-visible, apply the bounded retry policy, and record the sanitized category. Do not ask for another credential or offer a provider switch unless the user explicitly requests that provider.
 - Before changing a provider, credential, model, or paid routing policy, verify the selected channel in the deployed configuration and obtain the required explicit authorization. A missing credential for an unselected provider is not a current blocker.
 
+## Image2 Worker Execution And Acceptance
+
+- Start an Image2 worker through the official `agent-vault vault run -- npm run worker` path. Do not construct or inject a Vault proxy URL manually.
+- Before a paid Image2 request, verify that every selected private input can be fully read by the worker through its intended authenticated route; a successful response header alone is insufficient.
+- Accept a real Image2 generation only after the task reaches a terminal success state, its private output is linked back to the project, and the signed-in workspace renders that output. Provider model-list probes and queued-task states are diagnostic evidence, not completion.
+
 ## Collaboration And Delivery
 
 - Use a `codex/` branch and Pull Request for shared source changes.
