@@ -471,6 +471,41 @@ async function servePlayback(request, response, mediaId) {
   await sendUpstreamResponse(response, upstream);
 }
 
+function downloadExtension(contentType) {
+  const type = String(contentType || "").split(";", 1)[0].trim().toLowerCase();
+  if (type === "image/jpeg") return "jpg";
+  if (type === "image/png") return "png";
+  if (type === "image/webp") return "webp";
+  if (type === "video/webm") return "webm";
+  return "mp4";
+}
+
+async function serveOriginalDownload(request, response, mediaId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
+    method: request.method,
+    headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!upstream.ok) {
+    await sendUpstreamResponse(response, upstream);
+    return;
+  }
+  const responseHeaders = proxyResponseHeaders(upstream.headers);
+  responseHeaders.set("cache-control", "private, no-store");
+  responseHeaders.set("content-disposition", `attachment; filename="niannian-${mediaId}.${downloadExtension(responseHeaders.get("content-type"))}"`);
+  response.writeHead(upstream.status, Object.fromEntries(responseHeaders));
+  if (request.method === "HEAD" || !upstream.body) {
+    response.end();
+    return;
+  }
+  for await (const chunk of upstream.body) {
+    if (!response.write(chunk)) await once(response, "drain");
+  }
+  response.end();
+}
+
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
   const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
@@ -530,6 +565,11 @@ createServer(async (request, response) => {
     const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
     if (["GET", "HEAD"].includes(request.method) && playbackMatch) {
       await servePlayback(request, response, playbackMatch[1]);
+      return;
+    }
+    const downloadMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/download$/i);
+    if (["GET", "HEAD"].includes(request.method) && downloadMatch) {
+      await serveOriginalDownload(request, response, downloadMatch[1]);
       return;
     }
     if (request.method === "POST" && pathname === "/api/local/image2/input-links") {

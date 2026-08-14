@@ -1436,6 +1436,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       ${workflowQuickToolsMarkup(workflowSourceActionMarkup(step))}
       ${workflowStepBodyMarkup(step)}
       ${completedFinal ? "" : `<div class="v206-workflow-actions">${previous ? `<button type="button" class="v206-workflow-back" data-v206-action="workflow-previous">上一步</button>` : '<span></span>'}${skip}${primary ? `<button type="button" class="v206-primary" data-v206-action="${primary.name}"${primaryAttributes} ${state.busy ? "disabled" : ""}>${esc(primary.label)}</button>` : ""}</div>`}
+      ${completedFinal ? assistantDecisionMarkup() : ""}
       ${assistantDockMarkup()}
     </aside>`;
   }
@@ -1709,7 +1710,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const timing = [video.totalSeconds != null ? `总耗时 ${video.totalSeconds}s` : "", video.providerSeconds != null ? `生成 ${video.providerSeconds}s` : "", video.ingestionSeconds != null ? `入库 ${video.ingestionSeconds}s` : ""].filter(Boolean).join(" · ");
       const review = video.review?.result ? `<div class="v206-review-summary"><b>${esc(video.review.result.summary || "念念点评")}</b><span>人物 ${esc(video.review.result.identityStability?.status || "unknown")} · 服装 ${esc(video.review.result.garmentLock?.status || "unknown")} · 场景 ${esc(video.review.result.sceneContinuity?.status || "unknown")} · 动作 ${esc(video.review.result.motionNaturalness?.status || "unknown")}</span></div>` : "";
       const reviewAction = state.videoReviewEnabled ? `<button type="button" data-v206-action="review-video" data-media="${esc(video.mediaId)}">${esc(reviewLabel(video.review))}</button>` : "";
-      return `<article class="v206-video-version ${video.isCurrent ? "current" : ""}"><video src="${esc(video.media?.url || "")}" controls playsinline preload="metadata"></video><div><header><b>${video.isCurrent ? "当前成片" : "历史成片"}</b><span>${esc(formatMessageTime(video.completedAt))}</span></header><p>${esc(video.mode === "stable" ? "稳定模式" : "标准模式")} · ${Number(video.durationSeconds || 0).toFixed(1)}秒 · ${Number(video.tzCost || 0).toFixed(2)} TZB</p><small>${esc(timing)}</small>${sample}${review}<div class="v206-version-actions">${video.isCurrent ? "" : `<button type="button" data-v206-action="set-current-video" data-media="${esc(video.mediaId)}">设为当前成片</button>`}<button type="button" data-v206-action="download-video" data-media="${esc(video.mediaId)}">下载</button>${reviewAction}<button type="button" data-v206-action="delete-video" data-media="${esc(video.mediaId)}" data-current="${video.isCurrent ? "true" : "false"}">删除</button></div></div></article>`;
+      return `<article class="v206-video-version ${video.isCurrent ? "current" : ""}"><video src="${esc(video.media?.url || "")}" controls playsinline preload="metadata"></video><div><header><b>${video.isCurrent ? "当前成片" : "历史成片"}</b><span>${esc(formatMessageTime(video.completedAt))}</span></header><p>${esc(video.mode === "stable" ? "稳定模式" : "标准模式")} · ${Number(video.durationSeconds || 0).toFixed(1)}秒 · ${Number(video.tzCost || 0).toFixed(2)} TZB</p><small>${esc(timing)}</small>${sample}${review}<div class="v206-version-actions">${video.isCurrent ? "" : `<button type="button" data-v206-action="set-current-video" data-media="${esc(video.mediaId)}">设为当前成片</button>`}<a class="v206-version-download" href="/api/v1/media/${encodeURIComponent(video.mediaId)}/download" download>下载</a>${reviewAction}<button type="button" data-v206-action="delete-video" data-media="${esc(video.mediaId)}" data-current="${video.isCurrent ? "true" : "false"}">删除</button></div></div></article>`;
     }).join("");
     return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet wide" aria-label="历史成片"><header class="v206-sheet-header"><div><h2>历史成片</h2><p>所有成功版本都会保留；切换当前版本不会再次生成或扣费。</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭历史成片">×</button></header><div class="v206-sheet-body"><div class="v206-video-history">${rows || '<p class="v206-empty">当前项目还没有已完成成片。</p>'}</div></div></aside>`;
   }
@@ -2481,9 +2482,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   async function downloadVideo(mediaId) {
     try {
-      const result = await mediaRequest(`/api/v1/media/${encodeURIComponent(mediaId)}/download`);
       const downloadLink = document.createElement("a");
-      downloadLink.href = result.url;
+      downloadLink.href = `/api/v1/media/${encodeURIComponent(mediaId)}/download`;
       downloadLink.download = "";
       downloadLink.rel = "noopener";
       downloadLink.hidden = true;

@@ -4,6 +4,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "../public/workspace-wo
 
 const workspaceSource = await readFile(new URL("../public/workspace-v206.js", import.meta.url), "utf8");
 assert.match(workspaceSource, /from "\.\/workspace-workflow-state\.js\?v=[^"]+"/, "workspace state module must be versioned with its entry script");
+assert.match(workspaceSource, /\$\{completedFinal \? assistantDecisionMarkup\(\) : ""\}/, "a completed final video must expose its result actions in the workspace control panel");
 
 const projectId = "project-current";
 const asset = (mediaId, url = `/api/v1/media/${mediaId}/content`) => ({ mediaId, url, kind: "image" });
