@@ -1,0 +1,5 @@
+FROM kidswear-studio-worker:haika-yunfei-circuit-20260814
+
+# GPT Image 2 edits return an immediate response, but production responses can
+# exceed the former 30-second cap after large signed references are uploaded.
+RUN sed -i 's/const RELAY_REQUEST_TIMEOUT_MS = 30_000;/const RELAY_REQUEST_TIMEOUT_MS = Number(process.env.IMAGE2_RELAY_REQUEST_TIMEOUT_MS || 90_000);/' /app/src/worker/image2-relay-adapter.ts

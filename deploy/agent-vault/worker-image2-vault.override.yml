@@ -1,16 +1,23 @@
 services:
   worker:
+    image: "kidswear-studio-worker:haika-mikoto-90s-20260815"
     env_file:
       - /srv/kidswear-data/runtime-config-upload/.env.beta
       - /srv/kidswear-data/niannian-agent-vault/worker.env
     environment:
       AGENT_VAULT_ADDR: "http://niannian-agent-vault:14321"
       AGENT_VAULT_VAULT: "niannian-production"
-      NO_PROXY: "localhost,127.0.0.1,redis,postgres,object-storage,niannian-agent-vault"
-      NODE_USE_ENV_PROXY: "1"
-      NODE_EXTRA_CA_CERTS: "/etc/agent-vault/ca.pem"
-      IMAGE2_BASE_URL: "https://img.yunfei.best/v1"
+      # Only the background worker uses the legacy origin for signed provider
+      # input reads. The browser continues to use dh.cauai.fun.
+      PUBLIC_SITE_URL: "https://dh-origin.cauai.fun"
+      # Provider inputs are signed same-site URLs. Keep them off the credential
+      # proxy so the worker can fetch private project media directly.
+      NO_PROXY: "localhost,127.0.0.1,redis,postgres,object-storage,niannian-agent-vault,dh.cauai.fun,dh-origin.cauai.fun"
+      IMAGE2_BASE_URL: "https://api.mikoto.vip/v1"
+      # Agent Vault replaces this placeholder with MIKOTO_API_KEY for api.mikoto.vip.
+      IMAGE2_API_KEY: "__mikoto_api_key__"
       IMAGE2_MODEL: "gpt-image-2"
+      IMAGE2_RELAY_REQUEST_TIMEOUT_MS: "90000"
       IMAGE2_RELAY_ADAPTER_MODE: "enabled"
       RUNNINGHUB_IMAGE_ADAPTER_MODE: "disabled"
       WINDOWS_IMAGE_BRIDGE_MODE: "disabled"
@@ -19,11 +26,10 @@ services:
       - -ec
       - |
         test -n "$${AGENT_VAULT_TOKEN}"
-        export HTTPS_PROXY="http://$${AGENT_VAULT_TOKEN}:niannian-production@niannian-agent-vault:14322"
-        export HTTP_PROXY="$${HTTPS_PROXY}"
-        exec npm run worker
+        install -m 755 /opt/agent-vault-source/agent-vault /tmp/agent-vault
+        exec /tmp/agent-vault vault run -- npm run worker
     volumes:
-      - /srv/kidswear-data/niannian-agent-vault/data/.agent-vault/ca/ca.crt.pem:/etc/agent-vault/ca.pem:ro
+      - /srv/kidswear-data/niannian-agent-vault/bin/agent-vault:/opt/agent-vault-source/agent-vault:ro
     networks:
       default: {}
       agent-vault:

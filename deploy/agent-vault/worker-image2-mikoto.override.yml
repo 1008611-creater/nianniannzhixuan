@@ -1,0 +1,5 @@
+services:
+  worker:
+    environment:
+      IMAGE2_BASE_URL: "https://api.mikoto.vip/v1"
+      IMAGE2_API_KEY: "__mikoto_api_key__"
