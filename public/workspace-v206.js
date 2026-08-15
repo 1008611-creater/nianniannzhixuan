@@ -814,21 +814,27 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       ? mediaRequest(`/api/v1/projects/${requestedProjectId}`).catch(() => ({ project: null }))
       : Promise.resolve({ project: null });
     const canonicalProjectsPromise = mediaRequest("/api/v1/projects").catch((error) => ({ projects: [], error }));
-    const [canonicalProjects, requestedProjectResult] = await Promise.all([canonicalProjectsPromise, requestedProjectPromise]);
-    state.canonicalProjects = canonicalProjects.projects || [];
-    if (canonicalProjects.error && !requestedProjectResult.project) {
-      state.projectLoading = false;
-      flash("项目加载失败，请刷新重试。", "warning");
-      return;
-    }
-    let durable = canonicalProject();
-    if (!durable && state.session && requestedProjectId) {
-      durable = requestedProjectResult.project || null;
-      if (durable) {
-        const index = state.canonicalProjects.findIndex((item) => item.id === durable.id);
-        if (index >= 0) state.canonicalProjects[index] = durable;
-        else state.canonicalProjects.unshift(durable);
+    const requestedProjectResult = await requestedProjectPromise;
+    let durable = null;
+    if (requestedProjectResult.project && requestedProjectId) {
+      durable = requestedProjectResult.project;
+      state.canonicalProjects = [durable];
+      void canonicalProjectsPromise.then((result) => {
+        if (result.error || !Array.isArray(result.projects)) return;
+        const current = canonicalProject();
+        state.canonicalProjects = result.projects;
+        if (current && !state.canonicalProjects.some((item) => item.id === current.id)) state.canonicalProjects.unshift(current);
+        renderUnlessSourcesOpen();
+      });
+    } else {
+      const canonicalProjects = await canonicalProjectsPromise;
+      state.canonicalProjects = canonicalProjects.projects || [];
+      if (canonicalProjects.error) {
+        state.projectLoading = false;
+        flash("项目加载失败，请刷新重试。", "warning");
+        return;
       }
+      durable = canonicalProject();
     }
     if (durable) {
       hydrateCanonicalProject(durable);

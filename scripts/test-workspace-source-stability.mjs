@@ -25,8 +25,9 @@ assert.doesNotMatch(privateRefresh[0], /\/api\/v1\/(projects|jobs)/);
 
 assert.match(workspace, /const requestedProjectPromise = requestedProjectId/);
 assert.match(workspace, /const canonicalProjectsPromise = mediaRequest\("\/api\/v1\/projects"\)/);
-assert.match(workspace, /const \[canonicalProjects, requestedProjectResult\] = await Promise\.all/);
-assert.match(workspace, /if \(canonicalProjects\.error && !requestedProjectResult\.project\)/);
+assert.match(workspace, /const requestedProjectResult = await requestedProjectPromise/);
+assert.match(workspace, /void canonicalProjectsPromise\.then/);
+assert.match(workspace, /if \(canonicalProjects\.error\)/);
 
 const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
 assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260815-auth-loading-04"/);
