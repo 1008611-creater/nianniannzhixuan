@@ -441,6 +441,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     assets.final = finalNode?.media ? assetFromMedia(finalNode.media) : null;
     return assets;
   }
+  function currentFrameJobId(project = canonicalProject()) {
+    const frameNode = project?.nodes?.find((node) => node.role === "FIRST_FRAME");
+    return state.frameJobId || frameNode?.metadata?.sourceJobId || frameNode?.metadata?.jobId || "";
+  }
   function displayAssetFor(id) {
     const project = canonicalProject();
     const boundAssets = workflowBoundAssets(project);
@@ -464,7 +468,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       generationSources: state.generationSources,
       signatures: { frame: sourceSignature(), final: `${sourceSignature()}:${assets.frame?.mediaId || ""}` },
       currentJobIds: {
-        frame: state.frameJobId,
+        frame: currentFrameJobId(project),
         final: project?.nodes?.find((node) => node.role === "FINAL_VIDEO")?.metadata?.sourceJobId || "",
       },
     });
@@ -873,6 +877,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       state.assistantThreadId = thread.id;
       const detail = await mediaRequest(`/api/v1/assistant/threads/${thread.id}/messages`).catch(() => ({ thread: { messages: [] } }));
       state.chat = detail.thread?.messages || [];
+      recoverCompletedAgentImageEdit();
       restorePendingAgentImageEdit();
     } else state.chat = [];
     renderUnlessSourcesOpen();
@@ -1185,18 +1190,19 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function normalizePendingAgentImageEdit(edit) {
     if (!edit?.id || !edit.requirement || !Array.isArray(edit.inputs)) return null;
     const inputs = edit.inputs.map((item) => ({ slot: item.slot, role: item.role, label: item.label, mediaId: item.mediaId || "" })).filter((item) => slots[item.slot] && item.label);
-    return { id: edit.id, requirement: edit.requirement, inputs, status: edit.status || "pending_confirmation", createdAt: edit.createdAt || new Date().toISOString(), projectId: edit.projectId || "", jobId: edit.jobId || "" };
+    return { id: edit.id, requirement: edit.requirement, inputs, status: edit.status || "pending_confirmation", createdAt: edit.createdAt || new Date().toISOString(), completedAt: edit.completedAt || "", projectId: edit.projectId || "", jobId: edit.jobId || "", outputMediaId: edit.outputMediaId || "" };
   }
   function localAgentImageEditMessage(edit) {
+    const completed = String(edit.status || "").toLowerCase() === "completed";
     return {
       id: `local-agent-image-edit-message:${edit.id}`,
       role: "assistant",
-      content: "已根据当前项目整理改图方案。确认前不会生成或扣费。",
-      createdAt: edit.createdAt,
+      content: completed ? "改图已完成并保存为当前商品首帧。可以继续修改，或进入下一步制作成片。" : "已根据当前项目整理改图方案。确认前不会生成或扣费。",
+      createdAt: edit.completedAt || edit.createdAt,
       proposal: {
         id: `local-agent-image-edit-proposal:${edit.id}`,
         content: {
-          title: "商品首帧改图方案",
+          title: completed ? "商品首帧改图结果" : "商品首帧改图方案",
           creativeDirection: edit.requirement,
           materialAssessment: ["使用当前项目的人物、商品和背景素材，生成新的商品首帧。"],
           evidenceRefs: edit.inputs.map((item) => ({ role: item.role, label: item.label, reason: "当前项目已绑定素材" })),
@@ -1210,9 +1216,35 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function restorePendingAgentImageEdit() {
     const edit = state.pendingAgentImageEdit;
-    if (!edit?.id || !["pending_confirmation", "queued", "running", "retryable_failed", "failed"].includes(edit.status)) return;
+    if (!edit?.id || !["pending_confirmation", "queued", "running", "retryable_failed", "failed", "completed"].includes(edit.status)) return;
     if (!state.chat.some((message) => message.id === `local-agent-image-edit-message:${edit.id}`)) state.chat.push(localAgentImageEditMessage(edit));
     if (edit.jobId && ["queued", "running"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
+  }
+  function recoverCompletedAgentImageEdit() {
+    if (state.pendingAgentImageEdit || !state.chat.length) return false;
+    const project = canonicalProject();
+    const frame = project?.nodes?.find((node) => node.role === "FIRST_FRAME")?.media;
+    if (!project?.id || !frame?.id) return false;
+    const request = [...state.chat].reverse().find((message) => String(message.role || "").toLowerCase() === "user" && isAssistantImageEditIntent(message.content || message.text));
+    if (!request) return false;
+    const requestAt = Date.parse(String(request.createdAt || ""));
+    const currentJobId = currentFrameJobId(project);
+    const task = newestProjectTask(state.jobs, project.id, "FIRST_FRAME", currentJobId);
+    if (!task || !completedJob(task)) return false;
+    const taskAt = jobTimestamp(task);
+    const source = state.generationSources?.[task.id];
+    const isTrackedFrame = source?.kind === "frame" || task.id === currentJobId;
+    if (!isTrackedFrame || (Number.isFinite(requestAt) && taskAt && taskAt < requestAt)) return false;
+    const inputs = ["frame", "person", "outfit", "scene", "motion"]
+      .map((slot) => ({ slot, asset: displayAssetFor(slot) }))
+      .filter((item) => item.asset?.mediaId)
+      .map(({ slot, asset }) => ({ slot, role: slots[slot]?.title || slot, label: asset.label || "当前素材", mediaId: asset.mediaId }));
+    if (!inputs.length) return false;
+    const edit = { id: `recovered-agent-image-edit:${task.id}`, requirement: String(request.content || request.text || "").trim(), inputs, status: "completed", createdAt: request.createdAt || new Date(taskAt || Date.now()).toISOString(), completedAt: task.completedAt || task.updatedAt || new Date(taskAt || Date.now()).toISOString(), projectId: project.id, jobId: task.id, outputMediaId: frame.id };
+    state.pendingAgentImageEdit = edit;
+    if (!state.chat.some((message) => message.id === `local-agent-image-edit-message:${edit.id}`)) state.chat.push(localAgentImageEditMessage(edit));
+    writeState();
+    return true;
   }
   function assistantComposerMarkup(thread = false) {
     const referenceButtons = availableMaterials().filter((item) => item.kind === "image").slice(0, 8).map((item) => `<button type="button" class="v206-mention ${state.assistantRefs.includes(item.id) ? "active" : ""}" data-v206-action="mention" data-material="${esc(item.id)}">@${esc(item.label)}</button>`).join("");
@@ -2280,7 +2312,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     hydrateCanonicalProject(project);
     markDerivedOutputCurrent("frame");
     clearGenerationIdempotencyKey("agent_first_frame");
-    state.pendingAgentImageEdit = null;
+    edit.status = "completed";
+    edit.completedAt = new Date().toISOString();
+    edit.outputMediaId = firstFrame.id;
+    state.pendingAgentImageEdit = edit;
+    replaceLocalAgentImageEditAction(edit);
     writeState();
     renderUnlessSourcesOpen();
     flash("改图已由服务器私有入库，并替换为当前商品首帧。");

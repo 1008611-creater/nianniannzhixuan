@@ -64,6 +64,15 @@ assert.match(frontend, /restorePendingAgentImageEdit\(\);\s*\} else state\.chat 
 assert.match(frontend, /pendingAgentImageEdit: normalizePendingAgentImageEdit/);
 const pendingNormalizer = frontend.match(/function normalizePendingAgentImageEdit\(edit\) \{[\s\S]*?\n  \}/)?.[0] || "";
 assert.doesNotMatch(pendingNormalizer, /url\s*:/, "pending agent edit storage must not persist media URLs");
+assert.match(pendingNormalizer, /completedAt: edit\.completedAt/);
+assert.match(pendingNormalizer, /outputMediaId: edit\.outputMediaId/);
+assert.match(frontend, /\["pending_confirmation", "queued", "running", "retryable_failed", "failed", "completed"\]/);
+assert.match(frontend, /edit\.status = "completed";[\s\S]*edit\.outputMediaId = firstFrame\.id;[\s\S]*replaceLocalAgentImageEditAction\(edit\)/);
+assert.match(frontend, /改图已完成并保存为当前商品首帧。可以继续修改，或进入下一步制作成片。/);
+assert.match(frontend, /function recoverCompletedAgentImageEdit\(\)/);
+assert.match(frontend, /newestProjectTask\(state\.jobs, project\.id, "FIRST_FRAME", currentJobId\)/);
+assert.match(frontend, /source\?\.kind === "frame" \|\| task\.id === currentJobId/);
+assert.match(frontend, /recoverCompletedAgentImageEdit\(\);\s*restorePendingAgentImageEdit\(\);/);
 assert.match(frontend, /function isAssistantImageEditIntent\(text\)/);
 const imageIntentSource = frontend.match(/function isAssistantImageEditIntent\(text\) \{[\s\S]*?\n  \}/)?.[0];
 assert.ok(imageIntentSource, "image edit intent classifier is missing");
