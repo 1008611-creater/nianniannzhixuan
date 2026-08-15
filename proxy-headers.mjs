@@ -24,10 +24,13 @@ export function proxyHeaders(headers, upstreamOrigin, csrfOrigin = upstreamOrigi
   result.delete("connection");
 
   const csrf = new URL(csrfOrigin);
-  const origin = localUrl(result.get("origin")) || sameHostUrl(result.get("origin"), requestHost);
+  const forwardedPublicHost = result.get("x-forwarded-public-host");
+  const effectiveHost = forwardedPublicHost || requestHost;
+  result.delete("x-forwarded-public-host");
+  const origin = localUrl(result.get("origin")) || sameHostUrl(result.get("origin"), effectiveHost);
   if (origin) result.set("origin", csrf.origin);
 
-  const referer = localUrl(result.get("referer")) || sameHostUrl(result.get("referer"), requestHost);
+  const referer = localUrl(result.get("referer")) || sameHostUrl(result.get("referer"), effectiveHost);
   if (referer) {
     const upstreamReferer = new URL(csrf.origin);
     upstreamReferer.pathname = referer.pathname;
