@@ -28,6 +28,11 @@ assert.match(app, /async function refreshSessionState\(\)/);
 assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?await refreshSessionState\(\)/);
 assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?\} else \{[\s\S]*?await refreshState\(\)/);
 
+const index = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+assert.match(index, /<script defer src="\/vendor\/gsap\.min\.js/);
+assert.match(index, /<script defer src="\/copy-cleanup\.js/);
+assert.match(index, /<script defer src="\/motion-v209\.js/);
+
 const previewFlow = app.match(/function markPersonalTemplateVideoPreview\(video, status\) \{[\s\S]*?\nfunction safeAccountDisplayName/)?.[0] || "";
 assert.match(previewFlow, /function loadPersonalTemplatePreview\(video, autoplay = false\)/);
 assert.match(previewFlow, /if \(!video\.getAttribute\("src"\)\) \{[\s\S]*?video\.src = source;/);
