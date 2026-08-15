@@ -131,6 +131,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     assistantThreads: [],
     assistantThreadId: stored.assistantThreadId || "",
     session: null,
+    sessionLoaded: false,
     chat: [],
     view: null,
     target: "person",
@@ -799,6 +800,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const session = await request("/api/v1/auth/me").catch((error) => ({ user: null, error }));
     const sessionAuthFailed = session.error?.status === 401;
     state.session = session.user || (sessionAuthFailed ? null : state.session);
+    state.sessionLoaded = true;
     state.projects = [];
     if (!state.session) {
       state.projectLoading = false;
@@ -1551,7 +1553,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const accountLabel = document.querySelector("[data-v206-account-label]");
     if (accountLabel) {
       const accountName = String(state.session?.name || "").trim();
-      accountLabel.textContent = state.session ? (accountName && !accountName.includes("童装影厂") ? accountName : "账户") : "去登录";
+      if (state.sessionLoaded) accountLabel.textContent = state.session ? (accountName && !accountName.includes("童装影厂") ? accountName : "账户") : "去登录";
     }
     state.mediaObserver?.disconnect();
     state.mediaObserver = null;

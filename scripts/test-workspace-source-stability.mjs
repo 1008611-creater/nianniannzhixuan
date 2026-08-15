@@ -5,6 +5,7 @@ const [legacy, workspace] = await Promise.all([
   readFile(new URL("../public/app.compat.js", import.meta.url), "utf8"),
   readFile(new URL("../public/workspace-v206.js", import.meta.url), "utf8"),
 ]);
+const workspaceEntryCss = await readFile(new URL("../public/workspace-entry.css", import.meta.url), "utf8");
 
 assert.match(legacy, /path === "\/workspace" && app\.querySelector\("#v206-app"\).*return;/);
 assert.match(legacy, /if \(nextPath === "\/workspace"\)[\s\S]{0,700}window\.location\.assign/);
@@ -14,6 +15,10 @@ assert.match(workspace, /function sourceSheetMounted\(\)/);
 assert.match(workspace, /function renderUnlessSourcesOpen\(\)/);
 assert.match(workspace, /function syncSourceSheetBusy\(\)/);
 assert.match(workspace, /function syncSourceSheetToast\(\)/);
+assert.match(workspace, /sessionLoaded: false/);
+assert.match(workspace, /state\.sessionLoaded = true/);
+assert.match(workspace, /if \(state\.sessionLoaded\) accountLabel\.textContent/);
+assert.match(workspaceEntryCss, /\.brand-mark \{[^}]*border-radius: 9px/);
 assert.match(workspace, /function openSources\([\s\S]{0,300}firstFrameDraftRecoveryRun \+= 1;[\s\S]{0,120}scheduleTaskRefresh\(\);/);
 assert.match(workspace, /state\.view === "sources"\) return \{ recovered: false, reason: "sources-open" \}/);
 
@@ -30,7 +35,7 @@ assert.match(workspace, /void canonicalProjectsPromise\.then/);
 assert.match(workspace, /if \(canonicalProjects\.error\)/);
 
 const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
-assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260815-auth-loading-04"/);
+assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260815-auth-loading-05"/);
 
 const upload = workspace.match(/async function upload\(target, file, options = \{\}\) \{[\s\S]*?\n  async function ensureProject/);
 assert.ok(upload, "upload must exist");
