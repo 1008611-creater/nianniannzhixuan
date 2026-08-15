@@ -15,8 +15,14 @@ assert.doesNotMatch(card, /featured/);
 const staticPlayback = app.match(/function staticVideoPlaybackUrl\(url\) \{[\s\S]*?\n\}/)?.[0] || "";
 assert.match(staticPlayback, /assets\\\/references/);
 assert.match(staticPlayback, /return displayAssetUrl\(sourceUrl\)/);
+const staticImagePlayback = app.match(/function staticImagePlaybackUrl\(url\) \{[\s\S]*?\n\}/)?.[0] || "";
+assert.match(staticImagePlayback, /assets\\\/references/);
+assert.match(staticImagePlayback, /return displayAssetUrl\(sourceUrl\)/);
 const showcaseCard = app.match(/function renderShowcaseVideoCard\(item, index\) \{[\s\S]*?\n\}/)?.[0] || "";
 assert.match(showcaseCard, /staticVideoPlaybackUrl\(item\.referenceVideoUrl\)/);
+assert.match(showcaseCard, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
+const quickPick = app.match(/function renderTemplateQuickPick\(item, index\) \{[\s\S]*?\n\}/)?.[0] || "";
+assert.match(quickPick, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
 
 const previewFlow = app.match(/function markPersonalTemplateVideoPreview\(video, status\) \{[\s\S]*?\nfunction safeAccountDisplayName/)?.[0] || "";
 assert.match(previewFlow, /function loadPersonalTemplatePreview\(video, autoplay = false\)/);

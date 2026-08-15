@@ -2024,6 +2024,12 @@ function staticVideoPlaybackUrl(url) {
   return assetPreviewUrl(sourceUrl, "video");
 }
 
+function staticImagePlaybackUrl(url) {
+  const sourceUrl = String(url || "");
+  if (/^\/assets\/references\//i.test(sourceUrl)) return displayAssetUrl(sourceUrl);
+  return assetPreviewUrl(sourceUrl, "image");
+}
+
 function assetPreviewUrl(url, kind = "image") {
 const sourceUrl = String(url || "");
 if (!sourceUrl) return "";
@@ -7375,10 +7381,11 @@ document.getElementById("workflowRequirement")?.focus({ preventScroll: true });
 
 function renderShowcaseVideoCard(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "做这个";
+  const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
   return `
     <article class="showcase-video-card ${index === 0 ? "featured" : ""}">
-<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image"))}" data-title="${escapeHtml(item.title)}">
- <img src="${assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image")}" alt="${escapeHtml(item.title)}" ${lazyImageAttrs("lazy", item.resultCoverUrl || item.referenceImageUrl, assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image"))}>
+<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(cover)}" data-title="${escapeHtml(item.title)}">
+ <img src="${cover}" alt="${escapeHtml(item.title)}" ${lazyImageAttrs("lazy", item.resultCoverUrl || item.referenceImageUrl, cover)}>
  </button>
       <div class="showcase-video-caption">
         <div>
@@ -7785,7 +7792,7 @@ function renderTemplateVideoSection({ title, count, items }) {
 
 function renderTemplateQuickPick(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "用这个动作";
-  const cover = assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image");
+  const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
   return `
     <button class="template-quick-pick ${index === 0 ? "featured" : ""}" type="button" data-action="import-workflow-template" data-reference="${item.id}" ${state.isBusy ? "disabled" : ""}${pendingAttrs(`import-template:${item.id}`)}${disabledHint(state.isBusy && !isPendingAction(`import-template:${item.id}`), "另一个模板正在导入")}${disabledReason({ condition: state.isBusy && !isPendingAction(`import-template:${item.id}`), text: "另一个模板正在导入" })}>
       <span class="template-quick-pick-media"><img src="${cover}" alt="" ${lazyImageAttrs("eager", item.resultCoverUrl || item.referenceImageUrl, cover)}></span>
