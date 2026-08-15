@@ -1218,13 +1218,27 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const edit = state.pendingAgentImageEdit;
     if (!edit?.id || !["pending_confirmation", "queued", "running", "retryable_failed", "failed", "completed"].includes(edit.status)) return;
     if (!state.chat.some((message) => message.id === `local-agent-image-edit-message:${edit.id}`)) state.chat.push(localAgentImageEditMessage(edit));
-    if (edit.jobId && ["queued", "running"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
+    if (edit.jobId && ["queued", "running", "retryable_failed"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
   }
   function recoverCompletedAgentImageEdit() {
-    if (state.pendingAgentImageEdit || !state.chat.length) return false;
     const project = canonicalProject();
     const frame = project?.nodes?.find((node) => node.role === "FIRST_FRAME")?.media;
-    if (!project?.id || !frame?.id) return false;
+    const existing = state.pendingAgentImageEdit;
+    if (existing?.jobId && ["queued", "running", "retryable_failed"].includes(existing.status)) {
+      const task = state.jobs.find((item) => item.id === existing.jobId);
+      const frameNode = project?.nodes?.find((node) => node.role === "FIRST_FRAME");
+      const previousFrameId = existing.inputs?.find((item) => item.slot === "frame")?.mediaId || "";
+      const taskBound = frameNode?.metadata?.sourceJobId === existing.jobId || (frame?.id && frame.id !== previousFrameId);
+      if (task && completedJob(task) && frame?.id && taskBound) {
+        existing.status = "completed";
+        existing.completedAt = task.completedAt || task.updatedAt || new Date().toISOString();
+        existing.outputMediaId = frame.id;
+        replaceLocalAgentImageEditAction(existing);
+        writeState();
+        return true;
+      }
+    }
+    if (existing || !state.chat.length || !project?.id || !frame?.id) return false;
     const request = [...state.chat].reverse().find((message) => String(message.role || "").toLowerCase() === "user" && isAssistantImageEditIntent(message.content || message.text));
     if (!request) return false;
     const requestAt = Date.parse(String(request.createdAt || ""));
@@ -2326,7 +2340,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const result = await mediaRequest(`/api/v1/jobs/${encodeURIComponent(edit.jobId)}`);
       const job = result.job;
       const status = String(job?.status || "").toLowerCase();
-      if (status === "completed") { await completeAgentImageEdit(edit); return true; }
+      if (status === "completed") {
+        try { await completeAgentImageEdit(edit); return true; }
+        catch (error) {
+          if (!/首帧尚未绑定/.test(String(error?.message || "")) || attempt + 1 >= attempts) throw error;
+          await new Promise((resolve) => window.setTimeout(resolve, Math.min(30_000, 4_000 * (attempt + 1))));
+        }
+      }
       if (["blocked", "retryable_failed", "review_required", "cancelled"].includes(status)) {
         const error = new Error(job.failureText || "改图任务未生成可用结果，本次不会扣费。");
         error.terminal = true;

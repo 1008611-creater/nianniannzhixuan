@@ -59,6 +59,7 @@ assert.doesNotMatch(frontend, /mediaRequest\("\/api\/image2\/(?:generate|sync)"/
 assert.doesNotMatch(frontend, /mediaRequest\("\/api\/local\/image2\/input-links"/);
 assert.doesNotMatch(frontend, /\/api\/local\/image2\/jobs\/\$\{encodeURIComponent\(job\.id\)\}\/results\/0/);
 assert.match(frontend, /window\.setTimeout\(resumePendingAgentImageEdit, 500\)/);
+assert.match(frontend, /\["queued", "running", "retryable_failed"\]\.includes\(edit\.status\)/);
 assert.match(frontend, /actionStatus === "retryable_failed"/);
 assert.match(frontend, /改图服务暂时不可用。本次没有创建任务，也不会扣费/);
 assert.match(frontend, /restorePendingAgentImageEdit\(\);\s*\} else state\.chat = \[\];\s*renderUnlessSourcesOpen\(\);/);
@@ -70,7 +71,9 @@ assert.match(pendingNormalizer, /outputMediaId: edit\.outputMediaId/);
 assert.match(frontend, /\["pending_confirmation", "queued", "running", "retryable_failed", "failed", "completed"\]/);
 assert.match(frontend, /edit\.status = "completed";[\s\S]*edit\.outputMediaId = firstFrame\.id;[\s\S]*replaceLocalAgentImageEditAction\(edit\)/);
 assert.match(frontend, /改图已完成并保存为当前商品首帧。可以继续修改，或进入下一步制作成片。/);
+assert.match(frontend, /首帧尚未绑定[\s\S]*attempt \+ 1 >= attempts/);
 assert.match(frontend, /function recoverCompletedAgentImageEdit\(\)/);
+assert.match(frontend, /frameNode\?\.metadata\?\.sourceJobId === existing\.jobId/);
 assert.match(frontend, /newestProjectTask\(state\.jobs, project\.id, "FIRST_FRAME", currentJobId\)/);
 assert.match(frontend, /source\?\.kind === "frame" \|\| task\.id === currentJobId/);
 assert.match(frontend, /recoverCompletedAgentImageEdit\(\);\s*restorePendingAgentImageEdit\(\);/);
