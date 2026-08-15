@@ -30,6 +30,11 @@ assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?await refreshSess
 assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?\} else \{[\s\S]*?await refreshState\(\)/);
 
 const index = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+const templateRouterCss = await readFile(new URL("../public/front-skill-router-templates-20260815.css", import.meta.url), "utf8");
+assert.match(index, /front-skill-router-templates-20260815\.css\?v=20260815-route-fast-01/);
+assert.ok(templateRouterCss.length < 20000, "template route CSS should stay below 20KB");
+assert.match(templateRouterCss, /\.showcase-video-grid/);
+assert.doesNotMatch(templateRouterCss, /Workspace v39/);
 assert.match(index, /<script defer src="\/vendor\/gsap\.min\.js/);
 assert.match(index, /<script defer src="\/copy-cleanup\.js/);
 assert.match(index, /<script defer src="\/motion-v209\.js/);
