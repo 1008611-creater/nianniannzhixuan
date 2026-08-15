@@ -1139,6 +1139,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function stageMarkup() {
     const stage = mainStage();
+    const stagePoster = stage.poster || (stage.mode === "video" && stage.mediaId && activeVideoAsset()?.mediaId === stage.mediaId ? currentTemplate().cover : "");
     const emptyTarget = ["person", "outfit", "motion", "scene"].includes(stage.target || state.target) ? (stage.target || state.target) : "";
     const media = stage.mode === "empty"
       ? stage.guide
@@ -1146,7 +1147,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         : `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
       : stage.mode === "image"
         ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览"></div>`
-        : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.url)}" ${stage.poster ? `poster="${esc(stage.poster)}"` : ""} controls playsinline preload="metadata"></video>`;
+        : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.url)}" ${stagePoster ? `poster="${esc(stagePoster)}"` : ""} controls playsinline preload="metadata"></video>`;
     const project = activeProject();
     const projectTitle = project?.title || "当前项目";
     const stageProjectTitle = projectTitle.length > 18 ? `${projectTitle.slice(0, 18)}…` : projectTitle;
