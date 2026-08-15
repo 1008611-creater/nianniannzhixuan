@@ -640,7 +640,18 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     // preview in place, which made a successful replacement look ineffective.
     const selected = displayAssetFor(state.target);
     const finished = activeVideoAsset();
-    if (state.showFinalVideo && finished?.url) return { mode: "video", url: finished.url, mediaId: finished.mediaId, title: "成片已返回", note: activeProject()?.production?.sampleInputRoles?.length ? "本成片包含模板示例素材，正式商用前建议替换为自有素材。" : "可直接查看或导出成片。", label: "成片" };
+    if (state.showFinalVideo && finished?.url) {
+      const frameAsset = displayAssetFor("frame");
+      return {
+        mode: "video",
+        url: finished.url,
+        mediaId: finished.mediaId,
+        poster: frameAsset ? publicPreview(frameAsset) : "",
+        title: "成片已返回",
+        note: activeProject()?.production?.sampleInputRoles?.length ? "本成片包含模板示例素材，正式商用前建议替换为自有素材。" : "可直接查看或导出成片。",
+        label: "成片",
+      };
+    }
     if (state.target === "final") {
       const missing = readiness().missing[0];
       if (missing) {
