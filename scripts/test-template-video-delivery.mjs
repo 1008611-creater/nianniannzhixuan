@@ -21,6 +21,7 @@ assert.match(staticImagePlayback, /return displayAssetUrl\(sourceUrl\)/);
 const showcaseCard = app.match(/function renderShowcaseVideoCard\(item, index\) \{[\s\S]*?\n\}/)?.[0] || "";
 assert.match(showcaseCard, /staticVideoPlaybackUrl\(item\.referenceVideoUrl\)/);
 assert.match(showcaseCard, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
+assert.match(showcaseCard, /index === 0 \? "eager" : "lazy"/);
 const quickPick = app.match(/function renderTemplateQuickPick\(item, index\) \{[\s\S]*?\n\}/)?.[0] || "";
 assert.match(quickPick, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
 

@@ -7394,10 +7394,11 @@ document.getElementById("workflowRequirement")?.focus({ preventScroll: true });
 function renderShowcaseVideoCard(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "做这个";
   const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
+  const coverAttrs = lazyImageAttrs(index === 0 ? "eager" : "lazy", item.resultCoverUrl || item.referenceImageUrl, cover);
   return `
     <article class="showcase-video-card ${index === 0 ? "featured" : ""}">
 <button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(cover)}" data-title="${escapeHtml(item.title)}">
- <img src="${cover}" alt="${escapeHtml(item.title)}" ${lazyImageAttrs("lazy", item.resultCoverUrl || item.referenceImageUrl, cover)}>
+ <img src="${cover}" alt="${escapeHtml(item.title)}" ${coverAttrs}>
  </button>
       <div class="showcase-video-caption">
         <div>
