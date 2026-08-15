@@ -24,6 +24,10 @@ assert.match(showcaseCard, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| it
 const quickPick = app.match(/function renderTemplateQuickPick\(item, index\) \{[\s\S]*?\n\}/)?.[0] || "";
 assert.match(quickPick, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
 
+assert.match(app, /async function refreshSessionState\(\)/);
+assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?await refreshSessionState\(\)/);
+assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?\} else \{[\s\S]*?await refreshState\(\)/);
+
 const previewFlow = app.match(/function markPersonalTemplateVideoPreview\(video, status\) \{[\s\S]*?\nfunction safeAccountDisplayName/)?.[0] || "";
 assert.match(previewFlow, /function loadPersonalTemplatePreview\(video, autoplay = false\)/);
 assert.match(previewFlow, /if \(!video\.getAttribute\("src"\)\) \{[\s\S]*?video\.src = source;/);

@@ -2439,6 +2439,14 @@ state.system.openai = workflowChat.openai || state.system.openai;
 state.sessionLoaded = true;
 }
 
+async function refreshSessionState() {
+  const session = await fetchJson("/api/v1/auth/me").catch((error) => ({ user: state.session, error }));
+  if (session.error?.status === 401) clearPrivateSessionState();
+  if (session.user || session.error?.status === 401) state.session = session.user;
+  state.sessionLoaded = true;
+  return state.session;
+}
+
 async function refreshBillingState() {
   if (!state.session) {
     state.billing = null;
@@ -6893,7 +6901,11 @@ async function bootApp() {
   // paint so route changes never briefly downgrade nav to a logged-out header.
   if (peerPaths.has(bootPath)) {
     try {
-      await refreshState();
+      if (bootPath === "/templates") {
+        await refreshSessionState();
+      } else {
+        await refreshState();
+      }
     } catch (error) {
       setUiNotice(cleanUiStatusText(error.message || "状态刷新失败，请稍后重试。"), "warning");
     }
