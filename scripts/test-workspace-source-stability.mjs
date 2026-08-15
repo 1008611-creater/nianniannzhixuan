@@ -23,6 +23,14 @@ assert.match(privateRefresh[0], /mediaRequest\("\/api\/v1\/media"\)/);
 assert.match(privateRefresh[0], /renderUnlessSourcesOpen\(\)/);
 assert.doesNotMatch(privateRefresh[0], /\/api\/v1\/(projects|jobs)/);
 
+assert.match(workspace, /const requestedProjectPromise = requestedProjectId/);
+assert.match(workspace, /const canonicalProjectsPromise = mediaRequest\("\/api\/v1\/projects"\)/);
+assert.match(workspace, /const \[canonicalProjects, requestedProjectResult\] = await Promise\.all/);
+assert.match(workspace, /if \(canonicalProjects\.error && !requestedProjectResult\.project\)/);
+
+const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
+assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260815-auth-loading-04"/);
+
 const upload = workspace.match(/async function upload\(target, file, options = \{\}\) \{[\s\S]*?\n  async function ensureProject/);
 assert.ok(upload, "upload must exist");
 assert.match(upload[0], /if \(!syncSourceSheetBusy\(\)\) render\(\);/);

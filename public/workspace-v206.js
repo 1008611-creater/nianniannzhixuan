@@ -810,17 +810,20 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       flash(sessionAuthFailed ? "登录已失效，请重新登录。" : "登录状态暂时无法确认，请刷新重试。", "warning");
       return;
     }
-    const canonicalProjects = await mediaRequest("/api/v1/projects").catch((error) => ({ projects: [], error }));
+    const requestedProjectPromise = requestedProjectId
+      ? mediaRequest(`/api/v1/projects/${requestedProjectId}`).catch(() => ({ project: null }))
+      : Promise.resolve({ project: null });
+    const canonicalProjectsPromise = mediaRequest("/api/v1/projects").catch((error) => ({ projects: [], error }));
+    const [canonicalProjects, requestedProjectResult] = await Promise.all([canonicalProjectsPromise, requestedProjectPromise]);
     state.canonicalProjects = canonicalProjects.projects || [];
-    if (canonicalProjects.error) {
+    if (canonicalProjects.error && !requestedProjectResult.project) {
       state.projectLoading = false;
       flash("项目加载失败，请刷新重试。", "warning");
       return;
     }
     let durable = canonicalProject();
     if (!durable && state.session && requestedProjectId) {
-      const result = await mediaRequest(`/api/v1/projects/${requestedProjectId}`).catch(() => ({ project: null }));
-      durable = result.project || null;
+      durable = requestedProjectResult.project || null;
       if (durable) {
         const index = state.canonicalProjects.findIndex((item) => item.id === durable.id);
         if (index >= 0) state.canonicalProjects[index] = durable;
