@@ -2470,7 +2470,9 @@ function syncHeaderScrollbarCompensation() {
   document.body?.appendChild(probe);
   const scrollbarWidth = Math.max(0, probe.offsetWidth - probe.clientWidth);
   probe.remove();
-  document.documentElement.style.setProperty("--app-scrollbar-width", `${scrollbarWidth}px`);
+  const hasVerticalScrollbar = document.documentElement.clientWidth < window.innerWidth;
+  const headerOffset = hasVerticalScrollbar ? scrollbarWidth : 0;
+  document.documentElement.style.setProperty("--app-header-width-offset", `${headerOffset}px`);
 }
 
 function navigate(path) {
@@ -3217,6 +3219,7 @@ function render() {
   trackPageView(path);
   renderTurnstileWidgets();
   requestAnimationFrame(() => {
+    syncHeaderScrollbarCompensation();
     setupChatTextarea(document.querySelector("#workflowRequirement"));
     if (path === "/templates") {
       setupPersonalTemplateVideoPreviews();

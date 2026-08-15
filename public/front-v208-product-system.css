@@ -35,9 +35,9 @@ body::before {
   background: transparent;
 }
 
-:root { --app-scrollbar-width: 0px; }
-html:has(.v206-canonical-slot) .site-header {
-  width: calc(100% - var(--app-scrollbar-width));
+:root { --app-header-width-offset: 0px; }
+.site-header {
+  width: calc(100% + var(--app-header-width-offset));
 }
 
 #app::before {
