@@ -3256,7 +3256,7 @@ async function ensureWorkspaceV206Mount() {
     return;
   }
   if (!workspaceV206ModulePromise) {
-    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-playback-poster-02");
+    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-playback-poster-03");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;
