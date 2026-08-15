@@ -1003,7 +1003,7 @@ function workflowNodePublicUrl(node) {
 function workflowNodeDisplayUrl(node) {
 const override = nodeAssetOverride(node.id);
 const sourceUrl = override?.previewUrl || workflowNodeUrl(node);
-return assetPreviewUrl(sourceUrl, node.kind);
+return node.kind === "video" ? staticVideoPlaybackUrl(sourceUrl) : assetPreviewUrl(sourceUrl, node.kind);
 }
 
 function workflowNodeMap(nodes) {
@@ -2016,6 +2016,12 @@ const match = sourceUrl.match(/^([^?#]+)([?#].*)?$/);
 const cleanPath = match?.[1] || sourceUrl;
 const suffix = match?.[2] || "";
 return `${cleanPath.replace(/^\/assets\/references\//i, "/assets/references/previews/").replace(/\.(?:mp4|mov|webm)$/i, ".preview.mp4")}${suffix}`;
+}
+
+function staticVideoPlaybackUrl(url) {
+  const sourceUrl = String(url || "");
+  if (/^\/assets\/references\//i.test(sourceUrl)) return displayAssetUrl(sourceUrl);
+  return assetPreviewUrl(sourceUrl, "video");
 }
 
 function assetPreviewUrl(url, kind = "image") {
@@ -7371,7 +7377,7 @@ function renderShowcaseVideoCard(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "做这个";
   return `
     <article class="showcase-video-card ${index === 0 ? "featured" : ""}">
-<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(assetPreviewUrl(item.referenceVideoUrl, "video"))}" data-poster="${escapeHtml(assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image"))}" data-title="${escapeHtml(item.title)}">
+<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image"))}" data-title="${escapeHtml(item.title)}">
  <img src="${assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image")}" alt="${escapeHtml(item.title)}" ${lazyImageAttrs("lazy", item.resultCoverUrl || item.referenceImageUrl, assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image"))}>
  </button>
       <div class="showcase-video-caption">
@@ -8114,7 +8120,7 @@ const simpleSlotMarkup = simpleInputSlots.map((item) => {
 const thumbUrl = item.node?.kind === "video" && item.node?.posterUrl ? assetPreviewUrl(item.node.posterUrl, "image") : (item.node ? workflowNodeDisplayUrl(item.node) : "");
 const thumbFallbackUrl = item.node?.kind === "video" && item.node?.posterUrl ? item.node.posterUrl : (item.node ? workflowNodeUrl(item.node) : "");
 const previewSourceUrl = item.node ? workflowNodeUrl(item.node) : "";
-const previewDisplayUrl = item.node?.kind === "video" ? assetPreviewUrl(previewSourceUrl, "video") : (previewSourceUrl ? displayAssetUrl(previewSourceUrl) : thumbUrl);
+const previewDisplayUrl = item.node?.kind === "video" ? staticVideoPlaybackUrl(previewSourceUrl) : (previewSourceUrl ? displayAssetUrl(previewSourceUrl) : thumbUrl);
 const previewPosterUrl = item.node?.kind === "video" && item.node?.posterUrl ? assetPreviewUrl(item.node.posterUrl, "image") : thumbUrl;
 const previewLabel = item.node?.kind === "video" ? "参考视频预览" : `${item.label}素材预览`;
 const enlargedPreview = previewDisplayUrl ? (item.node?.kind === "video"

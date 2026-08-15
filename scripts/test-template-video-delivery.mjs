@@ -12,6 +12,12 @@ assert.doesNotMatch(card, /<video src=/);
 assert.doesNotMatch(card, /\scontrols(?:\s|>)/);
 assert.doesNotMatch(card, /featured/);
 
+const staticPlayback = app.match(/function staticVideoPlaybackUrl\(url\) \{[\s\S]*?\n\}/)?.[0] || "";
+assert.match(staticPlayback, /assets\\\/references/);
+assert.match(staticPlayback, /return displayAssetUrl\(sourceUrl\)/);
+const showcaseCard = app.match(/function renderShowcaseVideoCard\(item, index\) \{[\s\S]*?\n\}/)?.[0] || "";
+assert.match(showcaseCard, /staticVideoPlaybackUrl\(item\.referenceVideoUrl\)/);
+
 const previewFlow = app.match(/function markPersonalTemplateVideoPreview\(video, status\) \{[\s\S]*?\nfunction safeAccountDisplayName/)?.[0] || "";
 assert.match(previewFlow, /function loadPersonalTemplatePreview\(video, autoplay = false\)/);
 assert.match(previewFlow, /if \(!video\.getAttribute\("src"\)\) \{[\s\S]*?video\.src = source;/);
