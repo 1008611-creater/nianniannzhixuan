@@ -14,6 +14,7 @@ assert.equal(rewritten.has("connection"), false);
 assert.equal(rewritten.get("origin"), "http://127.0.0.1:18890");
 assert.equal(rewritten.get("referer"), "http://127.0.0.1:18890/workspace?projectId=test");
 assert.equal(rewritten.get("x-csrf-token"), "test-token");
+assert.equal(rewritten.get("accept-encoding"), "identity");
 
 const production = proxyHeaders(new Headers({
   host: "dh.cauai.fun",

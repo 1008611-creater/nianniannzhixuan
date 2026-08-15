@@ -22,6 +22,9 @@ export function proxyHeaders(headers, upstreamOrigin, csrfOrigin = upstreamOrigi
   const result = new Headers(headers);
   result.delete("host");
   result.delete("connection");
+  // The origin may select Zstandard for JSON. Node's fetch does not decode it,
+  // so request identity and keep the browser-facing response parseable.
+  result.set("accept-encoding", "identity");
 
   const csrf = new URL(csrfOrigin);
   const forwardedPublicHost = result.get("x-forwarded-public-host");
