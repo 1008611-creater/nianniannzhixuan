@@ -1,6 +1,6 @@
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { once } from "node:events";
@@ -19,6 +19,10 @@ const proxyTimeoutMs = Number(process.env.PROXY_TIMEOUT_MS || 120_000);
 const generatedImageMaxBytes = Number(process.env.GENERATED_IMAGE_MAX_BYTES || 25 * 1024 * 1024);
 const publicDir = resolve("public");
 const playbackDir = resolve(process.env.PLAYBACK_DIR || "playback");
+const cdnPlaybackEnabled = process.env.CDN_PLAYBACK_ENABLED === "1";
+const cdnPlaybackHost = String(process.env.CDN_PLAYBACK_HOST || new URL(process.env.PUBLIC_ORIGIN || "https://dh.cauai.fun").host).trim().toLowerCase();
+const cdnPlaybackAuthKey = readRuntimeSecret(process.env.CDN_PLAYBACK_AUTH_KEY, process.env.CDN_PLAYBACK_AUTH_KEY_FILE);
+const cdnPlaybackTtlSeconds = Math.max(60, Math.min(3_600, Number(process.env.CDN_PLAYBACK_TTL_SECONDS || 600)) || 600);
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const playbackJobs = new Map();
 const generatedImageInputs = new Map();
@@ -26,13 +30,54 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-  ".svg": "image/svg+xml", ".mp4": "video/mp4", ".woff": "font/woff", ".woff2": "font/woff2",
+  ".svg": "image/svg+xml", ".mp4": "video/mp4", ".nnvideo": "video/mp4", ".woff": "font/woff", ".woff2": "font/woff2",
 };
 const generatedImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const generatedImageInputTtlMs = 10 * 60 * 1000;
 const publicOrigin = new URL(process.env.PUBLIC_ORIGIN || "https://dh.cauai.fun").origin;
 
 mkdirSync(playbackDir, { recursive: true });
+
+function readRuntimeSecret(value, file) {
+  if (String(value || "").trim()) return String(value).trim();
+  if (!file) return "";
+  try { return readFileSync(file, "utf8").trim(); } catch { return ""; }
+}
+
+function cdnPlaybackReady() {
+  return cdnPlaybackEnabled && /^[A-Za-z0-9]{6,40}$/.test(cdnPlaybackAuthKey) && Boolean(cdnPlaybackHost);
+}
+
+function cdnPlaybackPath(mediaId) {
+  return `/_cdn-playback/${encodeURIComponent(mediaId)}.nnvideo`;
+}
+
+function cdnPlaybackDigest(pathname, timestamp, random, uid) {
+  return createHash("md5").update(`${pathname}-${timestamp}-${random}-${uid}-${cdnPlaybackAuthKey}`).digest("hex");
+}
+
+function signedCdnPlaybackUrl(mediaId) {
+  const pathname = cdnPlaybackPath(mediaId);
+  const timestamp = Math.floor(Date.now() / 1_000);
+  const random = randomBytes(8).toString("hex");
+  const uid = "0";
+  const sign = `${timestamp}-${random}-${uid}-${cdnPlaybackDigest(pathname, timestamp, random, uid)}`;
+  return `https://${cdnPlaybackHost}${pathname}?sign=${sign}`;
+}
+
+function hasValidCdnPlaybackSignature(request, mediaId) {
+  if (!cdnPlaybackReady()) return false;
+  const sign = new URL(request.url, "http://localhost").searchParams.get("sign") || "";
+  const parts = sign.split("-");
+  if (parts.length !== 4) return false;
+  const [timestampText, random, uid, digest] = parts;
+  const timestamp = Number(timestampText);
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0 || !/^[A-Za-z0-9]{1,100}$/.test(random) || !/^[A-Za-z0-9]{1,100}$/.test(uid) || !/^[a-f0-9]{32}$/i.test(digest)) return false;
+  const now = Math.floor(Date.now() / 1_000);
+  if (timestamp > now + 60 || timestamp + cdnPlaybackTtlSeconds < now) return false;
+  const expected = cdnPlaybackDigest(cdnPlaybackPath(mediaId), timestampText, random, uid);
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(digest.toLowerCase()));
+}
 
 function playbackFile(mediaId) {
   return join(playbackDir, `${mediaId}.mp4`);
@@ -481,11 +526,35 @@ async function servePlayback(request, response, mediaId) {
   }
   if (hasDerivative) {
     try { await upstream.body?.cancel(); } catch {}
+    if (cdnPlaybackReady()) {
+      response.writeHead(302, {
+        location: signedCdnPlaybackUrl(mediaId),
+        "cache-control": "private, no-store",
+        vary: "cookie",
+      });
+      response.end();
+      return;
+    }
     serveStatic(request, response, derivative, "private, max-age=300, must-revalidate");
     return;
   }
   schedulePlaybackDerivative(mediaId, headers);
   await sendUpstreamResponse(response, upstream);
+}
+
+function serveCdnPlayback(request, response, mediaId) {
+  if (!hasValidCdnPlaybackSignature(request, mediaId)) {
+    response.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" });
+    response.end(JSON.stringify({ error: "PLAYBACK_SIGNATURE_REJECTED" }));
+    return;
+  }
+  const derivative = playbackFile(mediaId);
+  if (!existsSync(derivative) || statSync(derivative).size === 0) {
+    response.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" });
+    response.end(JSON.stringify({ error: "PLAYBACK_DERIVATIVE_NOT_READY" }));
+    return;
+  }
+  serveStatic(request, response, derivative, `public, max-age=${cdnPlaybackTtlSeconds}, immutable`);
 }
 
 function downloadExtension(contentType) {
@@ -586,6 +655,11 @@ createServer(async (request, response) => {
     const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
     if (["GET", "HEAD"].includes(request.method) && playbackMatch) {
       await servePlayback(request, response, playbackMatch[1]);
+      return;
+    }
+    const cdnPlaybackMatch = pathname.match(/^\/_cdn-playback\/([0-9a-f-]{36})\.nnvideo$/i);
+    if (["GET", "HEAD"].includes(request.method) && cdnPlaybackMatch) {
+      serveCdnPlayback(request, response, cdnPlaybackMatch[1]);
       return;
     }
     const downloadMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/download$/i);
