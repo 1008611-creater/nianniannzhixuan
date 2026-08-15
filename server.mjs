@@ -194,18 +194,27 @@ async function logProxyResult(request, url, upstream) {
 
 async function sendUpstreamResponse(response, upstream) {
   const upstreamHeaders = proxyResponseHeaders(upstream.headers);
-  const setCookie = upstreamHeaders.get("set-cookie");
-  if (setCookie) upstreamHeaders.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
+  const rawSetCookies = typeof upstreamHeaders.getSetCookie === "function"
+    ? upstreamHeaders.getSetCookie()
+    : (upstreamHeaders.get("set-cookie") ? [upstreamHeaders.get("set-cookie")] : []);
+  upstreamHeaders.delete("set-cookie");
+  const setCookies = rawSetCookies
+    .map((value) => String(value).replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""))
+    .filter(Boolean);
+  const responseHeaders = Object.fromEntries(upstreamHeaders);
+  if (setCookies.length) responseHeaders["set-cookie"] = setCookies;
   const contentType = upstreamHeaders.get("content-type") || "";
   if (contentType.toLowerCase().includes("application/json") && upstream.body) {
     const body = Buffer.from(await upstream.arrayBuffer());
     upstreamHeaders.set("content-length", String(body.length));
     upstreamHeaders.delete("transfer-encoding");
-    response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
+    responseHeaders["content-length"] = String(body.length);
+    delete responseHeaders["transfer-encoding"];
+    response.writeHead(upstream.status, responseHeaders);
     response.end(body);
     return;
   }
-  response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
+  response.writeHead(upstream.status, responseHeaders);
   if (upstream.body) {
     for await (const chunk of upstream.body) {
       if (!response.write(chunk)) await once(response, "drain");
