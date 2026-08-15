@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260814-retryable-failure-reload-23";
+  const VERSION = "20260815-auth-loading-03";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -794,21 +794,27 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     }
   }
   async function load() {
-    const [session, canonicalProjects] = await Promise.all([
-      request("/api/v1/auth/me").catch((error) => ({ user: null, error })),
-      mediaRequest("/api/v1/projects").catch(() => ({ projects: [] })),
-    ]);
+    // Resolve authentication before project data so an expired session can never
+    // leave the workspace in its indefinite project-loading state.
+    const session = await request("/api/v1/auth/me").catch((error) => ({ user: null, error }));
     const sessionAuthFailed = session.error?.status === 401;
     state.session = session.user || (sessionAuthFailed ? null : state.session);
     state.projects = [];
-    state.canonicalProjects = canonicalProjects.projects || [];
-    if (!state.session && requestedProjectId && !sessionAuthFailed) {
-      flash("登录状态暂时无法确认，请稍后重试。", "warning");
+    if (!state.session) {
+      state.projectLoading = false;
+      if (requestedProjectId && sessionAuthFailed) {
+        localStorage.setItem("authReturnTo", `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`);
+        window.location.replace("/access");
+        return;
+      }
+      flash(sessionAuthFailed ? "登录已失效，请重新登录。" : "登录状态暂时无法确认，请刷新重试。", "warning");
       return;
     }
-    if (!state.session && requestedProjectId) {
-      localStorage.setItem("authReturnTo", `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`);
-      window.location.replace("/access");
+    const canonicalProjects = await mediaRequest("/api/v1/projects").catch((error) => ({ projects: [], error }));
+    state.canonicalProjects = canonicalProjects.projects || [];
+    if (canonicalProjects.error) {
+      state.projectLoading = false;
+      flash("项目加载失败，请刷新重试。", "warning");
       return;
     }
     let durable = canonicalProject();
