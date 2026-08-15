@@ -13,6 +13,7 @@ const [agent, skill, contractText, frontend, backend, workspace] = await Promise
 const contract = JSON.parse(contractText);
 assert.match(agent, /agent\/skills\/i-have-adhd\/SKILL\.md/);
 assert.match(agent, /agent\/contracts\/workspace-api\.json/);
+assert.match(agent, /bound output node and its recorded job identity/i);
 assert.match(skill, /same-origin|action-first|action-first/i);
 assert.equal(contract.frontend, "public/workspace-v206.js");
 assert.equal(contract.backend, "server.mjs");

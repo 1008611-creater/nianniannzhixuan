@@ -26,6 +26,7 @@
 - This project uses Yunwu as its only selected Image2 channel. A generic `gpt-image-2` request must not route to Yunfei, Krill, or any other provider.
 - Treat Yunwu provider `429` and `503` as a bounded, visible recovery path. Fix retry budget, request ownership, and user feedback before considering an additional channel or credential.
 - Do not open credential-entry work, request a key, or create a provider fallback unless the user has selected that provider for this project.
+- After an Image2 task reaches terminal success, recover its visible completion state from the current project's bound output node and its recorded job identity. Browser storage may preserve the presentation, but it must never be the only authority; refresh must restore the completed result without treating an unrelated historical task as the user's latest edit.
 
 ## Delivery
 
