@@ -168,7 +168,8 @@ function serveStatic(request, response, file, cacheControl = null) {
 }
 
 async function logProxyResult(request, url, upstream) {
-  if (!mutatingMethods.has(request.method) || !url.pathname.startsWith("/api/")) return;
+  const authMe = url.pathname === "/api/v1/auth/me";
+  if ((!mutatingMethods.has(request.method) && !authMe) || !url.pathname.startsWith("/api/")) return;
 
   let code = "-";
   const contentType = upstream.headers.get("content-type") || "";
@@ -185,6 +186,7 @@ async function logProxyResult(request, url, upstream) {
   }
   const safeCode = String(code).replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 160);
   console.log(`[proxy] ${request.method} ${url.pathname} -> ${upstream.status}${safeCode === "-" ? "" : ` ${safeCode}`}`);
+  if (authMe) console.log(`[proxy-auth] ${request.method} /api/v1/auth/me -> ${upstream.status} cookie=${Boolean(request.headers.cookie)}`);
   if (upstream.status >= 500 && /\/api\/v1\/media\/[^/]+\/content$/i.test(url.pathname)) {
     const detail = (await upstream.clone().text().catch(() => ""))
       .replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 240);
