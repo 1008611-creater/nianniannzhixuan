@@ -186,7 +186,14 @@ async function logProxyResult(request, url, upstream) {
   }
   const safeCode = String(code).replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 160);
   console.log(`[proxy] ${request.method} ${url.pathname} -> ${upstream.status}${safeCode === "-" ? "" : ` ${safeCode}`}`);
-  if (authMe) console.log(`[proxy-auth] ${request.method} /api/v1/auth/me -> ${upstream.status} cookie=${Boolean(request.headers.cookie)}`);
+  if (authMe) {
+    let keys = "";
+    if (upstream.ok && contentType.includes("application/json")) {
+      try { keys = Object.keys(await upstream.clone().json()).sort().join(","); } catch { keys = "INVALID_JSON"; }
+    }
+    const bodyBytes = upstream.ok ? Number(upstream.headers.get("content-length") || 0) || "stream" : "-";
+    console.log(`[proxy-auth] ${request.method} /api/v1/auth/me -> ${upstream.status} cookie=${Boolean(request.headers.cookie)} type=${contentType || "-"} bytes=${bodyBytes} keys=${keys || "-"}`);
+  }
   if (upstream.status >= 500 && /\/api\/v1\/media\/[^/]+\/content$/i.test(url.pathname)) {
     const detail = (await upstream.clone().text().catch(() => ""))
       .replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 240);
