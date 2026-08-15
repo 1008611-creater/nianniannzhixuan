@@ -23,7 +23,7 @@ rules it needs; no consumer is given the vault master password.
 ## Worker Image2 access
 
 Use `worker-image2-vault.override.yml` with the application's existing Compose files
-to let the worker access `yunfei-image` through the Vault proxy. The token remains in
+to let the worker access `yunwu-image` through the Vault proxy. The token remains in
 `/srv/kidswear-data/niannian-agent-vault/worker.env`; the Compose file constructs the
 proxy URL only at worker startup and never contains the token value.
 

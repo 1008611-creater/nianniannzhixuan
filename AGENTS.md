@@ -28,8 +28,8 @@
 
 ## Image2 Channel Policy
 
-- The authorized production Image2 channel is Yunfei. Do not select Krill, RunningHub, or any other provider from a generic model name, a local Skill default, or a missing-key diagnosis.
-- For Yunfei `429` or `503`, keep the failure user-visible, apply the bounded retry policy, and record the sanitized category. Do not ask for another credential or offer a provider switch unless the user explicitly requests that provider.
+- The authorized production Image2 channel is Yunwu. Do not select Yunfei, Krill, RunningHub, or any other provider from a generic model name, a local Skill default, or a missing-key diagnosis.
+- For Yunwu `429` or `503`, keep the failure user-visible, apply the bounded retry policy, and record the sanitized category. Do not ask for another credential or offer a provider switch unless the user explicitly requests that provider.
 - Before changing a provider, credential, model, or paid routing policy, verify the selected channel in the deployed configuration and obtain the required explicit authorization. A missing credential for an unselected provider is not a current blocker.
 
 ## Image2 Worker Execution And Acceptance

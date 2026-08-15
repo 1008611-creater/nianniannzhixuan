@@ -23,8 +23,8 @@
 
 ## Image2 Execution
 
-- This project uses Yunfei as its only selected Image2 channel. A generic `gpt-image-2` request must not route to Krill or any other provider.
-- Treat provider `429` and `503` as a bounded, visible recovery path. Fix retry budget, request ownership, and user feedback before considering an additional channel or credential.
+- This project uses Yunwu as its only selected Image2 channel. A generic `gpt-image-2` request must not route to Yunfei, Krill, or any other provider.
+- Treat Yunwu provider `429` and `503` as a bounded, visible recovery path. Fix retry budget, request ownership, and user feedback before considering an additional channel or credential.
 - Do not open credential-entry work, request a key, or create a provider fallback unless the user has selected that provider for this project.
 
 ## Delivery
