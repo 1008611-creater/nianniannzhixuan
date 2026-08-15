@@ -2520,7 +2520,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     writeState();
     flash(`已切换到${template.title}，请确认当前商品素材。`);
   }
-  function openResult() { const url = activeVideo(); if (url) window.open(url, "_blank", "noopener"); }
+  function openResult() {
+    if (!activeVideo()) return;
+    state.workflowStep = "final";
+    state.target = "final";
+    state.showFinalVideo = true;
+    render();
+  }
   async function openNotifications() {
     state.view = "notifications";
     render();
