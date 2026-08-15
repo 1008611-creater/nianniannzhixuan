@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
@@ -6,6 +6,7 @@ import { request as httpsRequest } from "node:https";
 import { once } from "node:events";
 import { lookup } from "node:dns/promises";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { proxyHeaders, proxyResponseHeaders } from "./proxy-headers.mjs";
 
@@ -47,7 +48,9 @@ function derivativeHeaders(headers) {
 async function generatePlaybackDerivative(mediaId, headers) {
   const output = playbackFile(mediaId);
   if (existsSync(output) && statSync(output).size > 0) return true;
+  const inputFile = `${output}.source.mp4`;
   const temporary = `${output}.part.mp4`;
+  try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
   try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
   let upstream;
   try {
@@ -56,21 +59,26 @@ async function generatePlaybackDerivative(mediaId, headers) {
       signal: AbortSignal.timeout(proxyTimeoutMs),
     });
     if (!upstream.ok || !upstream.body) throw new Error(`MEDIA_SOURCE_${upstream.status}`);
+    // Materialize the authorized source before transcoding. Some private
+    // object responses are streamed with metadata/packet boundaries that
+    // ffmpeg cannot reliably parse from stdin, which left playback falling
+    // back to the full original on every request.
+    await pipeline(Readable.fromWeb(upstream.body), createWriteStream(inputFile));
+    if (!existsSync(inputFile) || statSync(inputFile).size === 0) throw new Error("MEDIA_SOURCE_EMPTY");
     const ffmpeg = spawn("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+      "-hide_banner", "-loglevel", "error", "-i", inputFile,
       "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
       "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-y", temporary,
-    ], { stdio: ["pipe", "ignore", "pipe"] });
+    ], { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
     ffmpeg.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-800); });
-    ffmpeg.stdin.on("error", () => {});
-    Readable.fromWeb(upstream.body).pipe(ffmpeg.stdin);
     const [code] = await once(ffmpeg, "close");
     if (code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) throw new Error(`FFMPEG_EXIT_${code}${stderr ? `:${stderr.replace(/\s+/g, " ").slice(-240)}` : ""}`);
     renameSync(temporary, output);
     return true;
   } finally {
     try { await upstream?.body?.cancel(); } catch {}
+    try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
     try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
   }
 }

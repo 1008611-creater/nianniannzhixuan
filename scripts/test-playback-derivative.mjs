@@ -7,6 +7,8 @@ const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "ut
 
 assert.match(server, /function generatePlaybackDerivative\(mediaId, headers\)/);
 assert.match(server, /spawn\("ffmpeg"/);
+assert.match(server, /createWriteStream\(inputFile\)/);
+assert.match(server, /pipeline\(Readable\.fromWeb\(upstream\.body\), createWriteStream\(inputFile\)\)/);
 assert.match(server, /-movflags/, "derivative must be faststart");
 assert.match(server, /function servePlayback\(request, response, mediaId\)/);
 assert.match(server, /schedulePlaybackDerivative\(mediaId, headers\)/);
