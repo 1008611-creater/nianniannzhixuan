@@ -1218,17 +1218,22 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const edit = state.pendingAgentImageEdit;
     if (!edit?.id || !["pending_confirmation", "queued", "running", "retryable_failed", "failed", "completed"].includes(edit.status)) return;
     if (!state.chat.some((message) => message.id === `local-agent-image-edit-message:${edit.id}`)) state.chat.push(localAgentImageEditMessage(edit));
-    if (edit.jobId && ["queued", "running", "retryable_failed"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
+    // A client-side sync timeout is recoverable when the server already has a
+    // durable job id. Recheck failed records too; the job endpoint is the
+    // authority, not the stale local status copied before page reload.
+    if (edit.jobId && ["queued", "running", "retryable_failed", "failed"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
   }
   function recoverCompletedAgentImageEdit() {
     const project = canonicalProject();
     const frame = project?.nodes?.find((node) => node.role === "FIRST_FRAME")?.media;
     const existing = state.pendingAgentImageEdit;
-    if (existing?.jobId && ["queued", "running", "retryable_failed"].includes(existing.status)) {
+    if (existing?.jobId && ["queued", "running", "retryable_failed", "failed"].includes(existing.status)) {
       const task = state.jobs.find((item) => item.id === existing.jobId);
       const frameNode = project?.nodes?.find((node) => node.role === "FIRST_FRAME");
       const previousFrameId = existing.inputs?.find((item) => item.slot === "frame")?.mediaId || "";
-      const taskBound = frameNode?.metadata?.sourceJobId === existing.jobId || (frame?.id && frame.id !== previousFrameId);
+      const taskBound = task?.outputMediaId === frame?.id
+        || frameNode?.metadata?.sourceJobId === existing.jobId
+        || (frame?.id && frame.id !== previousFrameId);
       if (task && completedJob(task) && frame?.id && taskBound) {
         existing.status = "completed";
         existing.completedAt = task.completedAt || task.updatedAt || new Date().toISOString();

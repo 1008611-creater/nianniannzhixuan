@@ -59,7 +59,7 @@ assert.doesNotMatch(frontend, /mediaRequest\("\/api\/image2\/(?:generate|sync)"/
 assert.doesNotMatch(frontend, /mediaRequest\("\/api\/local\/image2\/input-links"/);
 assert.doesNotMatch(frontend, /\/api\/local\/image2\/jobs\/\$\{encodeURIComponent\(job\.id\)\}\/results\/0/);
 assert.match(frontend, /window\.setTimeout\(resumePendingAgentImageEdit, 500\)/);
-assert.match(frontend, /\["queued", "running", "retryable_failed"\]\.includes\(edit\.status\)/);
+assert.match(frontend, /\["queued", "running", "retryable_failed", "failed"\]\.includes\(edit\.status\)/);
 assert.match(frontend, /actionStatus === "retryable_failed"/);
 assert.match(frontend, /改图服务暂时不可用。本次没有创建任务，也不会扣费/);
 assert.match(frontend, /restorePendingAgentImageEdit\(\);\s*\} else state\.chat = \[\];\s*renderUnlessSourcesOpen\(\);/);
