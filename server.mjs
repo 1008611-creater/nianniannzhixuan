@@ -567,8 +567,12 @@ createServer(async (request, response) => {
       await serveIndex(request, response);
       return;
     }
-    if (["GET", "HEAD"].includes(request.method) && (pathname === "/workspace" || pathname === "/workspace/")) {
-      await serveWorkspace(request, response);
+    // Workspace is part of the same browser application shell as templates,
+    // pricing, and billing. The client mounts its heavy editor module only
+    // when this route is active, so switching routes does not reload the page.
+    if (["GET", "HEAD"].includes(request.method) && pathname === "/workspace/") {
+      response.writeHead(308, { location: "/workspace" });
+      response.end();
       return;
     }
     const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
@@ -615,7 +619,7 @@ createServer(async (request, response) => {
       return;
     }
     if (pathname.startsWith("/api/") || /\.[A-Za-z0-9]{1,8}$/.test(pathname)) return await proxy(request, response);
-    const appPaths = new Set(["/access", "/admin", "/billing", "/login", "/pricing", "/templates"]);
+    const appPaths = new Set(["/access", "/admin", "/billing", "/login", "/pricing", "/templates", "/workspace"]);
     const index = join(publicDir, "index.html");
     if (["GET", "HEAD"].includes(request.method) && appPaths.has(pathname) && existsSync(index)) {
       await serveIndex(request, response);

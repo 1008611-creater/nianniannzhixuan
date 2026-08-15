@@ -26,8 +26,8 @@ const quickPick = app.match(/function renderTemplateQuickPick\(item, index\) \{[
 assert.match(quickPick, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
 
 assert.match(app, /async function refreshSessionState\(\)/);
-assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?await refreshSessionState\(\)/);
-assert.match(app, /if \(bootPath === "\/templates"\) \{[\s\S]*?\} else \{[\s\S]*?await refreshState\(\)/);
+assert.match(app, /if \(bootPath === "\/templates" \|\| bootPath === "\/workspace"\) \{[\s\S]*?await refreshSessionState\(\)/);
+assert.match(app, /const peerPaths = new Set\(\["\/templates", "\/workspace", "\/pricing", "\/billing"\]\)/);
 
 const index = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
 const templateRouterCss = await readFile(new URL("../public/front-skill-router-templates-20260815.css", import.meta.url), "utf8");

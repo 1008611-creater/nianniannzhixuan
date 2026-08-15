@@ -2486,7 +2486,9 @@ function navigate(path) {
       state.lastWorkspaceProjectId = projectId;
       localStorage.setItem("lastWorkspaceProjectId", projectId);
     }
-    window.location.assign(`${nextPath}${target.search || ""}`);
+    window.history.pushState({}, "", `${nextPath}${target.search || ""}`);
+    render();
+    window.scrollTo({ top: 0, behavior: "instant" });
     return;
   }
   window.history.pushState({}, "", `${nextPath}${target.search || ""}`);
@@ -3199,7 +3201,7 @@ function render() {
   };
   renderAppHtml(path, renderers[path]());
   if (path === "/workspace") {
-    requestAnimationFrame(ensureWorkspaceV206Mount);
+    void ensureWorkspaceV206Mount();
   }
   document.title = `${routeMeta[path].title} | 念念 AI`;
   trackPageView(path);
@@ -3213,28 +3215,40 @@ function render() {
   });
 }
 
-function ensureWorkspaceV206Mount() {
+let workspaceV206ModulePromise = null;
+let workspaceV206StylesPromise = null;
+
+function ensureWorkspaceV206Styles() {
+  if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
+  const href = "/workspace-v206.css?v=20260815-unified-shell-01";
+  const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
+    || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
+  if (!existing) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.dataset.workspaceV206Style = "1";
+    document.head.appendChild(link);
+  }
+  workspaceV206StylesPromise = Promise.resolve();
+  return workspaceV206StylesPromise;
+}
+
+async function ensureWorkspaceV206Mount() {
   const mount = document.querySelector("#v206-app");
   if (!mount) return;
+  await ensureWorkspaceV206Styles();
   if (window.NianNianWorkspaceV206?.mount) {
     window.NianNianWorkspaceV206.mount(mount);
     return;
   }
-  if (window.__niannianWorkspaceV206Recovery) return;
-  window.__niannianWorkspaceV206Recovery = true;
-  const source = document.querySelector('script[src*="/workspace-v206.js"]');
-  const script = document.createElement("script");
-  script.src = source?.src || "/workspace-v206.js";
-  script.async = false;
-  script.dataset.niannianWorkspaceV206Recovery = "true";
-  script.addEventListener("load", () => {
-    window.__niannianWorkspaceV206Recovery = false;
-    window.NianNianWorkspaceV206?.mount(document.querySelector("#v206-app"));
-  }, { once: true });
-  script.addEventListener("error", () => {
-    window.__niannianWorkspaceV206Recovery = false;
-  }, { once: true });
-  document.head.appendChild(script);
+  if (!workspaceV206ModulePromise) {
+    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260815-unified-shell-01");
+  }
+  await workspaceV206ModulePromise.catch((error) => {
+    return null;
+  });
+  window.NianNianWorkspaceV206?.mount(document.querySelector("#v206-app"));
 }
 
 function refreshBillingPageContent() {
@@ -6892,16 +6906,12 @@ window.addEventListener("resize", () => fitMaterialPreviewImage({ resetTransform
 async function bootApp() {
   if (window.location.pathname === "/") window.history.replaceState({}, "", "/templates");
   const bootPath = normalizePath();
-  if (bootPath === "/workspace") {
-    render();
-    return;
-  }
   const peerPaths = new Set(["/templates", "/workspace", "/pricing", "/billing"]);
   // Peer routes share one authenticated shell. Load session state before first
   // paint so route changes never briefly downgrade nav to a logged-out header.
   if (peerPaths.has(bootPath)) {
     try {
-      if (bootPath === "/templates") {
+      if (bootPath === "/templates" || bootPath === "/workspace") {
         await refreshSessionState();
       } else {
         await refreshState();

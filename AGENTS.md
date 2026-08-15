@@ -14,6 +14,7 @@
 - For template videos, previews may stay lightweight, but playback must resolve the original or an HD derivative; verify the browser's loaded `videoWidth` and `videoHeight` on the affected route.
 - After every substantive iteration, verify the affected signed-in user path in the in-app browser and compare the observed result with the intended behavior; build success, HTTP 200, or static tests alone are not completion evidence. Record any failed real-page expectation and do not claim the iteration complete until it is retested successfully.
 - When a frontend JS or CSS behavior change is deployed, give the changed resource a new versioned URL and verify in a fresh signed-in browser page that the intended control is present and actionable; a reused cached asset is not completion evidence.
+- The peer routes `/templates`, `/workspace`, `/pricing`, and `/billing` must use the same `index.html` shell. `/workspace` may lazy-load its editor module and stylesheet, but route changes must use history navigation without a document reload.
 
 ## Protected Boundaries
 
