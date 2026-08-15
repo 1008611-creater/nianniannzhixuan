@@ -35,6 +35,11 @@ body::before {
   background: transparent;
 }
 
+:root { --app-header-width-offset: 0px; }
+.site-header {
+  width: calc(100% + var(--app-header-width-offset));
+}
+
 #app::before {
   content: "";
   position: fixed;

@@ -2,6 +2,11 @@ node_modules/
 .env
 .env.*
 !.env.example
+runtime.env
+agent-vault-data/
+scripts/agent-vault-token-tool/bin/
+scripts/agent-vault-token-tool/obj/
+scripts/agent-vault-token-tool/publish*/
 npm-debug.log*
 *.log
 .DS_Store

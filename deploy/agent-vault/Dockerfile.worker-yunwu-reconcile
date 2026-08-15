@@ -1,0 +1,4 @@
+FROM kidswear-studio-worker:haika-mikoto-90s-20260815
+
+COPY deploy/agent-vault/patch-worker-reconcile.mjs /tmp/patch-worker-reconcile.mjs
+RUN node /tmp/patch-worker-reconcile.mjs && rm /tmp/patch-worker-reconcile.mjs

@@ -1003,7 +1003,7 @@ function workflowNodePublicUrl(node) {
 function workflowNodeDisplayUrl(node) {
 const override = nodeAssetOverride(node.id);
 const sourceUrl = override?.previewUrl || workflowNodeUrl(node);
-return assetPreviewUrl(sourceUrl, node.kind);
+return node.kind === "video" ? staticVideoPlaybackUrl(sourceUrl) : assetPreviewUrl(sourceUrl, node.kind);
 }
 
 function workflowNodeMap(nodes) {
@@ -1468,6 +1468,7 @@ async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材"
       const chunkHeaders = new Headers(headers);
       chunkHeaders.set("x-upload-offset", String(offset));
       chunkHeaders.set("x-upload-chunk-length", String(chunk.size));
+      chunkHeaders.set("content-range", `bytes ${offset}-${offset + chunk.size - 1}/${file.size}`);
       let lastError;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
@@ -2017,6 +2018,18 @@ const suffix = match?.[2] || "";
 return `${cleanPath.replace(/^\/assets\/references\//i, "/assets/references/previews/").replace(/\.(?:mp4|mov|webm)$/i, ".preview.mp4")}${suffix}`;
 }
 
+function staticVideoPlaybackUrl(url) {
+  const sourceUrl = String(url || "");
+  if (/^\/assets\/references\//i.test(sourceUrl)) return displayAssetUrl(sourceUrl);
+  return assetPreviewUrl(sourceUrl, "video");
+}
+
+function staticImagePlaybackUrl(url) {
+  const sourceUrl = String(url || "");
+  if (/^\/assets\/references\//i.test(sourceUrl)) return displayAssetUrl(sourceUrl);
+  return assetPreviewUrl(sourceUrl, "image");
+}
+
 function assetPreviewUrl(url, kind = "image") {
 const sourceUrl = String(url || "");
 if (!sourceUrl) return "";
@@ -2426,6 +2439,14 @@ state.system.openai = workflowChat.openai || state.system.openai;
 state.sessionLoaded = true;
 }
 
+async function refreshSessionState() {
+  const session = await fetchJson("/api/v1/auth/me").catch((error) => ({ user: state.session, error }));
+  if (session.error?.status === 401) clearPrivateSessionState();
+  if (session.user || session.error?.status === 401) state.session = session.user;
+  state.sessionLoaded = true;
+  return state.session;
+}
+
 async function refreshBillingState() {
   if (!state.session) {
     state.billing = null;
@@ -2441,6 +2462,17 @@ function normalizePath(pathname = window.location.pathname) {
   if (cleaned === "/") return "/templates";
   if (cleaned === "/access") return "/login";
   return routeMeta[cleaned] ? cleaned : "/templates";
+}
+
+function syncHeaderScrollbarCompensation() {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;visibility:hidden;width:100px;height:100px;overflow:scroll;inset:-9999px auto auto -9999px;";
+  document.body?.appendChild(probe);
+  const scrollbarWidth = Math.max(0, probe.offsetWidth - probe.clientWidth);
+  probe.remove();
+  const hasVerticalScrollbar = document.documentElement.clientWidth < window.innerWidth;
+  const headerOffset = hasVerticalScrollbar ? scrollbarWidth : 0;
+  document.documentElement.style.setProperty("--app-header-width-offset", `${headerOffset}px`);
 }
 
 function navigate(path) {
@@ -2465,7 +2497,9 @@ function navigate(path) {
       state.lastWorkspaceProjectId = projectId;
       localStorage.setItem("lastWorkspaceProjectId", projectId);
     }
-    window.location.assign(`${nextPath}${target.search || ""}`);
+    window.history.pushState({}, "", `${nextPath}${target.search || ""}`);
+    render();
+    window.scrollTo({ top: 0, behavior: "instant" });
     return;
   }
   window.history.pushState({}, "", `${nextPath}${target.search || ""}`);
@@ -3168,6 +3202,7 @@ function renderBillingPage() {
 
 function render() {
   const path = normalizePath();
+  syncHeaderScrollbarCompensation();
   const renderers = {
     "/workspace": renderWorkspacePage,
     "/templates": renderTemplatesPage,
@@ -3178,12 +3213,13 @@ function render() {
   };
   renderAppHtml(path, renderers[path]());
   if (path === "/workspace") {
-    requestAnimationFrame(ensureWorkspaceV206Mount);
+    void ensureWorkspaceV206Mount();
   }
   document.title = `${routeMeta[path].title} | 念念 AI`;
   trackPageView(path);
   renderTurnstileWidgets();
   requestAnimationFrame(() => {
+    syncHeaderScrollbarCompensation();
     setupChatTextarea(document.querySelector("#workflowRequirement"));
     if (path === "/templates") {
       setupPersonalTemplateVideoPreviews();
@@ -3192,28 +3228,40 @@ function render() {
   });
 }
 
-function ensureWorkspaceV206Mount() {
+let workspaceV206ModulePromise = null;
+let workspaceV206StylesPromise = null;
+
+function ensureWorkspaceV206Styles() {
+  if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
+  const href = "/workspace-v206.css?v=20260815-unified-shell-01";
+  const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
+    || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
+  if (!existing) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.dataset.workspaceV206Style = "1";
+    document.head.appendChild(link);
+  }
+  workspaceV206StylesPromise = Promise.resolve();
+  return workspaceV206StylesPromise;
+}
+
+async function ensureWorkspaceV206Mount() {
   const mount = document.querySelector("#v206-app");
   if (!mount) return;
+  await ensureWorkspaceV206Styles();
   if (window.NianNianWorkspaceV206?.mount) {
     window.NianNianWorkspaceV206.mount(mount);
     return;
   }
-  if (window.__niannianWorkspaceV206Recovery) return;
-  window.__niannianWorkspaceV206Recovery = true;
-  const source = document.querySelector('script[src*="/workspace-v206.js"]');
-  const script = document.createElement("script");
-  script.src = source?.src || "/workspace-v206.js";
-  script.async = false;
-  script.dataset.niannianWorkspaceV206Recovery = "true";
-  script.addEventListener("load", () => {
-    window.__niannianWorkspaceV206Recovery = false;
-    window.NianNianWorkspaceV206?.mount(document.querySelector("#v206-app"));
-  }, { once: true });
-  script.addEventListener("error", () => {
-    window.__niannianWorkspaceV206Recovery = false;
-  }, { once: true });
-  document.head.appendChild(script);
+  if (!workspaceV206ModulePromise) {
+    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-agent-completion-12");
+  }
+  await workspaceV206ModulePromise.catch((error) => {
+    return null;
+  });
+  window.NianNianWorkspaceV206?.mount(document.querySelector("#v206-app"));
 }
 
 function refreshBillingPageContent() {
@@ -5958,11 +6006,22 @@ return;
   render();
 
   try {
-    const result = await fetchJson("/api/v1/projects/import-template", {
+    // A template import must start a new customer project. The legacy
+    // import-template route can resolve to an existing project, which leaks
+    // its private inputs into the new same-style workflow. Import only the
+    // public motion sample, then create a fresh project with that node.
+    const motion = await fetchJson("/api/v1/media/import-workspace-template", {
+      method: "POST",
+      body: JSON.stringify({ templateId: reference.id, role: "MOTION" }),
+    });
+    const motionId = String(motion?.media?.id || "");
+    if (!motionId) throw new Error("TEMPLATE_MOTION_IMPORT_REJECTED");
+    const result = await fetchJson("/api/v1/projects", {
       method: "POST",
       body: JSON.stringify({
-        templateId: reference.id,
         name: reference.title,
+        templateId: reference.id,
+        nodes: { MOTION: motionId },
       }),
     });
     replaceProject(result.project);
@@ -6860,16 +6919,16 @@ window.addEventListener("resize", () => fitMaterialPreviewImage({ resetTransform
 async function bootApp() {
   if (window.location.pathname === "/") window.history.replaceState({}, "", "/templates");
   const bootPath = normalizePath();
-  if (bootPath === "/workspace") {
-    render();
-    return;
-  }
   const peerPaths = new Set(["/templates", "/workspace", "/pricing", "/billing"]);
   // Peer routes share one authenticated shell. Load session state before first
   // paint so route changes never briefly downgrade nav to a logged-out header.
   if (peerPaths.has(bootPath)) {
     try {
-      await refreshState();
+      if (bootPath === "/templates" || bootPath === "/workspace") {
+        await refreshSessionState();
+      } else {
+        await refreshState();
+      }
     } catch (error) {
       setUiNotice(cleanUiStatusText(error.message || "状态刷新失败，请稍后重试。"), "warning");
     }
@@ -7357,10 +7416,12 @@ document.getElementById("workflowRequirement")?.focus({ preventScroll: true });
 
 function renderShowcaseVideoCard(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "做这个";
+  const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
+  const coverAttrs = lazyImageAttrs(index === 0 ? "eager" : "lazy", item.resultCoverUrl || item.referenceImageUrl, cover);
   return `
     <article class="showcase-video-card ${index === 0 ? "featured" : ""}">
-<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(assetPreviewUrl(item.referenceVideoUrl, "video"))}" data-poster="${escapeHtml(assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image"))}" data-title="${escapeHtml(item.title)}">
- <img src="${assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image")}" alt="${escapeHtml(item.title)}" ${lazyImageAttrs("lazy", item.resultCoverUrl || item.referenceImageUrl, assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image"))}>
+<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(cover)}" data-title="${escapeHtml(item.title)}">
+ <img src="${cover}" alt="${escapeHtml(item.title)}" ${coverAttrs}>
  </button>
       <div class="showcase-video-caption">
         <div>
@@ -7767,7 +7828,7 @@ function renderTemplateVideoSection({ title, count, items }) {
 
 function renderTemplateQuickPick(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "用这个动作";
-  const cover = assetPreviewUrl(item.resultCoverUrl || item.referenceImageUrl, "image");
+  const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
   return `
     <button class="template-quick-pick ${index === 0 ? "featured" : ""}" type="button" data-action="import-workflow-template" data-reference="${item.id}" ${state.isBusy ? "disabled" : ""}${pendingAttrs(`import-template:${item.id}`)}${disabledHint(state.isBusy && !isPendingAction(`import-template:${item.id}`), "另一个模板正在导入")}${disabledReason({ condition: state.isBusy && !isPendingAction(`import-template:${item.id}`), text: "另一个模板正在导入" })}>
       <span class="template-quick-pick-media"><img src="${cover}" alt="" ${lazyImageAttrs("eager", item.resultCoverUrl || item.referenceImageUrl, cover)}></span>
@@ -8102,7 +8163,7 @@ const simpleSlotMarkup = simpleInputSlots.map((item) => {
 const thumbUrl = item.node?.kind === "video" && item.node?.posterUrl ? assetPreviewUrl(item.node.posterUrl, "image") : (item.node ? workflowNodeDisplayUrl(item.node) : "");
 const thumbFallbackUrl = item.node?.kind === "video" && item.node?.posterUrl ? item.node.posterUrl : (item.node ? workflowNodeUrl(item.node) : "");
 const previewSourceUrl = item.node ? workflowNodeUrl(item.node) : "";
-const previewDisplayUrl = item.node?.kind === "video" ? assetPreviewUrl(previewSourceUrl, "video") : (previewSourceUrl ? displayAssetUrl(previewSourceUrl) : thumbUrl);
+const previewDisplayUrl = item.node?.kind === "video" ? staticVideoPlaybackUrl(previewSourceUrl) : (previewSourceUrl ? displayAssetUrl(previewSourceUrl) : thumbUrl);
 const previewPosterUrl = item.node?.kind === "video" && item.node?.posterUrl ? assetPreviewUrl(item.node.posterUrl, "image") : thumbUrl;
 const previewLabel = item.node?.kind === "video" ? "参考视频预览" : `${item.label}素材预览`;
 const enlargedPreview = previewDisplayUrl ? (item.node?.kind === "video"

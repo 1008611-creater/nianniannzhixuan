@@ -1,11 +1,12 @@
-import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { once } from "node:events";
 import { lookup } from "node:dns/promises";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { proxyHeaders, proxyResponseHeaders } from "./proxy-headers.mjs";
 
@@ -18,6 +19,10 @@ const proxyTimeoutMs = Number(process.env.PROXY_TIMEOUT_MS || 120_000);
 const generatedImageMaxBytes = Number(process.env.GENERATED_IMAGE_MAX_BYTES || 25 * 1024 * 1024);
 const publicDir = resolve("public");
 const playbackDir = resolve(process.env.PLAYBACK_DIR || "playback");
+const cdnPlaybackEnabled = process.env.CDN_PLAYBACK_ENABLED === "1";
+const cdnPlaybackHost = String(process.env.CDN_PLAYBACK_HOST || new URL(process.env.PUBLIC_ORIGIN || "https://dh.cauai.fun").host).trim().toLowerCase();
+const cdnPlaybackAuthKey = readRuntimeSecret(process.env.CDN_PLAYBACK_AUTH_KEY, process.env.CDN_PLAYBACK_AUTH_KEY_FILE);
+const cdnPlaybackTtlSeconds = Math.max(60, Math.min(3_600, Number(process.env.CDN_PLAYBACK_TTL_SECONDS || 600)) || 600);
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const playbackJobs = new Map();
 const generatedImageInputs = new Map();
@@ -25,13 +30,54 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-  ".svg": "image/svg+xml", ".mp4": "video/mp4", ".woff": "font/woff", ".woff2": "font/woff2",
+  ".svg": "image/svg+xml", ".mp4": "video/mp4", ".nnvideo": "video/mp4", ".woff": "font/woff", ".woff2": "font/woff2",
 };
 const generatedImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const generatedImageInputTtlMs = 10 * 60 * 1000;
 const publicOrigin = new URL(process.env.PUBLIC_ORIGIN || "https://dh.cauai.fun").origin;
 
 mkdirSync(playbackDir, { recursive: true });
+
+function readRuntimeSecret(value, file) {
+  if (String(value || "").trim()) return String(value).trim();
+  if (!file) return "";
+  try { return readFileSync(file, "utf8").trim(); } catch { return ""; }
+}
+
+function cdnPlaybackReady() {
+  return cdnPlaybackEnabled && /^[A-Za-z0-9]{6,40}$/.test(cdnPlaybackAuthKey) && Boolean(cdnPlaybackHost);
+}
+
+function cdnPlaybackPath(mediaId) {
+  return `/_cdn-playback/${encodeURIComponent(mediaId)}.nnvideo`;
+}
+
+function cdnPlaybackDigest(pathname, timestamp, random, uid) {
+  return createHash("md5").update(`${pathname}-${timestamp}-${random}-${uid}-${cdnPlaybackAuthKey}`).digest("hex");
+}
+
+function signedCdnPlaybackUrl(mediaId) {
+  const pathname = cdnPlaybackPath(mediaId);
+  const timestamp = Math.floor(Date.now() / 1_000);
+  const random = randomBytes(8).toString("hex");
+  const uid = "0";
+  const sign = `${timestamp}-${random}-${uid}-${cdnPlaybackDigest(pathname, timestamp, random, uid)}`;
+  return `https://${cdnPlaybackHost}${pathname}?sign=${sign}`;
+}
+
+function hasValidCdnPlaybackSignature(request, mediaId) {
+  if (!cdnPlaybackReady()) return false;
+  const sign = new URL(request.url, "http://localhost").searchParams.get("sign") || "";
+  const parts = sign.split("-");
+  if (parts.length !== 4) return false;
+  const [timestampText, random, uid, digest] = parts;
+  const timestamp = Number(timestampText);
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0 || !/^[A-Za-z0-9]{1,100}$/.test(random) || !/^[A-Za-z0-9]{1,100}$/.test(uid) || !/^[a-f0-9]{32}$/i.test(digest)) return false;
+  const now = Math.floor(Date.now() / 1_000);
+  if (timestamp > now + 60 || timestamp + cdnPlaybackTtlSeconds < now) return false;
+  const expected = cdnPlaybackDigest(cdnPlaybackPath(mediaId), timestampText, random, uid);
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(digest.toLowerCase()));
+}
 
 function playbackFile(mediaId) {
   return join(playbackDir, `${mediaId}.mp4`);
@@ -47,7 +93,9 @@ function derivativeHeaders(headers) {
 async function generatePlaybackDerivative(mediaId, headers) {
   const output = playbackFile(mediaId);
   if (existsSync(output) && statSync(output).size > 0) return true;
+  const inputFile = `${output}.source.mp4`;
   const temporary = `${output}.part.mp4`;
+  try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
   try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
   let upstream;
   try {
@@ -56,21 +104,26 @@ async function generatePlaybackDerivative(mediaId, headers) {
       signal: AbortSignal.timeout(proxyTimeoutMs),
     });
     if (!upstream.ok || !upstream.body) throw new Error(`MEDIA_SOURCE_${upstream.status}`);
+    // Materialize the authorized source before transcoding. Some private
+    // object responses are streamed with metadata/packet boundaries that
+    // ffmpeg cannot reliably parse from stdin, which left playback falling
+    // back to the full original on every request.
+    await pipeline(Readable.fromWeb(upstream.body), createWriteStream(inputFile));
+    if (!existsSync(inputFile) || statSync(inputFile).size === 0) throw new Error("MEDIA_SOURCE_EMPTY");
     const ffmpeg = spawn("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+      "-hide_banner", "-loglevel", "error", "-i", inputFile,
       "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
       "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-y", temporary,
-    ], { stdio: ["pipe", "ignore", "pipe"] });
+    ], { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
     ffmpeg.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-800); });
-    ffmpeg.stdin.on("error", () => {});
-    Readable.fromWeb(upstream.body).pipe(ffmpeg.stdin);
     const [code] = await once(ffmpeg, "close");
     if (code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) throw new Error(`FFMPEG_EXIT_${code}${stderr ? `:${stderr.replace(/\s+/g, " ").slice(-240)}` : ""}`);
     renameSync(temporary, output);
     return true;
   } finally {
     try { await upstream?.body?.cancel(); } catch {}
+    try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
     try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
   }
 }
@@ -185,13 +238,36 @@ async function logProxyResult(request, url, upstream) {
   }
   const safeCode = String(code).replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 160);
   console.log(`[proxy] ${request.method} ${url.pathname} -> ${upstream.status}${safeCode === "-" ? "" : ` ${safeCode}`}`);
+  if (upstream.status >= 500 && /\/api\/v1\/media\/[^/]+\/content$/i.test(url.pathname)) {
+    const detail = (await upstream.clone().text().catch(() => ""))
+      .replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 240);
+    if (detail) console.warn(`[proxy] media upload upstream detail ${detail}`);
+  }
 }
 
 async function sendUpstreamResponse(response, upstream) {
   const upstreamHeaders = proxyResponseHeaders(upstream.headers);
-  const setCookie = upstreamHeaders.get("set-cookie");
-  if (setCookie) upstreamHeaders.set("set-cookie", setCookie.replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""));
-  response.writeHead(upstream.status, Object.fromEntries(upstreamHeaders));
+  const rawSetCookies = typeof upstreamHeaders.getSetCookie === "function"
+    ? upstreamHeaders.getSetCookie()
+    : (upstreamHeaders.get("set-cookie") ? [upstreamHeaders.get("set-cookie")] : []);
+  upstreamHeaders.delete("set-cookie");
+  const setCookies = rawSetCookies
+    .map((value) => String(value).replace(/;\s*Domain=[^;]+/gi, "").replace(/;\s*Secure/gi, ""))
+    .filter(Boolean);
+  const responseHeaders = Object.fromEntries(upstreamHeaders);
+  if (setCookies.length) responseHeaders["set-cookie"] = setCookies;
+  const contentType = upstreamHeaders.get("content-type") || "";
+  if (contentType.toLowerCase().includes("application/json") && upstream.body) {
+    const body = Buffer.from(await upstream.arrayBuffer());
+    upstreamHeaders.set("content-length", String(body.length));
+    upstreamHeaders.delete("transfer-encoding");
+    responseHeaders["content-length"] = String(body.length);
+    delete responseHeaders["transfer-encoding"];
+    response.writeHead(upstream.status, responseHeaders);
+    response.end(body);
+    return;
+  }
+  response.writeHead(upstream.status, responseHeaders);
   if (upstream.body) {
     for await (const chunk of upstream.body) {
       if (!response.write(chunk)) await once(response, "drain");
@@ -219,6 +295,17 @@ async function readJsonRequest(request, maxBytes = 64 * 1024) {
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+async function readUploadChunk(request, maxBytes = 2 * 1024 * 1024) {
+  const chunks = [];
+  let bytes = 0;
+  for await (const chunk of request) {
+    bytes += chunk.length;
+    if (bytes > maxBytes) throw new Error("UPLOAD_CHUNK_TOO_LARGE");
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 function publicRequestOrigin(request) {
@@ -439,6 +526,15 @@ async function servePlayback(request, response, mediaId) {
   }
   if (hasDerivative) {
     try { await upstream.body?.cancel(); } catch {}
+    if (cdnPlaybackReady()) {
+      response.writeHead(302, {
+        location: signedCdnPlaybackUrl(mediaId),
+        "cache-control": "private, no-store",
+        vary: "cookie",
+      });
+      response.end();
+      return;
+    }
     serveStatic(request, response, derivative, "private, max-age=300, must-revalidate");
     return;
   }
@@ -446,9 +542,67 @@ async function servePlayback(request, response, mediaId) {
   await sendUpstreamResponse(response, upstream);
 }
 
+function serveCdnPlayback(request, response, mediaId) {
+  if (!hasValidCdnPlaybackSignature(request, mediaId)) {
+    response.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" });
+    response.end(JSON.stringify({ error: "PLAYBACK_SIGNATURE_REJECTED" }));
+    return;
+  }
+  const derivative = playbackFile(mediaId);
+  if (!existsSync(derivative) || statSync(derivative).size === 0) {
+    response.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" });
+    response.end(JSON.stringify({ error: "PLAYBACK_DERIVATIVE_NOT_READY" }));
+    return;
+  }
+  serveStatic(request, response, derivative, `public, max-age=${cdnPlaybackTtlSeconds}, immutable`);
+}
+
+function downloadExtension(contentType) {
+  const type = String(contentType || "").split(";", 1)[0].trim().toLowerCase();
+  if (type === "image/jpeg") return "jpg";
+  if (type === "image/png") return "png";
+  if (type === "image/webp") return "webp";
+  if (type === "video/webm") return "webm";
+  return "mp4";
+}
+
+async function serveOriginalDownload(request, response, mediaId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
+    method: request.method,
+    headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!upstream.ok) {
+    await sendUpstreamResponse(response, upstream);
+    return;
+  }
+  const responseHeaders = proxyResponseHeaders(upstream.headers);
+  responseHeaders.set("cache-control", "private, no-store");
+  responseHeaders.set("content-disposition", `attachment; filename="niannian-${mediaId}.${downloadExtension(responseHeaders.get("content-type"))}"`);
+  response.writeHead(upstream.status, Object.fromEntries(responseHeaders));
+  if (request.method === "HEAD" || !upstream.body) {
+    response.end();
+    return;
+  }
+  for await (const chunk of upstream.body) {
+    if (!response.write(chunk)) await once(response, "drain");
+  }
+  response.end();
+}
+
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
   const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const mediaUpload = request.method === "PUT" && /^\/api\/v1\/media\/[0-9a-f-]{36}\/content$/i.test(url.pathname);
+  let body;
+  if (mediaUpload) {
+    body = await readUploadChunk(request);
+    headers.delete("transfer-encoding");
+    headers.set("content-length", String(body.length));
+    console.log(`[upload] bytes=${body.length} declared=${headers.get("x-upload-content-length") || "-"} offset=${headers.get("x-upload-offset") || "-"} chunk=${headers.get("x-upload-chunk-length") || "-"} type=${headers.get("content-type") || "-"} origin=${headers.get("origin") || "-"} referer=${headers.get("referer") || "-"}`);
+  }
   const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), proxyTimeoutMs);
@@ -457,7 +611,7 @@ async function proxy(request, response) {
     upstream = await fetch(url, {
       method: request.method,
       headers,
-      body: ["GET", "HEAD"].includes(request.method) ? undefined : request,
+      body: ["GET", "HEAD"].includes(request.method) ? undefined : (mediaUpload ? body : request),
       duplex: "half",
       redirect: "manual",
       signal: controller.signal,
@@ -490,13 +644,27 @@ createServer(async (request, response) => {
       await serveIndex(request, response);
       return;
     }
-    if (["GET", "HEAD"].includes(request.method) && (pathname === "/workspace" || pathname === "/workspace/")) {
-      await serveWorkspace(request, response);
+    // Workspace is part of the same browser application shell as templates,
+    // pricing, and billing. The client mounts its heavy editor module only
+    // when this route is active, so switching routes does not reload the page.
+    if (["GET", "HEAD"].includes(request.method) && pathname === "/workspace/") {
+      response.writeHead(308, { location: "/workspace" });
+      response.end();
       return;
     }
     const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
     if (["GET", "HEAD"].includes(request.method) && playbackMatch) {
       await servePlayback(request, response, playbackMatch[1]);
+      return;
+    }
+    const cdnPlaybackMatch = pathname.match(/^\/_cdn-playback\/([0-9a-f-]{36})\.nnvideo$/i);
+    if (["GET", "HEAD"].includes(request.method) && cdnPlaybackMatch) {
+      serveCdnPlayback(request, response, cdnPlaybackMatch[1]);
+      return;
+    }
+    const downloadMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/download$/i);
+    if (["GET", "HEAD"].includes(request.method) && downloadMatch) {
+      await serveOriginalDownload(request, response, downloadMatch[1]);
       return;
     }
     if (request.method === "POST" && pathname === "/api/local/image2/input-links") {
@@ -533,7 +701,7 @@ createServer(async (request, response) => {
       return;
     }
     if (pathname.startsWith("/api/") || /\.[A-Za-z0-9]{1,8}$/.test(pathname)) return await proxy(request, response);
-    const appPaths = new Set(["/access", "/admin", "/billing", "/login", "/pricing", "/templates"]);
+    const appPaths = new Set(["/access", "/admin", "/billing", "/login", "/pricing", "/templates", "/workspace"]);
     const index = join(publicDir, "index.html");
     if (["GET", "HEAD"].includes(request.method) && appPaths.has(pathname) && existsSync(index)) {
       await serveIndex(request, response);

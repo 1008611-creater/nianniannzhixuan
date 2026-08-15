@@ -39,7 +39,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid #b08d39; outline-offs
   backdrop-filter: blur(7px) saturate(1.16);
 }
 .brand { justify-self: start; display: inline-flex; align-items: center; text-decoration: none; }
-.brand-mark { width: 36px; height: 36px; display: block; object-fit: contain; }
+.brand-mark { width: 36px; height: 36px; display: block; object-fit: contain; border-radius: 9px; }
 .top-nav {
   justify-self: center;
   display: inline-flex;

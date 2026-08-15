@@ -1,10 +1,12 @@
+import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-state.js?v=20260814-retryable-failure-reload-23";
+
 (() => {
   "use strict";
 
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260725-firstframe-live-status-01";
+  const VERSION = "20260815-auth-loading-03";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -73,6 +75,34 @@
       },
     },
   ];
+  const STORE_DANCE_TEMPLATE_IDS = ["03", "04", "05", "06", "07"];
+  const INDOOR_SEGMENT_TEMPLATE_IDS = ["01", "02", "03", "04", "05", "06"];
+  templates.push(...STORE_DANCE_TEMPLATE_IDS.map((number) => ({
+    id: `store-dance-${number}`,
+    title: `门店舞蹈 ${number}`,
+    note: "门店童装动作与机位参考",
+    cover: `/assets/references/store-dance-${number}.jpg`,
+    motion: `/assets/references/store-dance-${number}.mp4`,
+    prompt: "精品童装门店内，儿童模特自然舞动展示服装，保持模板动作、机位与竖版带货质感。",
+    starter: {
+      person: "/assets/references/user-store-gloofy-dress.png",
+      outfit: "/assets/references/white-dress-01.png",
+      scene: "/assets/references/default-store-scene-inspiration.jpg",
+    },
+  })));
+  templates.push(...INDOOR_SEGMENT_TEMPLATE_IDS.map((number) => ({
+    id: `indoor-style-01-seg-${number}`,
+    title: `室内风格 01-${Number(number)}`,
+    note: "室内童装动作与机位参考",
+    cover: `/assets/references/indoor-style-01-segments/indoor-style-01-seg-${number}-first.jpg`,
+    motion: `/assets/references/indoor-style-01-segments/indoor-style-01-seg-${number}.mp4`,
+    prompt: "室内自然柔光下的童装生活方式视频，保持模板动作、机位、光线与真实展示感。",
+    starter: {
+      person: "/assets/references/indoor-look-cream-bow.png",
+      outfit: "/assets/references/white-dress-03.png",
+      scene: "/assets/references/indoor-scene-sunshine-01.png",
+    },
+  })));
   const templateMaterials = [
     { id: "default-person", label: "门店小模特", kind: "image", url: "/assets/references/user-store-gloofy-dress.png", preview: "/assets/references/user-store-gloofy-dress-thumb.jpg", templateId: "store-dance-01", templateRole: "PERSON" },
     { id: "default-outfit-01", label: "白色连衣裙", kind: "image", url: "/assets/references/white-dress-01.png", preview: "/assets/references/white-dress-01-thumb.jpg", templateId: "store-dance-01", templateRole: "CLOTHES" },
@@ -101,6 +131,7 @@
     assistantThreads: [],
     assistantThreadId: stored.assistantThreadId || "",
     session: null,
+    sessionLoaded: false,
     chat: [],
     view: null,
     target: "person",
@@ -134,8 +165,12 @@
     projectNameDraft: "",
     projectLoading: !previewMode,
     sourceMutation: 0,
+    // Kept only until the server confirms a node PUT. Earlier releases stored
+    // permanent local overrides here, which could claim a missing asset was ready.
+    pendingAssignments: stored.pendingAssignments && typeof stored.pendingAssignments === "object" ? stored.pendingAssignments : {},
     invalidatedDerivedByProject: stored.invalidatedDerivedByProject && typeof stored.invalidatedDerivedByProject === "object" ? stored.invalidatedDerivedByProject : {},
     generationSources: stored.generationSources && typeof stored.generationSources === "object" ? stored.generationSources : {},
+    currentJobSnapshots: stored.currentJobSnapshots && typeof stored.currentJobSnapshots === "object" ? stored.currentJobSnapshots : {},
   };
   if (previewMode) {
     const previewProjectId = "00000000-0000-4000-8000-000000000001";
@@ -207,13 +242,15 @@
       assistantThreadId: state.assistantThreadId,
       invalidatedDerivedByProject: state.invalidatedDerivedByProject,
       generationSources: state.generationSources,
+      currentJobSnapshots: state.currentJobSnapshots,
+      pendingAssignments: state.pendingAssignments,
       pendingAgentImageEdit: state.pendingAgentImageEdit,
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
   }
   function validAsset(item) { return Boolean(item && (item.url || item.mediaId) && item.kind); }
   function normalizeTemplate(value) {
-    const aliases = { "store-action-reference": "store-dance-01", "store-window": "store-dance-01", "indoor-style-01-seg-01": "indoor-style-01" };
+    const aliases = { "store-action-reference": "store-dance-01", "store-window": "store-dance-01" };
     const requested = aliases[String(value || "")] || String(value || "");
     return templates.some((item) => item.id === requested) ? requested : FALLBACK_TEMPLATE;
   }
@@ -242,6 +279,55 @@
       || state.canonicalProjects.find((project) => project.templateId === state.templateId)
       || null;
   }
+  function mergeCanonicalProjects(incoming) {
+    const next = Array.isArray(incoming) ? incoming.filter((project) => project?.id) : [];
+    const incomingIds = new Set(next.map((project) => project.id));
+    const current = canonicalProject();
+    const mergedNext = next.map((project) => project.id === current?.id ? mergeCanonicalProject(project) : project);
+    // The server list remains authoritative. Retain only the currently edited
+    // project while a node write is outstanding and a delayed list omits it.
+    const currentPending = current?.id && Object.keys(state.pendingAssignments[current.id] || {}).length > 0;
+    state.canonicalProjects = [...mergedNext, ...(currentPending && !incomingIds.has(current.id) ? [current] : [])];
+  }
+  function mergeCanonicalProject(incoming) {
+    if (!incoming?.id) return null;
+    const existing = state.canonicalProjects.find((project) => project.id === incoming.id);
+    if (!existing) return incoming;
+    const incomingNodes = new Map((Array.isArray(incoming.nodes) ? incoming.nodes : []).map((node) => [node.role, node]));
+    const existingNodes = new Map((Array.isArray(existing.nodes) ? existing.nodes : []).map((node) => [node.role, node]));
+    const roles = new Set([...incomingNodes.keys(), ...existingNodes.keys()]);
+    const nodes = [...roles].map((role) => {
+      const incomingNode = incomingNodes.get(role);
+      const existingNode = existingNodes.get(role);
+      // Some upstream project reads are sparse and return a role with media
+      // omitted/null while the node write is already accepted. Treat that as
+      // an incomplete readback, never as an implicit user deletion.
+      if (incomingNode && existingNode?.media && !incomingNode.media) return existingNode;
+      return incomingNode || existingNode;
+    }).filter(Boolean);
+    return { ...existing, ...incoming, nodes };
+  }
+  function jobTimestamp(job) {
+    return [job?.updatedAt, job?.createdAt, job?.submittedAt].map((value) => Date.parse(String(value || ""))).find(Number.isFinite) || 0;
+  }
+  function mergeCanonicalJobs(incoming) {
+    const next = Array.isArray(incoming) ? incoming.filter((job) => job?.id) : [];
+    const ids = new Set(next.map((job) => job.id));
+    const projectId = canonicalProject()?.id || requestedProjectId || "";
+    const retained = state.jobs.filter((job) => {
+      if (!job?.id || ids.has(job.id)) return false;
+      const belongs = job?.project?.id === projectId || job?.projectId === projectId || job.id === state.frameJobId;
+      const active = taskIsActive(job.status);
+      const recent = Date.now() - jobTimestamp(job) < 10 * 60_000;
+      return belongs && (active || recent);
+    });
+    const merged = [...next, ...retained];
+    Object.values(state.currentJobSnapshots || {}).forEach((snapshot) => {
+      if (!snapshot?.id || merged.some((job) => job.id === snapshot.id)) return;
+      if (Date.now() - jobTimestamp(snapshot) < 10 * 60_000) merged.push(snapshot);
+    });
+    state.jobs = merged;
+  }
   function privateMediaUrl(media) {
     const id = String(media?.id || "");
     const mediaType = `${media?.kind || ""} ${media?.mimeType || ""} ${media?.mediaType || ""} ${media?.url || ""}`;
@@ -251,10 +337,11 @@
     return String(media?.url || "") || (UUID_PATTERN.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/content` : "");
   }
   function sourceSignature() {
-    return ["person", "outfit", "scene", "motion"].map((slot) => state.selected[slot]?.mediaId || "").join(":");
+    const assets = workflowBoundAssets();
+    return ["person", "outfit", "scene", "motion"].map((slot) => assets[slot]?.mediaId || "").join(":");
   }
   function generationInputSignature(kind) {
-    return kind === "final" ? `${sourceSignature()}:${state.selected.frame?.mediaId || ""}` : sourceSignature();
+    return kind === "final" ? `${sourceSignature()}:${workflowBoundAssets().frame?.mediaId || ""}` : sourceSignature();
   }
   function derivedInvalidation() {
     const projectId = canonicalProject()?.id;
@@ -300,9 +387,103 @@
     }
     if (changed) writeState();
   }
+  function assetUnavailable(asset) {
+    return Boolean(asset?.mediaId && state.unavailableMedia?.has(asset.mediaId));
+  }
   function assetFor(id) {
     if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
-    return state.selected[id] || null;
+    const asset = state.selected[id] || null;
+    return assetUnavailable(asset) ? null : asset;
+  }
+  function pendingAssignmentFor(projectId, slot) {
+    const pending = state.pendingAssignments?.[projectId]?.[slot];
+    const age = Date.now() - Number(pending?.createdAt || 0);
+    const ttl = pending?.status === "confirmed" ? 5 * 60_000 : 45_000;
+    return pending?.asset && age < ttl && ["pending", "confirmed"].includes(pending.status) ? pending : null;
+  }
+  function recordPendingAssignment(projectId, slot, asset, mutation) {
+    if (!projectId || !slots[slot] || !asset) return;
+    state.pendingAssignments[projectId] = {
+      ...(state.pendingAssignments[projectId] || {}),
+      [slot]: { asset: persistentAsset(asset), mutation, status: "pending", invalidatesDerived: ["person", "outfit", "scene", "motion"].includes(slot), createdAt: Date.now() },
+    };
+    writeState();
+  }
+  function confirmPendingAssignment(projectId, slot) {
+    const current = state.pendingAssignments?.[projectId]?.[slot];
+    if (!current) return;
+    state.pendingAssignments[projectId] = { ...state.pendingAssignments[projectId], [slot]: { ...current, status: "confirmed", confirmedAt: Date.now() } };
+    writeState();
+  }
+  function clearPendingAssignment(projectId, slot) {
+    const current = state.pendingAssignments?.[projectId];
+    if (!current || !Object.prototype.hasOwnProperty.call(current, slot)) return;
+    const next = { ...current };
+    delete next[slot];
+    if (Object.keys(next).length) state.pendingAssignments[projectId] = next;
+    else delete state.pendingAssignments[projectId];
+    writeState();
+  }
+  function projectNodeAsset(project, slot) {
+    const node = project?.nodes?.find((item) => item.role === NODE_ROLE_BY_SLOT[slot]);
+    if (!node) return null;
+    const selected = state.selected?.[slot];
+    const explicit = Boolean(selected?.mediaId && selected.mediaId === node.media?.id);
+    return projectInputAsset(slot, node.media, { explicit });
+  }
+  function workflowBoundAssets(project = canonicalProject()) {
+    if (!project?.id) return {};
+    const assets = {};
+    Object.keys(slots).forEach((slot) => {
+      assets[slot] = projectNodeAsset(project, slot);
+    });
+    const finalNode = project.nodes?.find((item) => item.role === "FINAL_VIDEO");
+    assets.final = finalNode?.media ? assetFromMedia(finalNode.media) : null;
+    return assets;
+  }
+  function currentFrameJobId(project = canonicalProject()) {
+    const frameNode = project?.nodes?.find((node) => node.role === "FIRST_FRAME");
+    return state.frameJobId || frameNode?.metadata?.sourceJobId || frameNode?.metadata?.jobId || "";
+  }
+  function displayAssetFor(id) {
+    const project = canonicalProject();
+    const boundAssets = workflowBoundAssets(project);
+    // Once a canonical project exists, its slot record is authoritative. Do
+    // not resurrect a stale local selection when that project slot is empty.
+    if (project?.id && Object.prototype.hasOwnProperty.call(boundAssets, id)) {
+      return pendingAssignmentFor(project.id, id)?.asset || boundAssets[id] || null;
+    }
+    return assetFor(id);
+  }
+  function workflowSnapshot() {
+    const project = canonicalProject();
+    const assets = workflowBoundAssets(project);
+    const snapshot = buildWorkflowSnapshot({
+      projectId: project?.id || "",
+      assets,
+      unavailableMedia: state.unavailableMedia,
+      jobs: state.jobs,
+      production: activeProject()?.production || null,
+      invalidated: derivedInvalidation() || {},
+      generationSources: state.generationSources,
+      signatures: { frame: sourceSignature(), final: `${sourceSignature()}:${assets.frame?.mediaId || ""}` },
+      currentJobIds: {
+        frame: currentFrameJobId(project),
+        final: project?.nodes?.find((node) => node.role === "FINAL_VIDEO")?.metadata?.sourceJobId || "",
+      },
+    });
+    if (project?.id) {
+      Object.keys(slots).forEach((slot) => {
+        const pending = pendingAssignmentFor(project.id, slot);
+        if (pending && assets[slot]?.mediaId !== pending.asset?.mediaId) snapshot[slot] = { ...snapshot[slot], pending: true, status: "保存确认中" };
+      });
+    }
+    // A current draft is newer than any historical failed task. Keep the
+    // confirmation state visible until the user accepts it or starts over.
+    if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) {
+      snapshot.frame = { ...snapshot.frame, task: null, status: state.firstFrameDraftAnalyzing ? "分析中" : "待确认" };
+    }
+    return snapshot;
   }
   function mediaIsActive(media) {
     const state = String(media?.deletionState || media?.status || "").toLowerCase();
@@ -315,21 +496,42 @@
     if (kind === "video") asset.preview = "";
     return { ...asset, width: media.width || null, height: media.height || null, durationSeconds: media.durationSeconds || null, source: media.source || "", isTemplateSample: String(media.source || "").startsWith("workspace_template:") };
   }
+  function projectInputAsset(slot, media, options = {}) {
+    const asset = assetFromMedia(media);
+    // Template images establish the action style only. They must never make a
+    // new same-style project look as though the customer supplied inputs.
+    return asset?.isTemplateSample && ["person", "outfit", "scene"].includes(slot) && !options.explicit ? null : asset;
+  }
   function hydrateCanonicalProject(project) {
     if (!project) return;
+    const sameProject = state.canonicalProjectId === project.id;
+    const previousSelection = sameProject ? { ...state.selected } : {};
     state.canonicalProjectId = project.id;
-    if (templates.some((template) => template.id === project.templateId)) state.templateId = normalizeTemplate(project.templateId);
+    state.templateId = normalizeTemplate(project.templateId || state.templateId);
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.set("projectId", project.id);
     window.history.replaceState(null, "", nextUrl);
     state.firstFrameDirection = "";
     state.motionReferenceTime = null;
     state.projectNameDraft = project.name || "";
-    Object.keys(slots).forEach((slot) => { state.selected[slot] = null; });
-    project.nodes.forEach((node) => {
+    Object.keys(slots).forEach((slot) => { state.selected[slot] = sameProject ? (previousSelection[slot] || null) : null; });
+    (Array.isArray(project.nodes) ? project.nodes : []).forEach((node) => {
       const slot = SLOT_BY_NODE_ROLE[node.role];
       if (!slot) return;
-      state.selected[slot] = assetFromMedia(node.media);
+      const next = projectInputAsset(slot, node.media, { explicit: sameProject && Boolean(previousSelection[slot]) });
+      if (Object.prototype.hasOwnProperty.call(node, "media")) state.selected[slot] = next;
+    });
+    Object.keys(slots).forEach((slot) => {
+      const pending = pendingAssignmentFor(project.id, slot);
+      const bound = projectNodeAsset(project, slot);
+      if (pending && bound?.mediaId === pending.asset?.mediaId) {
+        clearPendingAssignment(project.id, slot);
+        if (pending.invalidatesDerived) {
+          invalidateDerivedOutputs();
+          if (slot === "motion") state.motionReferenceTime = null;
+          setWorkflowStep(slot);
+        }
+      }
     });
     reconcileWorkflowForProject(project);
     writeState();
@@ -341,7 +543,11 @@
     const byId = new Map(activeMedia.map((item) => [item.id, item]));
     Object.entries(state.selected).forEach(([slot, asset]) => {
       if (!asset?.mediaId) return;
-      state.selected[slot] = assetFromMedia(byId.get(asset.mediaId));
+      // Project hydration is authoritative for assigned nodes. The personal
+      // media list may omit template references, so only replace an existing
+      // node asset when this refresh actually contains its media record.
+      const refreshed = byId.get(asset.mediaId);
+      if (refreshed) state.selected[slot] = assetFromMedia(refreshed);
     });
   }
   async function ensureCanonicalProject() {
@@ -386,7 +592,7 @@
     if (durable) {
       const finalNode = durable.nodes?.find((node) => node.role === "FINAL_VIDEO");
       const sourceJobId = finalNode?.metadata?.sourceJobId || "";
-      const actionJob = state.jobs.find((job) => job.id === sourceJobId) || state.jobs.find((job) => job.project?.id === durable.id && String(job.kind).toUpperCase() === "ACTION_TRANSFER");
+      const actionJob = state.jobs.find((job) => job.id === sourceJobId) || newestProjectTask(state.jobs, durable.id, "ACTION_TRANSFER");
       return {
         ...durable,
         title: durable.name,
@@ -415,13 +621,14 @@
     return url ? toAsset(url, "video", "已完成成片") : null;
   }
   function readiness() {
+    const snapshot = workflowSnapshot();
     const required = ["person", "outfit", "motion"];
-    const missing = required.filter((key) => !assetFor(key)?.url);
+    const missing = required.filter((key) => !snapshot[key].bound || snapshot[key].pending);
     return {
       missing,
       canFrame: missing.length === 0,
-      canVideo: missing.length === 0 && Boolean(assetFor("frame")?.url),
-      message: missing.length ? `还缺${missing.map((key) => slots[key].title).join("、")}。` : (assetFor("frame")?.url ? "首帧与动作参考已就绪。" : "人物、衣服和参考视频已齐，下一步生成商品首帧。"),
+      canVideo: missing.length === 0 && snapshot.frame.bound,
+      message: missing.length ? `${missing.map((key) => snapshot[key].pending ? `${slots[key].title}正在保存确认` : `还缺${slots[key].title}`).join("、")}。` : (snapshot.frame.bound ? "首帧与动作参考已就绪。" : "人物、衣服和参考视频已齐，下一步生成商品首帧。"),
     };
   }
   function firstFrameDirection() {
@@ -431,7 +638,7 @@
     // The active node is the user's current editing context. Keep its private
     // media on the canvas after replacement instead of leaving an old motion
     // preview in place, which made a successful replacement look ineffective.
-    const selected = assetFor(state.target);
+    const selected = displayAssetFor(state.target);
     const finished = activeVideoAsset();
     if (state.showFinalVideo && finished?.url) return { mode: "video", url: finished.url, mediaId: finished.mediaId, title: "成片已返回", note: activeProject()?.production?.sampleInputRoles?.length ? "本成片包含模板示例素材，正式商用前建议替换为自有素材。" : "可直接查看或导出成片。", label: "成片" };
     if (state.target === "final") {
@@ -444,24 +651,55 @@
     }
     if (selected?.url) {
       const slot = slots[state.target] || slots.person;
+      const unavailable = assetUnavailable(selected);
+      if (unavailable && state.target !== "motion") {
+        if (selected.fallbackUrl) {
+          // Keep the local template source visible while private playback
+          // refreshes; the saved mediaId remains attached to the project.
+        } else {
+        return { mode: "empty", target: state.target, title: `${slot.title}待添加`, note: `当前${slot.title}素材无法读取，请重新选择或上传。`, label: "待添加", guide: inputGuide(state.target) };
+        }
+      }
+      const fallback = currentTemplate().motion;
+      const hasSourceFallback = unavailable && Boolean(selected.fallbackUrl);
       return {
-        mode: selected.kind === "video" ? "video" : "image",
-        url: selected.url,
-        displayUrl: publicPreview(selected),
-        mediaId: selected.mediaId,
-        poster: selected.preview || "",
+        mode: hasSourceFallback ? (selected.kind === "video" ? "video" : "image") : (unavailable ? "video" : (selected.kind === "video" ? "video" : "image")),
+        url: unavailable ? (selected.fallbackUrl || fallback) : selected.url,
+        displayUrl: unavailable ? (selected.fallbackUrl || fallback) : publicPreview(selected),
+        mediaId: unavailable ? "" : selected.mediaId,
+        poster: unavailable ? "" : (selected.preview || ""),
         title: `${slot.title}素材`,
-        note: `${slot.title}已绑定当前项目。`,
-        label: slot.title,
+        note: hasSourceFallback ? `${slot.title}已绑定当前项目，正在使用模板原图预览。` : (unavailable ? `当前${slot.title}暂时无法读取，正在播放${currentTemplate().title}的同款参考视频。` : `${slot.title}已绑定当前项目。`),
+        label: hasSourceFallback ? slot.title : (unavailable ? "同款视频" : slot.title),
       };
     }
     const slot = slots[state.target] || slots.person;
-    return { mode: "empty", target: state.target, title: `${slot.title}待添加`, note: `请先上传或选择${slot.title}素材。`, label: "待添加" };
+    const template = currentTemplate();
+    if (state.target === "frame" && template.cover) {
+      return {
+        mode: "image",
+        url: template.cover,
+        displayUrl: template.cover,
+        mediaId: "",
+        title: "同款模板首帧",
+        note: `当前正在使用${template.title}的首帧与动作参考。生成后会替换为你的商品首帧。`,
+        label: "同款预览",
+      };
+    }
+    return { mode: "empty", target: state.target, title: `${slot.title}待添加`, note: `请先上传或选择${slot.title}素材。`, label: "待添加", guide: inputGuide(state.target) };
+  }
+  function inputGuide(target) {
+    const guides = {
+      person: { title: "添加人物图", detail: "使用一张清晰的儿童全身正面照片，脸部、手脚和服装轮廓完整可见。", checks: ["单人入镜，不要拼图或遮挡", "自然光或均匀室内光，避免过曝", "JPG、PNG 或 WebP，大小不超过 25 MB"] },
+      outfit: { title: "添加商品图", detail: "使用本次要展示的单件童装图，正面、平铺或白底图都可以。", checks: ["衣服主体完整，不要裁掉下摆或袖口", "避开模糊、反光和大面积文字", "商品颜色与花型尽量接近真实款"] },
+      scene: { title: "添加背景图", detail: "背景是可选项；不添加时会沿用模板视频的门店空间和机位。", checks: ["优先用同一门店的干净空景", "保留地面、墙面和拍摄角度", "不需要背景时可直接跳过"] },
+    };
+    return guides[target] || null;
   }
   function nextAction() {
     const stage = mainStage();
     if (stage.mode === "video" && stage.label === "成片") return { name: "open-result", label: "查看成片", note: stage.note };
-    if (assetFor("frame")?.url) return { name: "make-video", label: "开始动作迁移", note: readiness().canVideo ? "视频任务成功后才扣 TZB。" : readiness().message };
+    if (displayAssetFor("frame")?.url) return { name: "make-video", label: "开始动作迁移", note: readiness().canVideo ? "视频任务成功后才扣 TZB。" : readiness().message };
     return { name: "make-frame", label: "生成商品首帧", note: readiness().message };
   }
   async function request(url, options = {}) {
@@ -561,32 +799,48 @@
     }
   }
   async function load() {
-    const [session, canonicalProjects] = await Promise.all([
-      request("/api/v1/auth/me").catch((error) => ({ user: null, error })),
-      mediaRequest("/api/v1/projects").catch(() => ({ projects: [] })),
-    ]);
+    // Resolve authentication before project data so an expired session can never
+    // leave the workspace in its indefinite project-loading state.
+    const session = await request("/api/v1/auth/me").catch((error) => ({ user: null, error }));
     const sessionAuthFailed = session.error?.status === 401;
     state.session = session.user || (sessionAuthFailed ? null : state.session);
+    state.sessionLoaded = true;
     state.projects = [];
-    state.canonicalProjects = canonicalProjects.projects || [];
-    if (!state.session && requestedProjectId && !sessionAuthFailed) {
-      flash("登录状态暂时无法确认，请稍后重试。", "warning");
-      return;
-    }
-    if (!state.session && requestedProjectId) {
-      localStorage.setItem("authReturnTo", `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`);
-      window.location.replace("/access");
-      return;
-    }
-    let durable = canonicalProject();
-    if (!durable && state.session && requestedProjectId) {
-      const result = await mediaRequest(`/api/v1/projects/${requestedProjectId}`).catch(() => ({ project: null }));
-      durable = result.project || null;
-      if (durable) {
-        const index = state.canonicalProjects.findIndex((item) => item.id === durable.id);
-        if (index >= 0) state.canonicalProjects[index] = durable;
-        else state.canonicalProjects.unshift(durable);
+    if (!state.session) {
+      state.projectLoading = false;
+      if (requestedProjectId && sessionAuthFailed) {
+        localStorage.setItem("authReturnTo", `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`);
+        window.location.replace("/access");
+        return;
       }
+      flash(sessionAuthFailed ? "登录已失效，请重新登录。" : "登录状态暂时无法确认，请刷新重试。", "warning");
+      return;
+    }
+    const requestedProjectPromise = requestedProjectId
+      ? mediaRequest(`/api/v1/projects/${requestedProjectId}`).catch(() => ({ project: null }))
+      : Promise.resolve({ project: null });
+    const canonicalProjectsPromise = mediaRequest("/api/v1/projects").catch((error) => ({ projects: [], error }));
+    const requestedProjectResult = await requestedProjectPromise;
+    let durable = null;
+    if (requestedProjectResult.project && requestedProjectId) {
+      durable = requestedProjectResult.project;
+      state.canonicalProjects = [durable];
+      void canonicalProjectsPromise.then((result) => {
+        if (result.error || !Array.isArray(result.projects)) return;
+        const current = canonicalProject();
+        state.canonicalProjects = result.projects;
+        if (current && !state.canonicalProjects.some((item) => item.id === current.id)) state.canonicalProjects.unshift(current);
+        renderUnlessSourcesOpen();
+      });
+    } else {
+      const canonicalProjects = await canonicalProjectsPromise;
+      state.canonicalProjects = canonicalProjects.projects || [];
+      if (canonicalProjects.error) {
+        state.projectLoading = false;
+        flash("项目加载失败，请刷新重试。", "warning");
+        return;
+      }
+      durable = canonicalProject();
     }
     if (durable) {
       hydrateCanonicalProject(durable);
@@ -611,7 +865,7 @@
     ]);
     if (run !== secondaryWorkspaceRun || (projectId && projectId !== canonicalProject()?.id)) return;
     hydrateCanonicalMedia(canonicalMedia.media || []);
-    state.jobs = canonicalJobs.jobs || [];
+    mergeCanonicalJobs(canonicalJobs.jobs || []);
     state.assistantThreads = assistantThreads.threads || [];
     state.notifications = notificationData.notifications || [];
     state.unreadNotifications = Number(notificationData.unreadCount || 0);
@@ -623,20 +877,21 @@
       state.assistantThreadId = thread.id;
       const detail = await mediaRequest(`/api/v1/assistant/threads/${thread.id}/messages`).catch(() => ({ thread: { messages: [] } }));
       state.chat = detail.thread?.messages || [];
+      recoverCompletedAgentImageEdit();
       restorePendingAgentImageEdit();
     } else state.chat = [];
     renderUnlessSourcesOpen();
   }
 
   function currentFirstFrameDraftPayload() {
-    const person = assetFor("person"); const clothes = assetFor("outfit"); const motion = assetFor("motion");
+    const person = displayAssetFor("person"); const clothes = displayAssetFor("outfit"); const motion = displayAssetFor("motion");
     if (!person?.mediaId || !clothes?.mediaId || !motion?.mediaId) return null;
     const payload = { personMediaId: person.mediaId, clothesMediaId: clothes.mediaId, motionMediaId: motion.mediaId, requirement: firstFrameDirection() || "" };
     if (Number.isFinite(state.motionReferenceTime) && state.motionReferenceTime >= 0) payload.referenceTimeSeconds = state.motionReferenceTime;
     return payload;
   }
   function pendingFirstFrameProjection(draft) {
-    const person = assetFor("person"); const clothes = assetFor("outfit"); const motion = assetFor("motion");
+    const person = displayAssetFor("person"); const clothes = displayAssetFor("outfit"); const motion = displayAssetFor("motion");
     return { draft, personLabel: person?.label || "人物", clothesLabel: clothes?.label || "衣服", motionLabel: motion?.label || "参考视频", sampleInputs: [person?.isTemplateSample ? "人物" : "", clothes?.isTemplateSample ? "衣服" : "", motion?.isTemplateSample ? "动作" : ""].filter(Boolean) };
   }
   function applyPendingFirstFrameDraft(draft) {
@@ -666,7 +921,7 @@
   }
   function firstFrameRecoverySnapshot() {
     const project = canonicalProject();
-    return JSON.stringify({ projectId: project?.id || "", person: assetFor("person")?.mediaId || "", clothes: assetFor("outfit")?.mediaId || "", motion: assetFor("motion")?.mediaId || "", scene: assetFor("scene")?.mediaId || "", referenceTimeSeconds: state.motionReferenceTime, requirement: firstFrameDirection() });
+    return JSON.stringify({ projectId: project?.id || "", person: displayAssetFor("person")?.mediaId || "", clothes: displayAssetFor("outfit")?.mediaId || "", motion: displayAssetFor("motion")?.mediaId || "", scene: displayAssetFor("scene")?.mediaId || "", referenceTimeSeconds: state.motionReferenceTime, requirement: firstFrameDirection() });
   }
   async function reconcilePendingFirstFrameDraft({ poll = true, waitForMissing = false } = {}) {
     const run = ++firstFrameDraftRecoveryRun;
@@ -753,9 +1008,9 @@
         mediaRequest("/api/v1/jobs"),
       ]);
       if (run !== taskRefreshRun || mutation !== state.sourceMutation || projectId !== (canonicalProject()?.id || "") || state.view === "sources") return;
-      state.canonicalProjects = projects.projects || [];
+      mergeCanonicalProjects(projects.projects || []);
       hydrateCanonicalMedia(media.media || []);
-      state.jobs = jobs.jobs || [];
+      mergeCanonicalJobs(jobs.jobs || []);
       hydrateCanonicalProject(canonicalProject());
       reconcileDerivedOutputs();
       state.taskRefreshAt = Date.now();
@@ -828,28 +1083,17 @@
     if (!src) return "<span>+</span>";
     const mediaId = asset?.mediaId ? ` data-v206-media-id="${esc(asset.mediaId)}"` : "";
     if (asset?.kind === "video" || hasVideo(src)) {
-      if (asset.preview) return `<img src="${esc(asset.preview)}"${mediaId} alt="${esc(alt)}">`;
+      if (asset.preview) return `<img src="${esc(asset.preview)}"${mediaId} alt="${esc(alt)}" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('video'),{src:'${esc(asset.url)}',muted:true,playsInline:true,preload:'metadata'}))">`;
       return `<i class="v206-video-card-fallback" aria-hidden="true">视频</i><video src="${esc(src)}"${mediaId} aria-label="${esc(alt)}" muted playsinline preload="metadata"></video>`;
     }
-    return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}">`;
+    const fallback = asset?.url && asset.url !== src ? ` onerror="this.onerror=null;this.src='${esc(asset.url)}'"` : "";
+    return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}"${fallback}>`;
   }
   function currentWorkflowStep() {
     return workflowSteps.find((step) => step.id === state.workflowStep) || workflowSteps[0];
   }
   function workflowStepStatus(step) {
-    if (step.id === "final") {
-      if (activeVideoAsset()?.url) return "已完成";
-      const project = activeProject();
-      const projectJobs = state.jobs.filter((job) => jobBelongsToProject(job, project));
-      const activeAction = projectJobs.find((job) => String(job.kind || "").toUpperCase() === "ACTION_TRANSFER" && taskIsActive(job.status));
-      const activeProduction = project?.production && taskIsActive(project.production.status);
-      return activeAction || activeProduction ? "制作中" : "待制作";
-    }
-    if (step.id === "frame" && !assetFor("frame")?.url && currentTaskPresentation()?.active) return "制作中";
-    const asset = assetFor(step.target);
-    if (asset?.url) return step.id === "motion" ? "可播放" : "已就绪";
-    if (step.optional) return "可跳过";
-    return step.id === "frame" ? "待生成" : "待添加";
+    return workflowSnapshot()[step.id]?.status || (step.optional ? "待添加" : "待生成");
   }
   function setWorkflowStep(stepId) {
     const step = workflowSteps.find((item) => item.id === stepId) || workflowSteps[0];
@@ -860,17 +1104,17 @@
   function reconcileWorkflowForProject(project) {
     if (!project?.id || state.workflowProjectId === project.id) return;
     state.workflowProjectId = project.id;
-    const hasFinalVideo = project.nodes?.some((node) => node.role === "FINAL_VIDEO" && node.media?.url);
-    if (hasFinalVideo) {
+    const snapshot = workflowSnapshot();
+    if (snapshot.final.bound || snapshot.final.status === "制作中") {
       setWorkflowStep("final");
       return;
     }
-    const firstMissingInput = ["person", "outfit", "motion"].find((slot) => !assetFor(slot)?.url);
+    const firstMissingInput = ["person", "outfit", "motion"].find((slot) => !snapshot[slot].bound);
     if (firstMissingInput) {
       setWorkflowStep(firstMissingInput);
       return;
     }
-    setWorkflowStep(assetFor("frame")?.url ? "final" : "frame");
+    setWorkflowStep(snapshot.frame.bound ? "final" : "frame");
   }
   function workflowTabsMarkup() {
     return `<nav class="v206-workflow-tabs" aria-label="制作步骤切换">${workflowSteps.map((step, index) => {
@@ -881,12 +1125,11 @@
   }
   function stageMarkup() {
     const stage = mainStage();
-    const unavailable = state.unavailableMedia && stage.mediaId && state.unavailableMedia.has(stage.mediaId);
     const emptyTarget = ["person", "outfit", "motion", "scene"].includes(stage.target || state.target) ? (stage.target || state.target) : "";
     const media = stage.mode === "empty"
-      ? `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
-      : unavailable
-        ? `<div class="v206-stage-placeholder v206-stage-media-error" role="status"><strong>${stage.mode === "video" ? "视频暂时无法播放" : "素材暂时不可用"}</strong>${stage.mode === "video" ? "请更换参考视频后继续制作。" : "请在素材库中重新选择一张图片后继续制作。"}</div>`
+      ? stage.guide
+        ? `<section class="v206-stage-guide" aria-label="${esc(stage.guide.title)}教程"><span>制作教程</span><h2>${esc(stage.guide.title)}</h2><p>${esc(stage.guide.detail)}</p><ol>${stage.guide.checks.map((item) => `<li>${esc(item)}</li>`).join("")}</ol><button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button></section>`
+        : `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
       : stage.mode === "image"
         ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览"></div>`
         : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.url)}" ${stage.poster ? `poster="${esc(stage.poster)}"` : ""} controls playsinline preload="metadata"></video>`;
@@ -947,18 +1190,19 @@
   function normalizePendingAgentImageEdit(edit) {
     if (!edit?.id || !edit.requirement || !Array.isArray(edit.inputs)) return null;
     const inputs = edit.inputs.map((item) => ({ slot: item.slot, role: item.role, label: item.label, mediaId: item.mediaId || "" })).filter((item) => slots[item.slot] && item.label);
-    return { id: edit.id, requirement: edit.requirement, inputs, status: edit.status || "pending_confirmation", createdAt: edit.createdAt || new Date().toISOString(), projectId: edit.projectId || "", jobId: edit.jobId || "" };
+    return { id: edit.id, requirement: edit.requirement, inputs, status: edit.status || "pending_confirmation", createdAt: edit.createdAt || new Date().toISOString(), completedAt: edit.completedAt || "", projectId: edit.projectId || "", jobId: edit.jobId || "", outputMediaId: edit.outputMediaId || "" };
   }
   function localAgentImageEditMessage(edit) {
+    const completed = String(edit.status || "").toLowerCase() === "completed";
     return {
       id: `local-agent-image-edit-message:${edit.id}`,
       role: "assistant",
-      content: "已根据当前项目整理改图方案。确认前不会生成或扣费。",
-      createdAt: edit.createdAt,
+      content: completed ? "改图已完成并保存为当前商品首帧。可以继续修改，或进入下一步制作成片。" : "已根据当前项目整理改图方案。确认前不会生成或扣费。",
+      createdAt: edit.completedAt || edit.createdAt,
       proposal: {
         id: `local-agent-image-edit-proposal:${edit.id}`,
         content: {
-          title: "商品首帧改图方案",
+          title: completed ? "商品首帧改图结果" : "商品首帧改图方案",
           creativeDirection: edit.requirement,
           materialAssessment: ["使用当前项目的人物、商品和背景素材，生成新的商品首帧。"],
           evidenceRefs: edit.inputs.map((item) => ({ role: item.role, label: item.label, reason: "当前项目已绑定素材" })),
@@ -972,9 +1216,54 @@
   }
   function restorePendingAgentImageEdit() {
     const edit = state.pendingAgentImageEdit;
-    if (!edit?.id || !["pending_confirmation", "queued", "running", "retryable_failed", "failed"].includes(edit.status)) return;
+    if (!edit?.id || !["pending_confirmation", "queued", "running", "retryable_failed", "failed", "completed"].includes(edit.status)) return;
     if (!state.chat.some((message) => message.id === `local-agent-image-edit-message:${edit.id}`)) state.chat.push(localAgentImageEditMessage(edit));
-    if (edit.jobId && ["queued", "running"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
+    // A client-side sync timeout is recoverable when the server already has a
+    // durable job id. Recheck failed records too; the job endpoint is the
+    // authority, not the stale local status copied before page reload.
+    if (edit.jobId && ["queued", "running", "retryable_failed", "failed"].includes(edit.status)) window.setTimeout(resumePendingAgentImageEdit, 500);
+  }
+  function recoverCompletedAgentImageEdit() {
+    const project = canonicalProject();
+    const frame = project?.nodes?.find((node) => node.role === "FIRST_FRAME")?.media;
+    const existing = state.pendingAgentImageEdit;
+    if (existing?.jobId && ["queued", "running", "retryable_failed", "failed"].includes(existing.status)) {
+      const task = state.jobs.find((item) => item.id === existing.jobId);
+      const frameNode = project?.nodes?.find((node) => node.role === "FIRST_FRAME");
+      const previousFrameId = existing.inputs?.find((item) => item.slot === "frame")?.mediaId || "";
+      const taskBound = task?.outputMediaId === frame?.id
+        || frameNode?.metadata?.sourceJobId === existing.jobId
+        || (frame?.id && frame.id !== previousFrameId);
+      if (task && completedJob(task) && frame?.id && taskBound) {
+        existing.status = "completed";
+        existing.completedAt = task.completedAt || task.updatedAt || new Date().toISOString();
+        existing.outputMediaId = frame.id;
+        replaceLocalAgentImageEditAction(existing);
+        writeState();
+        return true;
+      }
+    }
+    if (existing || !state.chat.length || !project?.id || !frame?.id) return false;
+    const request = [...state.chat].reverse().find((message) => String(message.role || "").toLowerCase() === "user" && isAssistantImageEditIntent(message.content || message.text));
+    if (!request) return false;
+    const requestAt = Date.parse(String(request.createdAt || ""));
+    const currentJobId = currentFrameJobId(project);
+    const task = newestProjectTask(state.jobs, project.id, "FIRST_FRAME", currentJobId);
+    if (!task || !completedJob(task)) return false;
+    const taskAt = jobTimestamp(task);
+    const source = state.generationSources?.[task.id];
+    const isTrackedFrame = source?.kind === "frame" || task.id === currentJobId;
+    if (!isTrackedFrame || (Number.isFinite(requestAt) && taskAt && taskAt < requestAt)) return false;
+    const inputs = ["frame", "person", "outfit", "scene", "motion"]
+      .map((slot) => ({ slot, asset: displayAssetFor(slot) }))
+      .filter((item) => item.asset?.mediaId)
+      .map(({ slot, asset }) => ({ slot, role: slots[slot]?.title || slot, label: asset.label || "当前素材", mediaId: asset.mediaId }));
+    if (!inputs.length) return false;
+    const edit = { id: `recovered-agent-image-edit:${task.id}`, requirement: String(request.content || request.text || "").trim(), inputs, status: "completed", createdAt: request.createdAt || new Date(taskAt || Date.now()).toISOString(), completedAt: task.completedAt || task.updatedAt || new Date(taskAt || Date.now()).toISOString(), projectId: project.id, jobId: task.id, outputMediaId: frame.id };
+    state.pendingAgentImageEdit = edit;
+    if (!state.chat.some((message) => message.id === `local-agent-image-edit-message:${edit.id}`)) state.chat.push(localAgentImageEditMessage(edit));
+    writeState();
+    return true;
   }
   function assistantComposerMarkup(thread = false) {
     const referenceButtons = availableMaterials().filter((item) => item.kind === "image").slice(0, 8).map((item) => `<button type="button" class="v206-mention ${state.assistantRefs.includes(item.id) ? "active" : ""}" data-v206-action="mention" data-material="${esc(item.id)}">@${esc(item.label)}</button>`).join("");
@@ -1011,7 +1300,7 @@
     return null;
   }
   function materialJudgment() {
-    const selected = assetFor(state.target);
+    const selected = displayAssetFor(state.target);
     if (state.target === "frame") {
       if (selected?.url) return "首帧已进入当前项目，可以继续核对动作参考并制作视频。";
       return readiness().canFrame ? "人物、商品和参考视频已准备好，可以生成商品首帧。" : readiness().message;
@@ -1081,26 +1370,16 @@
     return `<section class="v206-video-inline" aria-label="视频制作确认"><div class="v206-section-label">制作依据</div><div class="v206-lock-list"><div><span>商品首帧</span><b>${esc(pending.firstFrameLabel)}</b></div><div><span>动作参考</span><b>${esc(pending.motionLabel)}</b></div><div><span>视频规格</span><b>720P · 24 fps · ${Number(pending.maximumSeconds).toFixed(1)} 秒</b></div></div><label class="v206-mode-select"><span>制作模式</span><select data-v206-video-mode><option value="standard" ${state.videoMode === "standard" ? "selected" : ""}>标准模式（推荐）</option><option value="stable" ${state.videoMode === "stable" ? "selected" : ""}>稳定模式</option></select></label><div class="v206-cost-summary"><b>最高 ${Number(pending.quote?.maxTzCost || 0).toFixed(2)} TZB</b><span>预计 ${waitMinutes(estimate.lower)}–${waitMinutes(estimate.upper)} 分钟 · 成功后按实际时长结算 · 失败不扣费</span></div></section>`;
   }
   function currentTaskPresentation() {
-    const project = activeProject();
-    const projectJobs = state.jobs.filter((job) => jobBelongsToProject(job, project));
-    const latestAction = projectJobs.find((job) => String(job.kind || "").toUpperCase() === "ACTION_TRANSFER");
-    const latestImage = projectJobs.find((job) => String(job.kind || "").toUpperCase() !== "ACTION_TRANSFER");
-    if (latestAction && taskIsActive(latestAction.status)) return { task: latestAction, kind: "成片", active: true };
-    if (project?.production && taskIsActive(project.production.status)) return { task: project.production, kind: "成片", active: true };
-    const activeImage = projectJobs.find((job) => String(job.kind || "").toUpperCase() !== "ACTION_TRANSFER" && taskIsActive(job.status));
-    if (activeImage) return { task: activeImage, kind: String(activeImage.kind || "").toUpperCase() === "FIRST_FRAME" ? "首帧" : "图片", active: true };
-    if (latestAction && /failed|blocked|review_required|needs_review|requires_review/i.test(String(latestAction.status || ""))) {
-      return { task: latestAction, kind: "成片", failed: true };
-    }
-    if (!activeVideoAsset()?.url && project?.production && /failed|blocked|review_required|needs_review|requires_review/i.test(String(project.production.status || ""))) {
-      return { task: project.production, kind: "成片", failed: true };
-    }
-    if (latestImage && /failed|blocked|review_required|needs_review|requires_review/i.test(String(latestImage.status || ""))) {
-      return { task: latestImage, kind: String(latestImage.kind || "").toUpperCase() === "FIRST_FRAME" ? "首帧" : "图片", failed: true };
-    }
+    if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) return null;
+    const snapshot = workflowSnapshot();
+    if (snapshot.final.status === "制作中") return { task: snapshot.final.task, kind: "成片", active: true };
+    if (snapshot.frame.status === "制作中") return { task: snapshot.frame.task, kind: "首帧", active: true };
+    if (snapshot.final.status === "制作失败") return { task: snapshot.final.task, kind: "成片", failed: true };
+    if (snapshot.frame.status === "生成失败") return { task: snapshot.frame.task, kind: "首帧", failed: true };
     return null;
   }
   function taskDecisionMarkup() {
+    if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) return "";
     const presentation = currentTaskPresentation();
     if (!presentation) return "";
     if (presentation.active) {
@@ -1136,18 +1415,19 @@
       if (draft.canConfirm === true || String(draft.status || "").toLowerCase() === "ready") return { name: "confirm-first-frame-inline", label: draft.softRisks?.length ? "素材没问题，继续生成" : "确认并生成一张首帧" };
       return { name: "retry-first-frame-analysis", label: "重新分析素材" };
     }
+    if (currentTaskPresentation()?.failed && step.id === "frame") return { name: "make-frame", label: "重新生成商品首帧" };
     if (step.id === "final" && state.pendingVideo) return { name: "confirm-video-inline", label: "确认并制作视频" };
     const assistantAction = pendingAssistantAction();
     if (assistantAction) return { name: "confirm-assistant-proposal", label: `确认${assistantAction.label || "制作"}`, proposalAction: assistantAction.id };
     if (["person", "outfit", "motion"].includes(step.id)) {
-      if (!assetFor(step.target)?.url) return { name: "prepare-required-material", label: `添加${step.title}`, target: step.target };
+      if (!displayAssetFor(step.target)?.url) return { name: "prepare-required-material", label: `添加${step.title}`, target: step.target };
       return { name: "workflow-next", label: `下一步：${workflowSteps[workflowSteps.indexOf(step) + 1]?.title || "继续"}` };
     }
-    if (step.id === "scene") return assetFor("scene")?.url
+    if (step.id === "scene") return displayAssetFor("scene")?.url
       ? { name: "workflow-next", label: "使用当前背景，下一步" }
       : { name: "sources", label: "添加背景图片" };
     if (step.id === "frame") {
-      if (assetFor("frame")?.url) return { name: "workflow-next", label: "下一步：制作成片" };
+      if (displayAssetFor("frame")?.url) return { name: "workflow-next", label: "下一步：制作成片" };
       const missing = readiness().missing[0];
       if (missing) return { name: "prepare-required-material", label: `先补充${slots[missing].title}`, target: missing };
       return { name: "make-frame", label: "生成商品首帧" };
@@ -1156,7 +1436,7 @@
       if (activeVideoAsset()?.url) return { name: "open-result", label: "播放当前成片" };
       const missing = readiness().missing[0];
       if (missing) return { name: "prepare-required-material", label: `先补充${slots[missing].title}`, target: missing };
-      if (!assetFor("frame")?.url) return { name: "workflow-step", label: "先生成商品首帧", step: "frame" };
+      if (!displayAssetFor("frame")?.url) return { name: "workflow-step", label: "先生成商品首帧", step: "frame" };
       return { name: "make-video", label: "核对费用并制作视频" };
     }
     return null;
@@ -1202,7 +1482,7 @@
     const currentTarget = ["person", "outfit", "motion", "scene"].includes(step.id) ? step.id : null;
     const target = currentTarget || (["frame", "final"].includes(step.id) ? "person" : null);
     if (!target) return "";
-    const selected = assetFor(target);
+    const selected = displayAssetFor(target);
     const label = target === "scene" ? "背景" : slots[target]?.title || "人物";
     const targetAttr = currentTarget ? "" : ` data-target="${target}"`;
     return `<button type="button" class="v206-replace" data-v206-action="sources"${targetAttr}>${selected?.url ? `更换${label}` : `添加${label}`}</button>`;
@@ -1224,6 +1504,7 @@
       ${workflowQuickToolsMarkup(workflowSourceActionMarkup(step))}
       ${workflowStepBodyMarkup(step)}
       ${completedFinal ? "" : `<div class="v206-workflow-actions">${previous ? `<button type="button" class="v206-workflow-back" data-v206-action="workflow-previous">上一步</button>` : '<span></span>'}${skip}${primary ? `<button type="button" class="v206-primary" data-v206-action="${primary.name}"${primaryAttributes} ${state.busy ? "disabled" : ""}>${esc(primary.label)}</button>` : ""}</div>`}
+      ${completedFinal ? assistantDecisionMarkup() : ""}
       ${assistantDockMarkup()}
     </aside>`;
   }
@@ -1323,7 +1604,7 @@
     const accountLabel = document.querySelector("[data-v206-account-label]");
     if (accountLabel) {
       const accountName = String(state.session?.name || "").trim();
-      accountLabel.textContent = state.session ? (accountName && !accountName.includes("童装影厂") ? accountName : "账户") : "去登录";
+      if (state.sessionLoaded) accountLabel.textContent = state.session ? (accountName && !accountName.includes("童装影厂") ? accountName : "账户") : "去登录";
     }
     state.mediaObserver?.disconnect();
     state.mediaObserver = null;
@@ -1413,7 +1694,7 @@
   }
   function assistantThreadSheet() {
     const project = activeProject();
-    const context = Object.entries(slots).map(([id, meta]) => `<span class="v206-thread-context-item"><b>${esc(meta.title)}</b>${esc(assetFor(id)?.label || "待补充")}</span>`).join("");
+    const context = Object.entries(slots).map(([id, meta]) => `<span class="v206-thread-context-item"><b>${esc(meta.title)}</b>${esc(displayAssetFor(id)?.label || "待补充")}</span>`).join("");
     return `<section class="v206-thread" data-v206-thread role="dialog" aria-modal="true" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
         <header class="v206-thread-header"><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1></div><div class="v206-thread-header-actions"><button type="button" data-v206-action="close" aria-label="收起念念完整对话">收起会话</button></div></header>
@@ -1430,7 +1711,7 @@
     return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet wide" aria-label="素材库"><header class="v206-sheet-header"><div><h2>素材库</h2><p>正在替换：${esc(active.title)}，${esc(active.purpose)}</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭素材库">×</button></header><div class="v206-sheet-body"><div class="v206-asset-target"><b>${esc(active.title)}</b></div><label class="v206-upload-zone">上传${active.type === "video" ? "参考视频" : "图片素材"}<input type="file" data-v206-upload="${state.target}" accept="${active.type === "video" ? "video/mp4,.mp4" : "image/jpeg,image/png,image/webp,.jpg,.jpeg,.jfif,.png,.webp"}"></label><p class="v206-source-status" data-v206-source-status hidden></p><div class="v206-library-nav"><button type="button" class="${state.library === "template" ? "active" : ""}" data-v206-action="library" data-library="template">模板素材</button><button type="button" class="${state.library === "mine" ? "active" : ""}" data-v206-action="library" data-library="mine">我的素材</button></div><div class="v206-material-grid">${compatible.length ? compatible.map((item) => materialCard(item)).join("") : `<p class="v206-empty">这里还没有${active.type === "video" ? "视频" : "图片"}素材。上传后会保留在“我的素材”。</p>`}</div></div></aside>`;
   }
   function materialCard(item) {
-    const selected = item.mediaId ? assetFor(state.target)?.mediaId === item.mediaId : assetFor(state.target)?.url === item.url;
+    const selected = item.mediaId ? displayAssetFor(state.target)?.mediaId === item.mediaId : displayAssetFor(state.target)?.url === item.url;
     return `<button type="button" class="v206-material ${selected ? "selected" : ""}" data-v206-action="assign" data-material="${esc(item.id)}"><span class="v206-material-media">${imageMarkup(item, item.label)}</span><span>${esc(item.label)}</span></button>`;
   }
   function templateSheet() {
@@ -1497,7 +1778,7 @@
       const timing = [video.totalSeconds != null ? `总耗时 ${video.totalSeconds}s` : "", video.providerSeconds != null ? `生成 ${video.providerSeconds}s` : "", video.ingestionSeconds != null ? `入库 ${video.ingestionSeconds}s` : ""].filter(Boolean).join(" · ");
       const review = video.review?.result ? `<div class="v206-review-summary"><b>${esc(video.review.result.summary || "念念点评")}</b><span>人物 ${esc(video.review.result.identityStability?.status || "unknown")} · 服装 ${esc(video.review.result.garmentLock?.status || "unknown")} · 场景 ${esc(video.review.result.sceneContinuity?.status || "unknown")} · 动作 ${esc(video.review.result.motionNaturalness?.status || "unknown")}</span></div>` : "";
       const reviewAction = state.videoReviewEnabled ? `<button type="button" data-v206-action="review-video" data-media="${esc(video.mediaId)}">${esc(reviewLabel(video.review))}</button>` : "";
-      return `<article class="v206-video-version ${video.isCurrent ? "current" : ""}"><video src="${esc(video.media?.url || "")}" controls playsinline preload="metadata"></video><div><header><b>${video.isCurrent ? "当前成片" : "历史成片"}</b><span>${esc(formatMessageTime(video.completedAt))}</span></header><p>${esc(video.mode === "stable" ? "稳定模式" : "标准模式")} · ${Number(video.durationSeconds || 0).toFixed(1)}秒 · ${Number(video.tzCost || 0).toFixed(2)} TZB</p><small>${esc(timing)}</small>${sample}${review}<div class="v206-version-actions">${video.isCurrent ? "" : `<button type="button" data-v206-action="set-current-video" data-media="${esc(video.mediaId)}">设为当前成片</button>`}<button type="button" data-v206-action="download-video" data-media="${esc(video.mediaId)}">下载</button>${reviewAction}<button type="button" data-v206-action="delete-video" data-media="${esc(video.mediaId)}" data-current="${video.isCurrent ? "true" : "false"}">删除</button></div></div></article>`;
+      return `<article class="v206-video-version ${video.isCurrent ? "current" : ""}"><video src="${esc(video.media?.url || "")}" controls playsinline preload="metadata"></video><div><header><b>${video.isCurrent ? "当前成片" : "历史成片"}</b><span>${esc(formatMessageTime(video.completedAt))}</span></header><p>${esc(video.mode === "stable" ? "稳定模式" : "标准模式")} · ${Number(video.durationSeconds || 0).toFixed(1)}秒 · ${Number(video.tzCost || 0).toFixed(2)} TZB</p><small>${esc(timing)}</small>${sample}${review}<div class="v206-version-actions">${video.isCurrent ? "" : `<button type="button" data-v206-action="set-current-video" data-media="${esc(video.mediaId)}">设为当前成片</button>`}<a class="v206-version-download" href="/api/v1/media/${encodeURIComponent(video.mediaId)}/download" download>下载</a>${reviewAction}<button type="button" data-v206-action="delete-video" data-media="${esc(video.mediaId)}" data-current="${video.isCurrent ? "true" : "false"}">删除</button></div></div></article>`;
     }).join("");
     return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet wide" aria-label="历史成片"><header class="v206-sheet-header"><div><h2>历史成片</h2><p>所有成功版本都会保留；切换当前版本不会再次生成或扣费。</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭历史成片">×</button></header><div class="v206-sheet-body"><div class="v206-video-history">${rows || '<p class="v206-empty">当前项目还没有已完成成片。</p>'}</div></div></aside>`;
   }
@@ -1517,18 +1798,71 @@
     if (!syncSourceSheetBusy()) render();
     try {
       let durableAsset = asset;
+      let pendingTemplateImport = null;
       if (!durableAsset.mediaId && durableAsset.templateId && durableAsset.templateRole) {
-        const imported = await mediaRequest("/api/v1/media/import-workspace-template", { method: "POST", body: JSON.stringify({ templateId: durableAsset.templateId, role: durableAsset.templateRole }) });
-        durableAsset = assetFromMedia(imported.media);
+        pendingTemplateImport = mediaRequest("/api/v1/media/import-workspace-template", { method: "POST", body: JSON.stringify({ templateId: durableAsset.templateId, role: durableAsset.templateRole }), timeoutMs: 12_000 });
+        durableAsset = { ...asset, fallbackUrl: asset.url };
       }
-      if (!durableAsset.mediaId) throw new Error("MEDIA_ID_REQUIRED");
+      if (!durableAsset.mediaId && !pendingTemplateImport) throw new Error("MEDIA_ID_REQUIRED");
+      // Persist an existing project's pending choice before any async import
+      // or project readback. A user can refresh immediately after clicking.
+      const existingProject = canonicalProject();
+      if (existingProject?.id) {
+        state.selected[target] = durableAsset;
+        recordPendingAssignment(existingProject.id, target, durableAsset, mutation);
+        writeState();
+      }
+      if (!durableAsset.mediaId && pendingTemplateImport) {
+        const project = await ensureCanonicalProject();
+        state.selected[target] = durableAsset;
+        recordPendingAssignment(project.id, target, durableAsset, mutation);
+        const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
+        if (invalidatesDerived) { invalidateDerivedOutputs(); setWorkflowStep(target); }
+        state.view = null; state.busy = ""; writeState(); flash(`${slots[target].title}已替换，正在后台保存。`); render();
+        void pendingTemplateImport.then((imported) => {
+          const importedAsset = assetFromMedia(imported.media);
+          if (!importedAsset || mutation !== state.sourceMutation) return;
+          const savedAsset = { ...importedAsset, url: importedAsset.url || asset.url, preview: importedAsset.preview || asset.preview, fallbackUrl: asset.url };
+          state.selected[target] = savedAsset;
+          // Replace the provisional template record with the durable media id
+          // before PUT, so a stale project read cannot erase the pending choice.
+          recordPendingAssignment(project.id, target, savedAsset, mutation);
+          return mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: importedAsset.mediaId }) })
+            .then(() => {
+              if (mutation !== state.sourceMutation) return null;
+              confirmPendingAssignment(project.id, target);
+              writeState();
+              renderUnlessSourcesOpen();
+              return mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 });
+            })
+            .then((result) => {
+              if (mutation !== state.sourceMutation || !result?.project) return;
+              const mergedProject = mergeCanonicalProject(result.project);
+              state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+              hydrateCanonicalProject(mergedProject);
+              renderUnlessSourcesOpen();
+            });
+        }).catch(() => {
+          if (mutation !== state.sourceMutation) return;
+          clearPendingAssignment(project.id, target);
+          state.selected[target] = projectNodeAsset(canonicalProject(), target);
+          flash("素材保存失败，已恢复为服务器实际状态。", "warning");
+          renderUnlessSourcesOpen();
+        });
+        return true;
+      }
       const project = await ensureCanonicalProject();
-      await mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }) });
-      const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
+      const assignmentRequest = mediaRequest(`/api/v1/projects/${project.id}/nodes/${NODE_ROLE_BY_SLOT[target]}`, { method: "PUT", body: JSON.stringify({ mediaId: durableAsset.mediaId }), timeoutMs: 12_000 });
+      // The proxy can receive a successful upstream PUT before the upstream
+      // response body finishes. Commit the visible selection immediately and
+      // let the request confirm in the background.
       if (mutation !== state.sourceMutation) return;
-      state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-      hydrateCanonicalProject(refreshed);
-      if (["person", "outfit", "scene", "motion"].includes(target)) {
+      // The user explicitly selected this asset. Keep it visible even when
+      // the upstream project response labels template-derived media as a sample.
+      state.selected[target] = durableAsset;
+      recordPendingAssignment(project.id, target, durableAsset, mutation);
+      const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
+      if (invalidatesDerived) {
         invalidateDerivedOutputs();
         if (target === "motion") state.motionReferenceTime = null;
         setWorkflowStep(target);
@@ -1542,6 +1876,28 @@
       flash(["person", "outfit", "scene", "motion"].includes(target)
         ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
         : `${slots[target].title}已替换并保存。`);
+      // The source sheet is intentionally open during background refreshes,
+      // but after a successful assignment the view must be re-rendered now.
+      render();
+      void assignmentRequest.then(() => {
+        confirmPendingAssignment(project.id, target);
+        renderUnlessSourcesOpen();
+      }).catch(() => {
+        clearPendingAssignment(project.id, target);
+        state.selected[target] = projectNodeAsset(canonicalProject(), target);
+        flash("素材保存失败，已恢复为服务器实际状态。", "warning");
+        renderUnlessSourcesOpen();
+      });
+      // Project readback is advisory. Do not block the user on a slow upstream GET.
+      void mediaRequest(`/api/v1/projects/${project.id}`, { timeoutMs: 8_000 }).then((result) => {
+        const refreshed = result.project;
+        if (!refreshed || mutation !== state.sourceMutation) return;
+        const mergedProject = mergeCanonicalProject(refreshed);
+        state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+        hydrateCanonicalProject(mergedProject);
+        state.selected[target] = projectNodeAsset(mergedProject, target) || durableAsset;
+        renderUnlessSourcesOpen();
+      }).catch(() => {});
       return true;
     } catch (error) {
       if (mutation !== state.sourceMutation) return;
@@ -1660,6 +2016,7 @@
           const chunkHeaders = new Headers(uploadHeaders);
           chunkHeaders.set("x-upload-offset", String(offset));
           chunkHeaders.set("x-upload-chunk-length", String(chunk.size));
+          chunkHeaders.set("content-range", `bytes ${offset}-${offset + chunk.size - 1}/${file.size}`);
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
@@ -1816,7 +2173,10 @@
       const job = result.job;
       state.jobs = job ? [job, ...state.jobs.filter((item) => item.id !== job.id)] : state.jobs;
       state.frameJobId = job?.id || state.frameJobId;
-      if (job?.id) state.generationSources[job.id] = { kind: "frame", signature: generationInputSignature("frame") };
+      if (job?.id) {
+        state.generationSources[job.id] = { kind: "frame", signature: generationInputSignature("frame") };
+        state.currentJobSnapshots.frame = job;
+      }
       state.pendingFirstFrame = null;
       setWorkflowStep("frame");
       writeState();
@@ -1861,7 +2221,7 @@
     render();
     try {
       const project = await ensureProject();
-      const frame = assetFor("frame"); const motion = assetFor("motion");
+    const frame = displayAssetFor("frame"); const motion = displayAssetFor("motion");
       if (!frame?.mediaId || !motion?.mediaId) throw new Error("ACTION_TRANSFER_MEDIA_NOT_READY");
       const maximumSeconds = Math.min(Math.max(Number(motion.durationSeconds || 15), 0.1), 120);
       const [summary, quote] = await Promise.all([
@@ -1888,7 +2248,10 @@
         body: JSON.stringify({ kind: "action_transfer", input: { firstFrameMediaId: pending.firstFrameMediaId, motionMediaId: pending.motionMediaId, quotedMaxDurationSeconds: pending.maximumSeconds, fps: 24, frameLoadCap: stable ? 360 : pending.standardFrames, resolution: "720p", actionVariant: "standard", cameraMotion: false, stableRetry: stable } }),
       });
       if (result.job) state.jobs = [result.job, ...state.jobs.filter((item) => item.id !== result.job.id)];
-      if (result.job?.id) state.generationSources[result.job.id] = { kind: "final", signature: generationInputSignature("final") };
+      if (result.job?.id) {
+        state.generationSources[result.job.id] = { kind: "final", signature: generationInputSignature("final") };
+        state.currentJobSnapshots.final = result.job;
+      }
       clearGenerationIdempotencyKey("action_transfer");
       state.pendingVideo = null;
       scheduleTaskRefresh();
@@ -1943,7 +2306,7 @@
   }
   function createPendingAgentImageEdit(requirement) {
     const inputs = ["frame", "person", "outfit", "scene", "motion"]
-      .map((slot) => ({ slot, asset: assetFor(slot) }))
+      .map((slot) => ({ slot, asset: displayAssetFor(slot) }))
       .filter((item) => item.asset?.mediaId)
       .map(({ slot, asset }) => ({ slot, role: slots[slot]?.title || slot, label: asset.label || "当前素材", mediaId: asset.mediaId || "" }));
     return { id: crypto.randomUUID(), requirement, inputs, status: "pending_confirmation", createdAt: new Date().toISOString(), projectId: canonicalProject()?.id || "", jobId: "" };
@@ -1968,7 +2331,11 @@
     hydrateCanonicalProject(project);
     markDerivedOutputCurrent("frame");
     clearGenerationIdempotencyKey("agent_first_frame");
-    state.pendingAgentImageEdit = null;
+    edit.status = "completed";
+    edit.completedAt = new Date().toISOString();
+    edit.outputMediaId = firstFrame.id;
+    state.pendingAgentImageEdit = edit;
+    replaceLocalAgentImageEditAction(edit);
     writeState();
     renderUnlessSourcesOpen();
     flash("改图已由服务器私有入库，并替换为当前商品首帧。");
@@ -1978,7 +2345,13 @@
       const result = await mediaRequest(`/api/v1/jobs/${encodeURIComponent(edit.jobId)}`);
       const job = result.job;
       const status = String(job?.status || "").toLowerCase();
-      if (status === "completed") { await completeAgentImageEdit(edit); return true; }
+      if (status === "completed") {
+        try { await completeAgentImageEdit(edit); return true; }
+        catch (error) {
+          if (!/首帧尚未绑定/.test(String(error?.message || "")) || attempt + 1 >= attempts) throw error;
+          await new Promise((resolve) => window.setTimeout(resolve, Math.min(30_000, 4_000 * (attempt + 1))));
+        }
+      }
       if (["blocked", "retryable_failed", "review_required", "cancelled"].includes(status)) {
         const error = new Error(job.failureText || "改图任务未生成可用结果，本次不会扣费。");
         error.terminal = true;
@@ -2045,9 +2418,9 @@
       const confirmed = await billing("image", { count: 1, inputs: edit.inputs });
       if (!confirmed) return;
       const project = await ensureCanonicalProject();
-      const personMediaId = assetFor("person")?.mediaId || "";
-      const clothesMediaId = assetFor("outfit")?.mediaId || "";
-      const motionMediaId = assetFor("motion")?.mediaId || "";
+      const personMediaId = displayAssetFor("person")?.mediaId || "";
+      const clothesMediaId = displayAssetFor("outfit")?.mediaId || "";
+      const motionMediaId = displayAssetFor("motion")?.mediaId || "";
       if (![personMediaId, clothesMediaId, motionMediaId].every((id) => UUID_PATTERN.test(id))) throw new Error("人物、商品或参考视频已变化，请重新生成改图方案。");
       const prepared = await firstFrameDraftRequest(`/api/v1/projects/${project.id}/first-frame/drafts`, {
         method: "POST",
@@ -2147,7 +2520,13 @@
     writeState();
     flash(`已切换到${template.title}，请确认当前商品素材。`);
   }
-  function openResult() { const url = activeVideo(); if (url) window.open(url, "_blank", "noopener"); }
+  function openResult() {
+    if (!activeVideo()) return;
+    state.workflowStep = "final";
+    state.target = "final";
+    state.showFinalVideo = true;
+    render();
+  }
   async function openNotifications() {
     state.view = "notifications";
     render();
@@ -2178,17 +2557,17 @@
     try {
       await mediaRequest(`/api/v1/projects/${project.id}/nodes/FINAL_VIDEO`, { method: "PUT", body: JSON.stringify({ mediaId }) });
       const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
-      state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-      hydrateCanonicalProject(refreshed);
+      const mergedProject = mergeCanonicalProject(refreshed);
+      state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+      hydrateCanonicalProject(mergedProject);
       await openVideoHistory();
       flash("当前成片已切换，没有重新生成或扣费。");
     } catch (error) { flash(error.message || "当前成片切换失败。", "warning"); }
   }
   async function downloadVideo(mediaId) {
     try {
-      const result = await mediaRequest(`/api/v1/media/${encodeURIComponent(mediaId)}/download`);
       const downloadLink = document.createElement("a");
-      downloadLink.href = result.url;
+      downloadLink.href = `/api/v1/media/${encodeURIComponent(mediaId)}/download`;
       downloadLink.download = "";
       downloadLink.rel = "noopener";
       downloadLink.hidden = true;
@@ -2215,8 +2594,9 @@
       const project = canonicalProject();
       if (project) {
         const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
-        state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-        hydrateCanonicalProject(refreshed);
+        const mergedProject = mergeCanonicalProject(refreshed);
+        state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+        hydrateCanonicalProject(mergedProject);
       }
       await openVideoHistory();
       flash("成片已进入恢复期，历史版本未被自动重新生成。");
@@ -2248,8 +2628,9 @@
     render();
     try {
       const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`, { method: "PATCH", body: JSON.stringify({ name }) })).project;
-      state.canonicalProjects = [refreshed, ...state.canonicalProjects.filter((item) => item.id !== refreshed.id)];
-      hydrateCanonicalProject(refreshed);
+      const mergedProject = mergeCanonicalProject(refreshed);
+      state.canonicalProjects = [mergedProject, ...state.canonicalProjects.filter((item) => item.id !== mergedProject.id)];
+      hydrateCanonicalProject(mergedProject);
       state.view = null;
       flash("项目名称已保存。");
     } catch (error) {

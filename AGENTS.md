@@ -11,7 +11,10 @@
 - Run locally with `npm start`; the default local URL is `http://127.0.0.1:18893`.
 - Run `npm run verify` after application, proxy, or deployment changes.
 - Verify the signed-in template and workspace routes in a real browser for media changes.
+- For template videos, previews may stay lightweight, but playback must resolve the original or an HD derivative; verify the browser's loaded `videoWidth` and `videoHeight` on the affected route.
 - After every substantive iteration, verify the affected signed-in user path in the in-app browser and compare the observed result with the intended behavior; build success, HTTP 200, or static tests alone are not completion evidence. Record any failed real-page expectation and do not claim the iteration complete until it is retested successfully.
+- When a frontend JS or CSS behavior change is deployed, give the changed resource a new versioned URL and verify in a fresh signed-in browser page that the intended control is present and actionable; a reused cached asset is not completion evidence.
+- The peer routes `/templates`, `/workspace`, `/pricing`, and `/billing` must use the same `index.html` shell. `/workspace` may lazy-load its editor module and stylesheet, but route changes must use history navigation without a document reload.
 
 ## Protected Boundaries
 
@@ -19,6 +22,21 @@
 - Preserve `Content-Length`, byte ranges, and soft-delete filtering across all media consumers.
 - Do not make private media public or cache session/token-authorized responses before authentication.
 - Keep the authority original for downloads; authenticated playback derivatives are implemented in the local proxy. A private-media CDN remains a separate pending capability.
+- `dh-origin.cauai.fun` is the legacy authenticated backend on port `8791`; `dh.cauai.fun` is the local frontend/proxy on `18893`. Never point `REMOTE_ORIGIN` at the public frontend domain, which creates a proxy loop.
+- Legacy web and worker media readers must accept Node streams, Web Streams, and async iterables returned by the S3 SDK. Verify an actual signed-in private image after either container is rebuilt.
+- The legacy Next 16 media-route overlay must use the installed Turbo runtime module names and must not eagerly import image-rendition code into the GET path when the production image lacks the optional `sharp` runtime.
+
+## Image2 Channel Policy
+
+- The authorized production Image2 channel is Yunwu. Do not select Yunfei, Krill, RunningHub, or any other provider from a generic model name, a local Skill default, or a missing-key diagnosis.
+- For Yunwu `429` or `503`, keep the failure user-visible, apply the bounded retry policy, and record the sanitized category. Do not ask for another credential or offer a provider switch unless the user explicitly requests that provider.
+- Before changing a provider, credential, model, or paid routing policy, verify the selected channel in the deployed configuration and obtain the required explicit authorization. A missing credential for an unselected provider is not a current blocker.
+
+## Image2 Worker Execution And Acceptance
+
+- Start an Image2 worker through the official `agent-vault vault run -- npm run worker` path. Do not construct or inject a Vault proxy URL manually.
+- Before a paid Image2 request, verify that every selected private input can be fully read by the worker through its intended authenticated route; a successful response header alone is insufficient.
+- Accept a real Image2 generation only after the task reaches a terminal success state, its private output is linked back to the project, and the signed-in workspace renders that output. Provider model-list probes and queued-task states are diagnostic evidence, not completion.
 
 ## Collaboration And Delivery
 
