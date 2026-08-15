@@ -14,9 +14,9 @@ services:
       # proxy so the worker can fetch private project media directly.
       NO_PROXY: "localhost,127.0.0.1,redis,postgres,object-storage,niannian-agent-vault,dh.cauai.fun,dh-origin.cauai.fun"
       IMAGE2_BASE_URL: "https://yunwu.ai/v1"
-      # Agent Vault replaces this placeholder with YUNWU_API_KEY for yunwu.ai.
-      IMAGE2_API_KEY: "__yunwu_api_key__"
-      IMAGE2_MODEL: "gpt-image-2"
+      # Agent Vault replaces this placeholder with YUNWU_IMAGE_API_KEY for yunwu.ai.
+      IMAGE2_API_KEY: "__yunwu_image_api_key__"
+      IMAGE2_MODEL: "gpt-image-2-c"
       IMAGE2_RELAY_REQUEST_TIMEOUT_MS: "90000"
       IMAGE2_RELAY_ADAPTER_MODE: "enabled"
       RUNNINGHUB_IMAGE_ADAPTER_MODE: "disabled"
