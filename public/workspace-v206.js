@@ -641,7 +641,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const selected = displayAssetFor(state.target);
     const finished = activeVideoAsset();
     if (state.showFinalVideo && finished?.url) {
-      const frameAsset = displayAssetFor("frame");
+      // A completed project may briefly omit the FIRST_FRAME node media while
+      // its canonical read is catching up. Keep the final player visually
+      // grounded with the template cover until the private frame is available.
+      const frameAsset = displayAssetFor("frame") || toAsset(currentTemplate().cover, "image", "首帧封面");
       return {
         mode: "video",
         url: finished.url,
