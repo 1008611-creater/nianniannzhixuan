@@ -2464,6 +2464,15 @@ function normalizePath(pathname = window.location.pathname) {
   return routeMeta[cleaned] ? cleaned : "/templates";
 }
 
+function syncHeaderScrollbarCompensation() {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;visibility:hidden;width:100px;height:100px;overflow:scroll;inset:-9999px auto auto -9999px;";
+  document.body?.appendChild(probe);
+  const scrollbarWidth = Math.max(0, probe.offsetWidth - probe.clientWidth);
+  probe.remove();
+  document.documentElement.style.setProperty("--app-scrollbar-width", `${scrollbarWidth}px`);
+}
+
 function navigate(path) {
   const target = new URL(String(path || "/workspace"), window.location.origin);
   const nextPath = normalizePath(target.pathname);
@@ -3191,6 +3200,7 @@ function renderBillingPage() {
 
 function render() {
   const path = normalizePath();
+  syncHeaderScrollbarCompensation();
   const renderers = {
     "/workspace": renderWorkspacePage,
     "/templates": renderTemplatesPage,

@@ -35,6 +35,11 @@ body::before {
   background: transparent;
 }
 
+:root { --app-scrollbar-width: 0px; }
+html:has(.v206-canonical-slot) .site-header {
+  width: calc(100% - var(--app-scrollbar-width));
+}
+
 #app::before {
   content: "";
   position: fixed;
