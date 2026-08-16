@@ -124,13 +124,6 @@ function assistantEventId(snapshot) {
 
 function assistantEventType(previous, snapshot, initial = false) {
   if (initial || !previous) return "PROJECT_RESTORED";
-  const previousNodes = new Map((previous.nodes || []).map((node) => [node.role, node]));
-  for (const node of snapshot.nodes || []) {
-    const before = previousNodes.get(node.role);
-    if (!before || before.mediaId !== node.mediaId || before.status !== node.status) {
-      return before?.mediaId ? "ASSET_REPLACED" : "ASSET_BOUND";
-    }
-  }
   const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
   for (const job of snapshot.jobs || []) {
     const before = previousJobs.get(job.id);
@@ -142,6 +135,13 @@ function assistantEventType(previous, snapshot, initial = false) {
     if (kind === "FIRST_FRAME") return failed ? "FIRST_FRAME_FAILED" : completed ? "FIRST_FRAME_READY" : "FIRST_FRAME_ANALYZING";
     if (kind === "ACTION_TRANSFER") return failed ? "VIDEO_FAILED" : completed ? "VIDEO_COMPLETED" : "VIDEO_QUEUED";
     if (kind === "IMAGE_ASSET" && failed) return "ASSET_SAVE_FAILED";
+  }
+  const previousNodes = new Map((previous.nodes || []).map((node) => [node.role, node]));
+  for (const node of snapshot.nodes || []) {
+    const before = previousNodes.get(node.role);
+    if (!before || before.mediaId !== node.mediaId || before.status !== node.status) {
+      return before?.mediaId ? "ASSET_REPLACED" : "ASSET_BOUND";
+    }
   }
   return "PROJECT_RESTORED";
 }
