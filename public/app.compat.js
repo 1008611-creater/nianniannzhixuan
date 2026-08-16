@@ -2006,6 +2006,8 @@ function publicAssetUrl(url) {
 function displayAssetUrl(url) {
 if (!url) return "";
 if (/^(https?:|blob:|data:)/i.test(url)) return url;
+const cdnOrigin = configuredMediaCdnOrigin();
+if (cdnOrigin && /^\/assets\//i.test(url)) return `${cdnOrigin}${url}`;
 return `${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
