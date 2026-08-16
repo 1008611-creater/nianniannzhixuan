@@ -171,14 +171,14 @@ async function serveIndex(request, response) {
     .replaceAll("/front-v208-product-system.css?v=20260802-unified-web-48", "/front-v208-product-system.css?v=20260811-media-delivery-05")
     .replaceAll("/workspace-v206.js?v=20260802-unified-web-48", "/workspace-v206.js?v=20260812-playback-derivative-01")
     .replaceAll("/workspace-v206.css?v=20260802-unified-web-48", "/workspace-v206.css?v=20260811-workspace-stable-02");
-  const withMediaConfig = currentAssets.replace("</head>", `<script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
+  const withMediaConfig = currentAssets.replace("</head>", `<meta name="nn-media-cdn-origin" content="${publicMediaCdnOrigin}"><script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
   const withUploadHash = withMediaConfig.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
   response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
   response.end(request.method === "HEAD" ? undefined : withUploadHash);
 }
 
 async function serveWorkspace(request, response) {
-  const html = readFileSync(join(publicDir, "workspace.html"), "utf8").replace("</head>", `<script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
+  const html = readFileSync(join(publicDir, "workspace.html"), "utf8").replace("</head>", `<meta name="nn-media-cdn-origin" content="${publicMediaCdnOrigin}"><script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
   response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
   response.end(request.method === "HEAD" ? undefined : html);
 }

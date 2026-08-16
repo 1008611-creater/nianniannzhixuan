@@ -272,9 +272,15 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function esc(value) { return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char])); }
   function hasVideo(url) { return /\.(mp4|mov|webm)(?:[?#]|$)/i.test(String(url || "")); }
+  function configuredMediaCdnOrigin() {
+    const fromWindow = String(window.__NN_MEDIA_CDN_ORIGIN || "").trim();
+    if (fromWindow) return fromWindow.replace(/\/$/, "");
+    const meta = document.querySelector('meta[name="nn-media-cdn-origin"]');
+    return String(meta?.getAttribute("content") || "").trim().replace(/\/$/, "");
+  }
   function mediaCdnAssetUrl(url) {
     const source = String(url || "");
-    const cdnOrigin = String(window.__NN_MEDIA_CDN_ORIGIN || "").replace(/\/$/, "");
+    const cdnOrigin = configuredMediaCdnOrigin();
     return cdnOrigin && /^\/assets\//i.test(source) ? `${cdnOrigin}${source}` : source;
   }
   function publicPreview(asset) { return mediaCdnAssetUrl(asset?.preview || asset?.url || ""); }
