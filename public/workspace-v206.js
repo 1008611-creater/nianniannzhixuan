@@ -841,13 +841,15 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (requestedProjectResult.project && requestedProjectId) {
       durable = requestedProjectResult.project;
       state.canonicalProjects = [durable];
-      void canonicalProjectsPromise.then((result) => {
-        if (result.error || !Array.isArray(result.projects)) return;
-        const current = canonicalProject();
+      // Keep the initial workspace paint atomic. The project response is
+      // usable immediately, but replacing the page again when the full list
+      // arrives made a fresh entry look like repeated browser refreshes.
+      const result = await canonicalProjectsPromise;
+      if (!result.error && Array.isArray(result.projects)) {
+        const current = durable;
         state.canonicalProjects = result.projects;
         if (current && !state.canonicalProjects.some((item) => item.id === current.id)) state.canonicalProjects.unshift(current);
-        renderUnlessSourcesOpen();
-      });
+      }
     } else {
       const canonicalProjects = await canonicalProjectsPromise;
       state.canonicalProjects = canonicalProjects.projects || [];
@@ -868,7 +870,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const project = activeProject();
     if (project && !state.projectId) state.projectId = project.id;
     if (state.session && project?.id) mediaRequest("/api/v1/workspace/opened", { method: "POST", body: JSON.stringify({ projectId: project.id }) }).catch(() => {});
-    if (state.session) void loadSecondaryWorkspaceState(project?.id || "");
+    if (state.session) await loadSecondaryWorkspaceState(project?.id || "");
   }
 
   async function loadSecondaryWorkspaceState(projectId) {
@@ -897,7 +899,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       recoverCompletedAgentImageEdit();
       restorePendingAgentImageEdit();
     } else state.chat = [];
-    renderUnlessSourcesOpen();
+    // The caller owns the first full render. Keeping it here would produce a
+    // second visible remount immediately after the workspace becomes ready.
   }
 
   function currentFirstFrameDraftPayload() {
