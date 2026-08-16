@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-17";
+  const VERSION = "20260817-agent-rail-18";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -144,7 +144,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     assistantMentionsOpen: false,
     workflowStep: "person",
     workflowProjectId: "",
-    pendingVideo: null,
+    pendingVideo: normalizePendingVideo(stored.pendingVideo),
     videoMode: "standard",
     pendingFirstFrame: null,
     firstFrameDraftAnalyzing: false,
@@ -238,6 +238,25 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (asset.mediaId) return { id: asset.mediaId, mediaId: asset.mediaId, kind: asset.kind, label: asset.label };
     return String(asset.url || "").startsWith("/assets/") ? asset : null;
   }
+  function normalizePendingVideo(value) {
+    if (!value || !UUID_PATTERN.test(String(value.projectId || "")) || !value.firstFrameMediaId || !value.motionMediaId) return null;
+    const estimate = value.quote?.estimatedWaitSeconds || {};
+    return {
+      projectId: String(value.projectId),
+      firstFrameMediaId: String(value.firstFrameMediaId),
+      motionMediaId: String(value.motionMediaId),
+      firstFrameLabel: String(value.firstFrameLabel || "商品首帧"),
+      motionLabel: String(value.motionLabel || "动作参考"),
+      sampleInputs: Array.isArray(value.sampleInputs) ? value.sampleInputs.map(String).slice(0, 4) : [],
+      maximumSeconds: Math.min(Math.max(Number(value.maximumSeconds || 0), 0.1), 120),
+      standardFrames: Math.min(3600, Math.max(24, Number(value.standardFrames || 24))),
+      quote: {
+        maxTzCost: Number(value.quote?.maxTzCost || 0),
+        estimatedWaitSeconds: { lower: Number(estimate.lower || 720), upper: Number(estimate.upper || 1200) },
+        quotedMaxDurationSeconds: Number(value.quote?.quotedMaxDurationSeconds || value.maximumSeconds || 0),
+      },
+    };
+  }
   function writeState() {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       templateId: state.templateId,
@@ -254,6 +273,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       pendingAssignments: state.pendingAssignments,
       pendingAgentImageEdit: state.pendingAgentImageEdit,
       pendingFirstFrame: persistentPendingFirstFrame(),
+      pendingVideo: normalizePendingVideo(state.pendingVideo),
       assistantEventMessages: state.assistantEventMessages.slice(-40),
       firstFrameQuote: state.firstFrameQuote,
     }));
@@ -2603,6 +2623,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       if (Number(summary.wallet?.tzBalance || 0) < Number(quote.maxTzCost || 0)) throw new Error("TZB余额不足。");
       generationIdempotencyKey("action_transfer");
       state.pendingVideo = { projectId: project.id, firstFrameMediaId: frame.mediaId, motionMediaId: motion.mediaId, firstFrameLabel: frame.label || "商品首帧", motionLabel: motion.label || "动作参考", sampleInputs: [{ label: "商品首帧", sample: frame.isTemplateSample }, { label: "动作参考", sample: motion.isTemplateSample }].filter((item) => item.sample).map((item) => item.label), maximumSeconds, standardFrames: Math.min(3600, Math.max(24, Math.ceil(maximumSeconds * 24))), quote };
+      writeState();
       setWorkflowStep("final");
     } catch (error) { flash(error.message || "视频报价读取失败。", "warning"); }
     finally { state.busy = ""; render(); }
@@ -2626,6 +2647,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       }
       clearGenerationIdempotencyKey("action_transfer");
       state.pendingVideo = null;
+      writeState();
       scheduleTaskRefresh();
       setWorkflowStep("final");
       flash(`${stable ? "稳定" : "标准"}模式已进入持久队列，成片入库后会在主画布显示。`);

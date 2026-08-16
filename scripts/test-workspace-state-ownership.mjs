@@ -13,6 +13,8 @@ assert.match(workspace, /function generationInputSignature\(kind\)/);
 assert.match(workspace, /function generationIdempotencyKey\(kind\)/);
 assert.match(workspace, /first-frame\/drafts\/\$\{pending\.draft\.id\}\/confirm[\s\S]{0,180}idempotency-key.*generationIdempotencyKey\("first_frame"\)/);
 assert.match(workspace, /first-frame\/drafts\/\$\{draft\.id\}\/confirm[\s\S]{0,180}idempotency-key.*generationIdempotencyKey\("first_frame"\)/);
+assert.match(workspace, /pendingVideo: normalizePendingVideo\(stored\.pendingVideo\)/, "video quote confirmation must survive refresh");
+assert.match(workspace, /pendingVideo: normalizePendingVideo\(state\.pendingVideo\)/, "video quote state must be persisted without raw provider data");
 assert.match(workspace, /mutation !== state\.sourceMutation/);
 assert.match(workspace, /source\.signature !== generationInputSignature\(source\.kind\)/);
 assert.match(workspace, /state\.view === "sources" \|\| document\.visibilityState === "hidden"/);
