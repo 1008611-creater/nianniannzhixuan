@@ -11,6 +11,8 @@ assert.match(workspaceSource, /decision\.choices\.slice\(0, 3\)/, "the agent mus
 assert.match(workspaceSource, /确认后才会进入付费制作/, "paid actions must remain confirmation-gated");
 assert.match(workspaceSource, /data-v206-decision-id/, "agent actions must carry a decision fingerprint");
 assert.match(workspaceSource, /当前制作状态已经更新，请按最新引导操作/, "stale agent actions must be rejected visibly");
+assert.match(workspaceSource, /成片报价已核对：最高/, "a prepared video quote must become an explicit confirmation decision");
+assert.match(workspaceSource, /choice\("确认并制作视频", "confirm-video-inline"/, "video confirmation must not submit a second quote");
 
 const projectId = "project-current";
 const asset = (mediaId, url = `/api/v1/media/${mediaId}/content`) => ({ mediaId, url, kind: "image" });

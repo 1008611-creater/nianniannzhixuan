@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-15";
+  const VERSION = "20260817-agent-rail-16";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -1566,7 +1566,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     };
     const finalize = () => {
       const stateKey = Object.entries(workflow).map(([key, value]) => `${key}:${value?.status || ""}:${value?.bound ? "1" : "0"}:${value?.task?.id || ""}`).join("|");
-      result.id = [step.id, stateKey, missing.join(","), pendingDraft?.id || "", pendingDraft?.status || "", state.firstFrameDraftError || "", pendingAction?.id || "", pendingAction?.status || "", presentation?.task?.id || ""].join("::").replace(/[^A-Za-z0-9:|,_-]/g, "_");
+      result.id = [step.id, stateKey, missing.join(","), pendingDraft?.id || "", pendingDraft?.status || "", state.firstFrameDraftError || "", pendingAction?.id || "", pendingAction?.status || "", state.pendingVideo?.projectId || "", state.pendingVideo?.firstFrameMediaId || "", presentation?.task?.id || ""].join("::").replace(/[^A-Za-z0-9:|,_-]/g, "_");
       return result;
     };
     if (video?.url) {
@@ -1612,6 +1612,15 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       result.recommendation = "正在分析当前素材；分析完成后会显示确认生成，不会自动扣费。";
       result.blocking = "首帧分析中";
       result.choices = [choice("查看当前素材", "workflow-step", { step: "person", primary: true }), choice("先改图", "assistant-thread"), choice("查看制作进度", "tasks")];
+      return finalize();
+    }
+    if (step.id === "final" && state.pendingVideo) {
+      const maximumSeconds = Number(state.pendingVideo.maximumSeconds || 0);
+      const maxTzCost = Number(state.pendingVideo.quote?.maxTzCost || 0);
+      result.recommendation = `成片报价已核对：最高 ${maxTzCost.toFixed(2)} TZB，成功后按实际时长结算，失败不扣费。确认后才会提交制作任务。`;
+      result.blocking = "等待用户确认";
+      result.requiresConfirmation = true;
+      result.choices = [choice("确认并制作视频", "confirm-video-inline", { primary: true }), choice("先改首帧", "assistant-thread"), choice("查看制作依据", "workflow-step", { step: "final" })];
       return finalize();
     }
     if (pendingAction) {
