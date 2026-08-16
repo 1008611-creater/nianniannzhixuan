@@ -2463,7 +2463,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const confirmed = await billing("image", { count: 1, confirmedInPanel: true, inputs: [{ role: "人物", label: pending.personLabel, sample: pending.sampleInputs.includes("人物") }, { role: "衣服", label: pending.clothesLabel, sample: pending.sampleInputs.includes("衣服") }, { role: "参考视频", label: pending.motionLabel, sample: pending.sampleInputs.includes("动作") }] });
       if (!confirmed) return;
       const acceptMaterialRisk = Boolean(pending.draft.softRisks?.length || pending.draft.analysis?.conflicts?.length);
-      const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/drafts/${pending.draft.id}/confirm`, { method: "POST", body: JSON.stringify({ acceptMaterialRisk }) });
+      const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/drafts/${pending.draft.id}/confirm`, { method: "POST", headers: { "idempotency-key": generationIdempotencyKey("first_frame") }, body: JSON.stringify({ acceptMaterialRisk }) });
       const job = result.job;
       state.jobs = job ? [job, ...state.jobs.filter((item) => item.id !== job.id)] : state.jobs;
       state.frameJobId = job?.id || state.frameJobId;
@@ -2472,6 +2472,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         state.currentJobSnapshots.frame = job;
       }
       state.pendingFirstFrame = null;
+      clearGenerationIdempotencyKey("first_frame");
       setWorkflowStep("frame");
       writeState();
       scheduleTaskRefresh();
@@ -2723,6 +2724,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const draft = await waitForAgentFirstFrameDraft(project.id, prepared.draft);
       const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/drafts/${draft.id}/confirm`, {
         method: "POST",
+        headers: { "idempotency-key": generationIdempotencyKey("first_frame") },
         body: JSON.stringify({ acceptMaterialRisk: Boolean(draft.softRisks?.length || draft.analysis?.conflicts?.length) }),
       });
       const job = result.job;
@@ -2730,6 +2732,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       edit.projectId = project.id;
       edit.jobId = job.id;
       edit.status = "queued";
+      clearGenerationIdempotencyKey("first_frame");
       state.pendingAgentImageEdit = edit;
       state.jobs = [job, ...state.jobs.filter((item) => item.id !== job.id)];
       state.frameJobId = job.id;

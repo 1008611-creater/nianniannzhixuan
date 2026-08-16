@@ -10,6 +10,9 @@ assert.match(legacy, /async function runTaskAutoSync\(\) \{[\s\S]{0,300}normaliz
 assert.match(legacy, /function startTaskAutoSync\(\) \{[\s\S]{0,200}normalizePath\(\) === "\/workspace"\) return;/);
 assert.match(workspace, /function invalidateDerivedOutputs\(\)/);
 assert.match(workspace, /function generationInputSignature\(kind\)/);
+assert.match(workspace, /function generationIdempotencyKey\(kind\)/);
+assert.match(workspace, /first-frame\/drafts\/\$\{pending\.draft\.id\}\/confirm[\s\S]{0,180}idempotency-key.*generationIdempotencyKey\("first_frame"\)/);
+assert.match(workspace, /first-frame\/drafts\/\$\{draft\.id\}\/confirm[\s\S]{0,180}idempotency-key.*generationIdempotencyKey\("first_frame"\)/);
 assert.match(workspace, /mutation !== state\.sourceMutation/);
 assert.match(workspace, /source\.signature !== generationInputSignature\(source\.kind\)/);
 assert.match(workspace, /state\.view === "sources" \|\| document\.visibilityState === "hidden"/);
