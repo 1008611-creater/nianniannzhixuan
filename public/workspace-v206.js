@@ -171,6 +171,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     invalidatedDerivedByProject: stored.invalidatedDerivedByProject && typeof stored.invalidatedDerivedByProject === "object" ? stored.invalidatedDerivedByProject : {},
     generationSources: stored.generationSources && typeof stored.generationSources === "object" ? stored.generationSources : {},
     currentJobSnapshots: stored.currentJobSnapshots && typeof stored.currentJobSnapshots === "object" ? stored.currentJobSnapshots : {},
+    eventStreamStatus: "offline",
   };
   if (previewMode) {
     const previewProjectId = "00000000-0000-4000-8000-000000000001";
@@ -205,6 +206,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   let firstFrameDraftRecoveryTimer = 0;
   let firstFrameDraftRecoveryRun = 0;
   const mediaRefreshAt = new Map();
+  let assistantEventSource = null;
+  let assistantEventProjectId = "";
+  let assistantEventSnapshot = null;
+  const assistantEventIds = new Set();
 
   function read(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key) || "") || fallback; } catch { return fallback; }
@@ -897,6 +902,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (project && !state.projectId) state.projectId = project.id;
     if (state.session && project?.id) mediaRequest("/api/v1/workspace/opened", { method: "POST", body: JSON.stringify({ projectId: project.id }) }).catch(() => {});
     if (state.session) await loadSecondaryWorkspaceState(project?.id || "");
+    if (state.session && project?.id) connectAssistantEventStream(project.id);
     restorePersistedPendingFirstFrame();
   }
 
@@ -1079,9 +1085,66 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       firstFrameQuality: project?.firstFrameQuality ? { id: project.firstFrameQuality.id, status: project.firstFrameQuality.status, result: project.firstFrameQuality.result } : null,
     });
   }
+  function closeAssistantEventStream() {
+    if (assistantEventSource) assistantEventSource.close();
+    assistantEventSource = null;
+    assistantEventProjectId = "";
+    state.eventStreamStatus = "offline";
+  }
+  function appendAssistantEventMessage(event) {
+    if (!event?.id || assistantEventIds.has(event.id)) return;
+    assistantEventIds.add(event.id);
+    if (assistantEventIds.size > 40) assistantEventIds.delete(assistantEventIds.values().next().value);
+    const previous = assistantEventSnapshot;
+    assistantEventSnapshot = event.snapshot || null;
+    if (!previous || !assistantEventSnapshot) return;
+    const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
+    const changedJobs = (assistantEventSnapshot.jobs || []).filter((job) => {
+      const before = previousJobs.get(job.id);
+      return !before || before.status !== job.status || before.updatedAt !== job.updatedAt;
+    });
+    const terminal = changedJobs.find((job) => /^(completed|succeeded|success|failed|error|retryable_failed)$/i.test(String(job.status || "")));
+    const nodeChanged = JSON.stringify(previous.nodes || []) !== JSON.stringify(assistantEventSnapshot.nodes || []);
+    const content = terminal && /failed|error|retryable_failed/i.test(String(terminal.status || ""))
+      ? "任务没有完成，本次不会扣费。可以重试，或先调整素材。"
+      : terminal
+        ? "任务已经完成，我正在同步当前项目结果。接下来可以查看结果，或继续调整素材。"
+        : nodeChanged
+          ? "素材已保存到当前项目，我已重新核对下一步。"
+          : "制作状态已更新，我正在同步当前项目。";
+    state.chat.push({ id: `local-assistant-event:${event.id}`, role: "assistant", content, createdAt: new Date().toISOString() });
+    renderUnlessSourcesOpen();
+  }
+  function connectAssistantEventStream(projectId) {
+    if (!projectId || !state.session || !window.EventSource) return;
+    if (assistantEventSource && assistantEventProjectId === projectId) return;
+    closeAssistantEventStream();
+    assistantEventProjectId = projectId;
+    const source = new EventSource(`/api/v1/assistant/events?projectId=${encodeURIComponent(projectId)}`, { withCredentials: true });
+    assistantEventSource = source;
+    source.onopen = () => {
+      state.eventStreamStatus = "connected";
+      window.clearTimeout(taskRefreshTimer);
+      taskRefreshTimer = 0;
+    };
+    source.addEventListener("snapshot", (event) => {
+      try { assistantEventSnapshot = JSON.parse(event.data); } catch {}
+    });
+    source.addEventListener("workflow.changed", (event) => {
+      try {
+        const snapshot = JSON.parse(event.data);
+        appendAssistantEventMessage({ id: event.lastEventId || `event-${Date.now()}`, snapshot });
+        void refreshTaskState();
+      } catch {}
+    });
+    source.onerror = () => {
+      state.eventStreamStatus = "reconnecting";
+      scheduleTaskRefresh(5_000);
+    };
+  }
   function scheduleTaskRefresh(delay = 12000) {
     window.clearTimeout(taskRefreshTimer);
-    if (!state.session || state.view === "sources" || document.visibilityState === "hidden" || taskRefreshInFlight) return;
+    if (state.eventStreamStatus === "connected" || !state.session || state.view === "sources" || document.visibilityState === "hidden" || taskRefreshInFlight) return;
     const project = activeProject();
     const hasActiveImage = state.jobs.some((job) => jobBelongsToProject(job, project) && taskIsActive(job.status));
     const hasActiveVideo = taskIsActive(project?.production?.status);
@@ -1258,7 +1321,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const messages = visibleChat.map((message) => String(message.role || "").toLowerCase() === "user"
       ? `<article class="v206-inline-message user"><div class="v206-message-meta"><b>你的要求</b><time>${esc(formatMessageTime(message.createdAt))}</time></div><span>${esc(message.content || message.text || "")}</span></article>`
       : assistantMessage(message)).join("");
-    return messages || `<p class="v206-chat-empty">补充一句想保留或想调整的内容，我会先给方案，再由你确认是否生成。</p>`;
+    const decision = assistantDecisionMarkup();
+    return `${messages || `<p class="v206-chat-empty">补充一句想保留或想调整的内容，我会先给方案，再由你确认是否生成。</p>`}${decision}`;
   }
   function assistantActionStatus(action) {
     const status = String(action?.status || "").toLowerCase();

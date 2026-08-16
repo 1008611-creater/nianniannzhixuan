@@ -93,6 +93,95 @@ function playbackFile(mediaId) {
   return join(playbackDir, `${mediaId}.mp4`);
 }
 
+const projectIdPattern = /^[0-9a-f-]{36}$/i;
+
+function assistantEventSnapshot(projectId, projectPayload, jobsPayload) {
+  const project = projectPayload?.project || projectPayload || {};
+  const nodes = Array.isArray(project.nodes) ? project.nodes : [];
+  const jobs = Array.isArray(jobsPayload?.jobs) ? jobsPayload.jobs : [];
+  return {
+    projectId,
+    projectUpdatedAt: project.updatedAt || project.updated_at || null,
+    nodes: nodes.map((node) => ({
+      role: node.role || null,
+      mediaId: node.media?.id || node.mediaId || null,
+      status: node.status || (node.media ? "bound" : "empty"),
+      updatedAt: node.updatedAt || node.updated_at || null,
+    })).filter((node) => node.role),
+    jobs: jobs.filter((job) => job.projectId === projectId || job.project?.id === projectId).map((job) => ({
+      id: job.id || null,
+      kind: job.kind || null,
+      status: job.status || null,
+      updatedAt: job.updatedAt || job.updated_at || null,
+      failureCategory: job.failureCategory || job.failure_code || null,
+    })).filter((job) => job.id),
+  };
+}
+
+function assistantEventId(snapshot) {
+  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex").slice(0, 24);
+}
+
+async function fetchAssistantState(pathname, headers, signal) {
+  const requestHeaders = new Headers(headers);
+  requestHeaders.set("accept", "application/json");
+  const upstream = await fetch(new URL(pathname, remoteOrigin), { headers: requestHeaders, signal });
+  if (!upstream.ok) throw new Error(`ASSISTANT_STATE_${upstream.status}`);
+  return upstream.json();
+}
+
+async function streamAssistantEvents(request, response, projectId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  let closed = false;
+  let timer;
+  let heartbeat;
+  let controller;
+  let lastEventId = request.headers["last-event-id"] || "";
+  const write = (chunk) => {
+    if (!closed && !response.destroyed) response.write(chunk);
+  };
+  const emit = (type, id, data) => {
+    write(`event: ${type}\nid: ${id}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  const cleanup = () => {
+    closed = true;
+    clearTimeout(timer);
+    clearInterval(heartbeat);
+    controller?.abort();
+  };
+  response.once("close", cleanup);
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "connection": "keep-alive",
+    "x-accel-buffering": "no-store",
+  });
+  write(`retry: 5000\n\n`);
+  heartbeat = setInterval(() => write(`: heartbeat ${Date.now()}\n\n`), 20_000);
+  const poll = async (initial = false) => {
+    if (closed) return;
+    controller = new AbortController();
+    try {
+      const [projectPayload, jobsPayload] = await Promise.all([
+        fetchAssistantState(`/api/v1/projects/${encodeURIComponent(projectId)}`, headers, controller.signal),
+        fetchAssistantState("/api/v1/jobs", headers, controller.signal),
+      ]);
+      const snapshot = assistantEventSnapshot(projectId, projectPayload, jobsPayload);
+      const eventId = assistantEventId(snapshot);
+      if (initial || eventId !== lastEventId) {
+        emit(initial ? "snapshot" : "workflow.changed", eventId, snapshot);
+        lastEventId = eventId;
+      }
+    } catch (error) {
+      if (!closed && error?.name !== "AbortError") emit("error", `error-${Date.now()}`, { category: "state_unavailable" });
+    } finally {
+      controller = null;
+      if (!closed) timer = setTimeout(() => poll(false), 8_000);
+    }
+  };
+  await poll(true);
+}
+
 function derivativeHeaders(headers) {
   const result = new Headers(headers);
   ["host", "connection", "content-length", "content-type", "range", "origin", "referer"].forEach((name) => result.delete(name));
@@ -649,6 +738,16 @@ createServer(async (request, response) => {
     if (request.method === "GET" && pathname === "/healthz") {
       response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
       response.end(JSON.stringify({ ok: true, service: "dh-cauai-local", port, remoteOrigin }));
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/v1/assistant/events") {
+      const projectId = new URL(request.url, "http://localhost").searchParams.get("projectId") || "";
+      if (!projectIdPattern.test(projectId)) {
+        response.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        response.end(JSON.stringify({ error: "INVALID_PROJECT_ID" }));
+        return;
+      }
+      await streamAssistantEvents(request, response, projectId);
       return;
     }
     if (["GET", "HEAD"].includes(request.method) && (pathname === "/" || pathname === "/index.html")) {
