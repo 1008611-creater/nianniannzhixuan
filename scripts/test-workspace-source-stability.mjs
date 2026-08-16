@@ -10,7 +10,7 @@ const workspaceEntryCss = await readFile(new URL("../public/workspace-entry.css"
 assert.match(legacy, /path === "\/workspace" && app\.querySelector\("#v206-app"\).*return;/);
 assert.match(legacy, /if \(nextPath === "\/workspace"\)[\s\S]{0,700}window\.history\.pushState/);
 assert.match(legacy, /workspaceV206ModulePromise = import\("\/workspace-v206\.js\?v=20260816-playback-poster-03"\)/);
-assert.match(legacy, /href = "\/workspace-v206\.css\?v=20260815-unified-shell-01"/);
+assert.match(legacy, /href = "\/workspace-v206\.css\?v=20260816-agent-dialog-01"/);
 assert.match(legacy, /function startTaskFeedbackTicker\(\)[\s\S]{0,180}normalizePath\(\) === "\/workspace"/);
 
 assert.match(workspace, /function sourceSheetMounted\(\)/);

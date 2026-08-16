@@ -631,3 +631,60 @@ html:has(.v206-canonical-slot), body:has(.v206-canonical-slot) { height: 100%; m
 .workflow-workbench button.v206-material {
   border-radius: 0 !important;
 }
+
+/* Product-style assistant conversation: calm canvas, clear hierarchy, and a
+   deliberate confirmation surface for actions that may incur a charge. */
+.v206-thread {
+  padding: 22px;
+  background: rgba(26, 42, 34, .18);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+.v206-thread-shell {
+  width: min(960px, 100%);
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(40, 76, 56, .22);
+  border-radius: 18px;
+  background: #f7faf5;
+  box-shadow: 0 24px 70px rgba(23, 43, 33, .22);
+}
+.v206-thread-header {
+  min-height: 82px;
+  padding: 14px 22px;
+  background: rgba(255, 255, 252, .86);
+}
+.v206-thread-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.v206-thread-avatar { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(47, 121, 80, .24); border-radius: 12px; background: #15231f; box-shadow: 0 5px 14px rgba(35, 65, 47, .14); }
+.v206-thread-avatar img { width: 100%; height: 100%; object-fit: contain; }
+.v206-thread-header h1 { font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif; font-size: 19px; font-weight: 850; letter-spacing: 0; }
+.v206-thread-header p { margin-bottom: 2px; font-family: inherit; font-size: 10px; }
+.v206-thread-identity > div > span { color: var(--shell-muted); font-size: 11px; }
+.v206-thread-header-actions button { min-height: 32px; border-radius: 9px; background: #f5f8f1; transition: background-color 150ms ease, border-color 150ms ease; }
+.v206-thread-header-actions button:hover { border-color: var(--forest); background: #eaf2e8; }
+.v206-thread-context { gap: 7px; padding: 10px 18px; border-bottom: 1px solid rgba(40, 76, 56, .12); background: #eef4eb; }
+.v206-thread-context-item { min-width: 0; max-width: 170px; flex: 1 1 0; gap: 2px; padding: 7px 9px; border: 1px solid rgba(40, 76, 56, .12); border-radius: 9px; background: rgba(255, 255, 252, .64); }
+.v206-thread-context-item b { color: var(--forest); font-family: inherit; font-size: 10px; }
+.v206-thread-history { gap: 16px; padding: 24px clamp(18px, 7vw, 88px) 34px; background: #f3f7f1; }
+.v206-thread .v206-inline-message { border-radius: 14px; box-shadow: 0 5px 14px rgba(35, 65, 47, .05); }
+.v206-thread .v206-inline-message.user { border: 1px solid rgba(47, 121, 80, .18); border-right: 3px solid var(--forest); background: #e1eee2; }
+.v206-thread .v206-message-bubble { border: 1px solid rgba(40, 76, 56, .12); border-left: 3px solid var(--forest); border-radius: 14px; background: #fff; box-shadow: 0 5px 14px rgba(35, 65, 47, .06); }
+.v206-thread .v206-assistant-avatar { width: 34px; height: 34px; flex-basis: 34px; margin-top: 3px; border: 1px solid rgba(47, 121, 80, .18); border-radius: 10px; background: #15231f; }
+.v206-thread .v206-proposal { gap: 10px; margin-top: 12px; padding-top: 12px; border-top-color: rgba(40, 76, 56, .12); }
+.v206-thread .v206-proposal-action { gap: 6px; border-color: rgba(176, 141, 57, .34); border-radius: 11px; background: #fffaf0; }
+.v206-thread .v206-proposal-action button { min-height: 34px; border-radius: 8px; padding: 0 12px; background: var(--brand-action); font-weight: 750; }
+.v206-thread-compose { gap: 8px; padding: 12px 22px 18px; background: rgba(255, 255, 252, .9); }
+.v206-thread .v206-assistant-composer { border: 1px solid rgba(40, 76, 56, .2); border-radius: 13px; background: #fff; box-shadow: 0 8px 24px rgba(35, 65, 47, .08); }
+.v206-thread textarea { min-height: 62px; border: 0; border-radius: 13px; padding: 13px 14px; outline: none; }
+.v206-thread textarea:focus { box-shadow: inset 0 0 0 2px rgba(47, 121, 80, .16); }
+.v206-thread .v206-command-foot { padding: 0 10px 9px; }
+.v206-thread .v206-send { min-height: 34px; border-radius: 8px; padding: 0 15px; }
+
+@media (max-width: 720px) {
+  .v206-thread { padding: 0; }
+  .v206-thread-shell { border: 0; border-radius: 0; }
+  .v206-thread-header { padding: 12px 15px; }
+  .v206-thread-context { padding: 8px 12px; }
+  .v206-thread-context-item { min-width: 112px; flex: 0 0 auto; }
+  .v206-thread-history { padding: 18px 13px 26px; }
+  .v206-thread-compose { padding: 10px 13px calc(12px + env(safe-area-inset-bottom)); }
+}
