@@ -656,6 +656,11 @@ html:has(.v206-canonical-slot), body:has(.v206-canonical-slot) { height: 100%; m
 .v206-thread-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .v206-thread-avatar { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(47, 121, 80, .24); border-radius: 12px; background: #15231f; box-shadow: 0 5px 14px rgba(35, 65, 47, .14); }
 .v206-thread-avatar img { width: 100%; height: 100%; object-fit: contain; }
+.v206-thread-header > div:first-child:not(.v206-thread-identity) { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); column-gap: 11px; align-items: center; min-width: 0; padding-left: 53px; }
+.v206-thread-header > div:first-child:not(.v206-thread-identity)::before { content: ""; position: absolute; left: 0; top: 50%; width: 42px; height: 42px; border-radius: 12px; transform: translateY(-50%); background: #10291f url("/assets/niannian-ai-logo-128.webp") center / cover no-repeat; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
+.v206-thread-header > div:first-child:not(.v206-thread-identity)::after { content: "素材与制作助手"; grid-column: 2; margin-top: -2px; color: #708077; font-size: 12px; line-height: 1.2; }
+.v206-thread-header > div:first-child:not(.v206-thread-identity) > p,
+.v206-thread-header > div:first-child:not(.v206-thread-identity) > h1 { grid-column: 2; }
 .v206-thread-header h1 { font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif; font-size: 19px; font-weight: 850; letter-spacing: 0; }
 .v206-thread-header p { margin-bottom: 2px; font-family: inherit; font-size: 10px; }
 .v206-thread-identity > div > span { color: var(--shell-muted); font-size: 11px; }
