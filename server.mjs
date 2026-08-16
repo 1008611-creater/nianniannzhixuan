@@ -35,6 +35,16 @@ const mimeTypes = {
 const generatedImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const generatedImageInputTtlMs = 10 * 60 * 1000;
 const publicOrigin = new URL(process.env.PUBLIC_ORIGIN || "https://dh.cauai.fun").origin;
+const publicMediaCdnOrigin = (() => {
+  const value = String(process.env.PUBLIC_MEDIA_CDN_ORIGIN || "").trim();
+  if (!value) return "";
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" ? parsed.origin : "";
+  } catch {
+    return "";
+  }
+})();
 
 mkdirSync(playbackDir, { recursive: true });
 
@@ -161,13 +171,14 @@ async function serveIndex(request, response) {
     .replaceAll("/front-v208-product-system.css?v=20260802-unified-web-48", "/front-v208-product-system.css?v=20260811-media-delivery-05")
     .replaceAll("/workspace-v206.js?v=20260802-unified-web-48", "/workspace-v206.js?v=20260812-playback-derivative-01")
     .replaceAll("/workspace-v206.css?v=20260802-unified-web-48", "/workspace-v206.css?v=20260811-workspace-stable-02");
-  const withUploadHash = currentAssets.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
+  const withMediaConfig = currentAssets.replace("</head>", `<script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
+  const withUploadHash = withMediaConfig.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
   response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
   response.end(request.method === "HEAD" ? undefined : withUploadHash);
 }
 
 async function serveWorkspace(request, response) {
-  const html = readFileSync(join(publicDir, "workspace.html"), "utf8");
+  const html = readFileSync(join(publicDir, "workspace.html"), "utf8").replace("</head>", `<script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
   response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
   response.end(request.method === "HEAD" ? undefined : html);
 }

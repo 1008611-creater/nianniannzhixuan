@@ -11,6 +11,7 @@ services:
       PORT: 18893
       REMOTE_ORIGIN: https://dh-origin.cauai.fun
       PUBLIC_ORIGIN: https://dh.cauai.fun
+      PUBLIC_MEDIA_CDN_ORIGIN: ${PUBLIC_MEDIA_CDN_ORIGIN:-}
       CSRF_ORIGIN: http://127.0.0.1:18890
       # Enable only after Tencent CDN Type A authentication and cache rules are active.
       CDN_PLAYBACK_ENABLED: ${CDN_PLAYBACK_ENABLED:-0}

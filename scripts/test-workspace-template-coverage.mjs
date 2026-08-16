@@ -18,7 +18,7 @@ assert.match(workspace, /asset\?\.isTemplateSample && \["person", "outfit", "sce
 assert.match(workspace, /const previousSelection = sameProject \? \{ \.\.\.state\.selected \} : \{\}/);
 assert.match(workspace, /if \(Object\.prototype\.hasOwnProperty\.call\(node, "media"\)\) state\.selected\[slot\] = next/);
 assert.match(workspace, /function inputGuide\(target\)/);
-assert.match(workspace, /this\.onerror=null;this\.src='\$\{esc\(asset\.url\)\}'/);
+assert.match(workspace, /this\.onerror=null;this\.src='\$\{esc\(mediaCdnAssetUrl\(asset\.url\)\)\}'/);
 assert.match(workspace, /制作教程/);
 assert.match(workspace, /背景是可选项；不添加时会沿用模板视频的门店空间和机位。/);
 assert.match(workspace, /if \(unavailable && state\.target !== "motion"\)/);
