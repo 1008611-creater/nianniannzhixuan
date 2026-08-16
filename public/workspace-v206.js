@@ -1786,11 +1786,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function assistantThreadSheet() {
     const project = activeProject();
-    const context = Object.entries(slots).map(([id, meta]) => `<span class="v206-thread-context-item"><b>${esc(meta.title)}</b>${esc(displayAssetFor(id)?.label || "待补充")}</span>`).join("");
     return `<section class="v206-thread v206-assistant-inline" data-v206-thread role="region" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
         <header class="v206-thread-header"><div class="v206-thread-identity"><span class="v206-thread-avatar"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1><span>素材与制作助手</span></div></div></header>
-        <div class="v206-thread-context" aria-label="当前制作素材">${context}</div>
         <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${chatMessagesMarkup()}${guidedAgentMarkup()}</div>
         <div class="v206-thread-compose">${assistantComposerMarkup(true)}</div>
       </div>
