@@ -1985,9 +1985,18 @@ function setupChatTextarea(textarea) {
 
 
 
+function configuredMediaCdnOrigin() {
+  const fromWindow = String(window.__NN_MEDIA_CDN_ORIGIN || "").trim();
+  if (fromWindow) return fromWindow.replace(/\/$/, "");
+  const meta = document.querySelector('meta[name="nn-media-cdn-origin"]');
+  return String(meta?.getAttribute("content") || "").trim().replace(/\/$/, "");
+}
+
 function publicAssetUrl(url) {
   if (!url) return "";
   if (/^(https?:|blob:|data:)/i.test(url)) return url;
+  const cdnOrigin = configuredMediaCdnOrigin();
+  if (cdnOrigin && /^\/assets\//i.test(url)) return `${cdnOrigin}${url}`;
   const origin = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
     ? "https://dh.cauai.fun"
     : window.location.origin;
