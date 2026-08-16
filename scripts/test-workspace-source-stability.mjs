@@ -9,7 +9,7 @@ const workspaceEntryCss = await readFile(new URL("../public/workspace-entry.css"
 
 assert.match(legacy, /path === "\/workspace" && app\.querySelector\("#v206-app"\).*return;/);
 assert.match(legacy, /if \(nextPath === "\/workspace"\)[\s\S]{0,700}window\.history\.pushState/);
-assert.match(legacy, /workspaceV206ModulePromise = import\("\/workspace-v206\.js\?v=20260816-agent-dialog-01"\)/);
+assert.match(legacy, /workspaceV206ModulePromise = import\("\/workspace-v206\.js\?v=20260816-workspace-media-stable-01"\)/);
 assert.match(legacy, /href = "\/workspace-v206\.css\?v=20260816-agent-dialog-02"/);
 assert.match(legacy, /function startTaskFeedbackTicker\(\)[\s\S]{0,180}normalizePath\(\) === "\/workspace"/);
 
@@ -39,11 +39,13 @@ assert.match(workspace, /if \(canonicalProjects\.error\)/);
 const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
 assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260816-agent-dialog-01"/);
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
-assert.match(indexHtml, /app\.compat\.js\?v=20260816-agent-dialog-02/);
+assert.match(indexHtml, /app\.compat\.js\?v=20260816-agent-dialog-03/);
 
 const upload = workspace.match(/async function upload\(target, file, options = \{\}\) \{[\s\S]*?\n  async function ensureProject/);
 assert.ok(upload, "upload must exist");
 assert.match(upload[0], /if \(!syncSourceSheetBusy\(\)\) render\(\);/);
 assert.doesNotMatch(upload[0], /state\.busy = assistantReference[\s\S]{0,120}\n\s*render\(\);/);
+assert.match(workspace, /A failed preview request is a transport\/rendering problem/);
+assert.match(workspace, /state\.unavailableMedia\.add\(mediaId\);\n\s*refreshPrivateMedia\(mediaId\);/);
 
 console.log("OK workspace source sheet survives background refresh and upload state changes");
