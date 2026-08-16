@@ -1223,6 +1223,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function stageMarkup() {
     const stage = mainStage();
     const stageFallback = "/assets/references/premium-storefront-cover-thumb.jpg";
+    const stagePrimary = stage.displayUrl || stage.url || "";
     const stagePoster = stage.poster || (stage.mode === "video" && stage.mediaId && activeVideoAsset()?.mediaId === stage.mediaId ? currentTemplate().cover : "");
     const emptyTarget = ["person", "outfit", "motion", "scene"].includes(stage.target || state.target) ? (stage.target || state.target) : "";
     const media = stage.mode === "empty"
@@ -1230,7 +1231,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         ? `<section class="v206-stage-guide" aria-label="${esc(stage.guide.title)}教程"><span>制作教程</span><h2>${esc(stage.guide.title)}</h2><p>${esc(stage.guide.detail)}</p><ol>${stage.guide.checks.map((item) => `<li>${esc(item)}</li>`).join("")}</ol><button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button></section>`
         : `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
       : stage.mode === "image"
-        ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media data-v206-media-fallback="${esc(stageFallback)}"${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览"></div>`
+        ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media data-v206-media-fallback="${esc(stageFallback)}" data-v206-media-primary="${esc(stagePrimary)}"${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stageFallback)}" alt="${esc(stage.label)}预览"></div>`
         : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(mediaCdnAssetUrl(stage.url))}" ${stagePoster ? `poster="${esc(stagePoster)}"` : ""} controls playsinline preload="metadata"></video>`;
     const project = activeProject();
     const projectTitle = project?.title || "当前项目";
@@ -1847,6 +1848,17 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         stage.classList.add("is-ready");
         fit();
       }, { once: true });
+      const primary = media.getAttribute("data-v206-media-primary");
+      if (primary && primary !== media.getAttribute("data-v206-media-fallback")) {
+        const probe = new Image();
+        probe.onload = () => {
+          media.setAttribute("src", primary);
+          stage.classList.remove("is-fallback");
+          stage.classList.add("is-ready");
+          fit();
+        };
+        probe.src = primary;
+      }
       media.addEventListener("error", () => {
         const fallback = media.getAttribute("data-v206-media-fallback");
         if (fallback && media.getAttribute("src") !== fallback) {

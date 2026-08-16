@@ -3261,7 +3261,7 @@ let workspaceV206StylesPromise = null;
 
 function ensureWorkspaceV206Styles() {
   if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
-  const href = "/workspace-v206.css?v=20260816-first-frame-recovery-06";
+  const href = "/workspace-v206.css?v=20260816-first-frame-recovery-07";
   const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
     || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
   if (!existing) {
@@ -3284,7 +3284,7 @@ async function ensureWorkspaceV206Mount() {
     return;
   }
   if (!workspaceV206ModulePromise) {
-    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-first-frame-recovery-06");
+    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-first-frame-recovery-07");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;
