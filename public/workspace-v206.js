@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-19";
+  const VERSION = "20260817-agent-rail-20";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -1585,6 +1585,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       choices: [],
     };
     const finalize = () => {
+      // Keep the decision contract bounded at the source. Rendering also
+      // caps choices, but callers must never receive an unbounded or inert
+      // action list from the single decision owner.
+      result.choices = [...new Map(result.choices
+        .filter((item) => item && item.label && item.action)
+        .map((item) => [item.action + "::" + item.label, item])).values()].slice(0, 3);
       const stateKey = Object.entries(workflow).map(([key, value]) => `${key}:${value?.status || ""}:${value?.bound ? "1" : "0"}:${value?.task?.id || ""}`).join("|");
       result.id = [step.id, stateKey, missing.join(","), pendingDraft?.id || "", pendingDraft?.status || "", state.firstFrameDraftError || "", pendingAction?.id || "", pendingAction?.status || "", state.pendingVideo?.projectId || "", state.pendingVideo?.firstFrameMediaId || "", presentation?.task?.id || ""].join("::").replace(/[^A-Za-z0-9:|,_-]/g, "_");
       return result;

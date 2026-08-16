@@ -8,6 +8,7 @@ assert.doesNotMatch(workspaceSource, /\$\{guidedAgentMarkup\(\)\}/, "the right r
 assert.match(workspaceSource, /function agentDecisionSnapshot\(\)/, "the agent must have one workflow decision owner");
 assert.match(workspaceSource, /result\.choices = \[choice\("打开成片", "open-result"/, "a completed final video must expose its result action in the decision snapshot");
 assert.match(workspaceSource, /decision\.choices\.slice\(0, 3\)/, "the agent must cap each decision to three choices");
+assert.match(workspaceSource, /result\.choices = \[\.\.\.new Map\(result\.choices/, "the decision snapshot must cap and validate actions before rendering");
 assert.match(workspaceSource, /确认后才会进入付费制作/, "paid actions must remain confirmation-gated");
 assert.match(workspaceSource, /data-v206-decision-id/, "agent actions must carry a decision fingerprint");
 assert.match(workspaceSource, /当前制作状态已经更新，请按最新引导操作/, "stale agent actions must be rejected visibly");
