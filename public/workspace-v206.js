@@ -1169,8 +1169,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const projectTitle = project?.title || "当前项目";
     const stageProjectTitle = projectTitle.length > 18 ? `${projectTitle.slice(0, 18)}…` : projectTitle;
     const actionReference = currentTemplate().title;
+    const step = currentWorkflowStep();
+    const stageAction = slots[step.id]
+      ? `<button type="button" class="v206-stage-replace" data-v206-action="sources" data-target="${esc(step.id)}">${displayAssetFor(step.id)?.url ? `更换${esc(slots[step.id].title)}` : `添加${esc(slots[step.id].title)}`}</button>`
+      : activeVideoAsset()?.url
+        ? '<button type="button" class="v206-stage-replace" data-v206-action="open-result">打开成片</button>'
+        : '<button type="button" class="v206-stage-replace" data-v206-action="workflow-step" data-step="frame">查看首帧</button>';
     return `<section class="v206-stage" data-v206-stage>
-      <div class="v206-stage-top"><span>TAKE 01</span><span title="项目：${esc(projectTitle)} · 动作参考：${esc(actionReference)}">${esc(stageProjectTitle)}</span><span>${esc(project?.production?.status === "running" ? "正在制作" : stage.label)}</span></div>
+      <div class="v206-stage-top"><span>TAKE 01</span><span title="项目：${esc(projectTitle)} · 动作参考：${esc(actionReference)}">${esc(stageProjectTitle)}</span><span class="v206-stage-status">${esc(project?.production?.status === "running" ? "正在制作" : stage.label)}</span>${stageAction}</div>
       <div class="v206-stage-media">${media}</div>
     </section>`;
   }
@@ -1573,20 +1579,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function controlMarkup() {
     const step = currentWorkflowStep();
-    const assistantOpen = state.view === "assistant-thread";
-    const primary = primaryDecisionAction(step);
-    const primaryAttributes = primary ? `${primary.target ? ` data-target="${esc(primary.target)}"` : ""}${primary.proposalAction ? ` data-proposal-action="${esc(primary.proposalAction)}"` : ""}${primary.step ? ` data-step="${esc(primary.step)}"` : ""}${primary.reviewId ? ` data-review-id="${esc(primary.reviewId)}"` : ""}` : "";
-    const index = workflowSteps.indexOf(step);
-    const previous = index > 0 ? workflowSteps[index - 1] : null;
-    const skip = step.optional ? '<button type="button" class="v206-workflow-skip" data-v206-action="workflow-skip">跳过这一步</button>' : "";
-    const completedFinal = step.id === "final" && Boolean(activeVideoAsset()?.url);
     return `<aside class="v206-control" data-v206-inspector>
       ${workflowTabsMarkup()}
-      ${assistantOpen ? assistantThreadSheet() : `${workflowQuickToolsMarkup(workflowSourceActionMarkup(step))}
-      ${workflowStepBodyMarkup(step)}
-      ${completedFinal ? "" : `<div class="v206-workflow-actions">${previous ? `<button type="button" class="v206-workflow-back" data-v206-action="workflow-previous">上一步</button>` : '<span></span>'}${skip}${primary ? `<button type="button" class="v206-primary" data-v206-action="${primary.name}"${primaryAttributes} ${state.busy ? "disabled" : ""}>${esc(primary.label)}</button>` : ""}</div>`}
-      ${guidedAgentMarkup()}
-      ${assistantDockMarkup()}`}
+      ${assistantThreadSheet()}
     </aside>`;
   }
   function taskBarMarkup() {
@@ -1777,9 +1772,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const context = Object.entries(slots).map(([id, meta]) => `<span class="v206-thread-context-item"><b>${esc(meta.title)}</b>${esc(displayAssetFor(id)?.label || "待补充")}</span>`).join("");
     return `<section class="v206-thread v206-assistant-inline" data-v206-thread role="region" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
-        <header class="v206-thread-header"><div class="v206-thread-identity"><span class="v206-thread-avatar"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1><span>素材与制作助手</span></div></div><div class="v206-thread-header-actions"><button type="button" data-v206-action="close" aria-label="收起念念完整对话">收起会话</button></div></header>
+        <header class="v206-thread-header"><div class="v206-thread-identity"><span class="v206-thread-avatar"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1><span>素材与制作助手</span></div></div></header>
         <div class="v206-thread-context" aria-label="当前制作素材">${context}</div>
-        <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${chatMessagesMarkup()}</div>
+        <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${guidedAgentMarkup()}${chatMessagesMarkup()}</div>
         <div class="v206-thread-compose">${assistantComposerMarkup(true)}</div>
       </div>
     </section>`;
@@ -2731,7 +2726,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (action === "adjust-first-frame-material") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; openSources(target, "mine"); return; }
     if (action === "retry-first-frame-analysis") { state.pendingFirstFrame = null; state.firstFrameDraftAnalyzing = false; state.firstFrameDraftError = ""; state.view = null; makeFrame(); return; }
     if (action === "toggle-assistant-mentions") { state.assistantMentionsOpen = !state.assistantMentionsOpen; render(); return; }
-    if (action === "assistant-thread" || action === "sources" || action === "templates" || action === "tasks" || action === "settings") {
+    if (action === "assistant-thread") { root?.querySelector("[data-v206-assistant-input]")?.focus(); return; }
+    if (action === "sources" || action === "templates" || action === "tasks" || action === "settings") {
       if (action === "sources") { openSources(slots[button.dataset.target] ? button.dataset.target : state.target); return; }
       state.view = action;
       render();

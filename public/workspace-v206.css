@@ -100,7 +100,9 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-stage { flex: 1; min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: transparent; border: 0; }
 .v206-stage-top { min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 15px; border-bottom: 1px solid var(--shell-line); color: var(--shell-muted); font-size: 11px; letter-spacing: 0; }
 .v206-stage-top span:first-child { color: var(--coral); font-family: ui-monospace, "Cascadia Mono", monospace; }
-.v206-stage-top span:last-child { margin-left: auto; color: var(--forest); }
+.v206-stage-status { margin-left: auto; color: var(--forest); }
+.v206-stage-replace { min-height: 28px; border: 1px solid rgba(40, 76, 56, .26); padding: 0 10px; background: rgba(255, 255, 252, .5); color: var(--forest); cursor: pointer; font-size: 11px; font-weight: 700; }
+.v206-stage-replace:hover { border-color: var(--forest); background: rgba(232, 241, 231, .66); }
 .v206-stage-media { min-height: 0; position: relative; display: grid; place-items: center; overflow: hidden; background: transparent; }
 .v206-stage-media::after { content: ""; position: absolute; inset: 0; border-left: 1px solid rgba(40, 76, 56, .08); border-right: 1px solid rgba(40, 76, 56, .08); pointer-events: none; }
 .v206-stage-media-frame { position: absolute; inset: 0; display: grid; place-items: center; }
@@ -117,7 +119,7 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-stage-guide h2 { margin: 8px 0; color: var(--ink); font-family: "Songti SC", "STSong", ui-serif, serif; font-size: 28px; font-weight: 600; }
 .v206-stage-guide p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
 .v206-stage-guide ol { display: grid; gap: 8px; margin: 18px 0 22px; padding-left: 20px; color: var(--ink); font-size: 13px; line-height: 1.55; }
-.v206-control { min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; overflow: hidden; border: 0; border-left: 1px solid var(--shell-line); background: rgba(250, 252, 248, .28); }
+.v206-control { min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 0; border-left: 1px solid var(--shell-line); background: rgba(250, 252, 248, .28); }
 .v206-workflow-tabs { min-width: 0; min-height: 58px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); overflow: hidden; border-bottom: 1px solid var(--line); background: rgba(247, 250, 245, .36); }
 .v206-workflow-tab { min-width: 0; display: grid; grid-template-columns: 19px minmax(0, 1fr); align-items: center; gap: 5px; border: 0; border-right: 1px solid rgba(40, 76, 56, .12); padding: 8px 5px; background: transparent; color: var(--muted); cursor: pointer; text-align: left; }
 .v206-workflow-tab:last-child { border-right: 0; }
