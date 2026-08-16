@@ -40,7 +40,7 @@ assert.match(workspace, /if \(canonicalProjects\.error\)/);
 const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
 assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260816-media-cdn-meta-01"/);
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
-assert.match(indexHtml, /app\.compat\.js\?v=20260816-media-cdn-meta-01/);
+assert.match(indexHtml, /app\.compat\.js\?v=20260816-media-cdn-meta-02/);
 
 const upload = workspace.match(/async function upload\(target, file, options = \{\}\) \{[\s\S]*?\n  async function ensureProject/);
 assert.ok(upload, "upload must exist");
