@@ -13,6 +13,8 @@ assert.match(server, /failureCategory/);
 assert.match(server, /function assistantEventType\(previous, snapshot/);
 assert.match(server, /FIRST_FRAME_READY/);
 assert.match(server, /VIDEO_COMPLETED/);
+assert.match(server, /function recordAssistantEventAudit\(projectId, eventId, eventType\)/);
+assert.match(server, /\[assistant-event\] project=\$\{projectId\} event=\$\{eventType\} id=\$\{eventId\}/);
 assert.match(server, /const previousJobs = new Map[\s\S]{0,1200}const previousNodes = new Map/);
 assert.match(server, /newly-created job is itself a transition/);
 assert.match(server, /if \(before && before\.status === job\.status\) continue/);

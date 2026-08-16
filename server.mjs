@@ -26,6 +26,7 @@ const cdnPlaybackTtlSeconds = Math.max(60, Math.min(3_600, Number(process.env.CD
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const playbackJobs = new Map();
 const generatedImageInputs = new Map();
+const assistantEventAudit = new Map();
 const mimeTypes = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -122,6 +123,17 @@ function assistantEventId(snapshot) {
   return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex").slice(0, 24);
 }
 
+function recordAssistantEventAudit(projectId, eventId, eventType) {
+  if (!projectId || !eventId || !eventType) return;
+  const entries = assistantEventAudit.get(projectId) || [];
+  if (entries.some((entry) => entry.eventId === eventId)) return;
+  entries.push({ projectId, eventId, eventType, recordedAt: new Date().toISOString() });
+  assistantEventAudit.set(projectId, entries.slice(-100));
+  // Keep the audit line deliberately metadata-only: never log media URLs,
+  // cookies, authorization headers, provider responses, or request bodies.
+  console.info(`[assistant-event] project=${projectId} event=${eventType} id=${eventId}`);
+}
+
 function assistantEventType(previous, snapshot, initial = false) {
   if (initial || !previous) return "PROJECT_RESTORED";
   const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
@@ -198,6 +210,7 @@ async function streamAssistantEvents(request, response, projectId) {
       const eventId = assistantEventId(snapshot);
       if (initial || eventId !== lastEventId) {
         const eventType = assistantEventType(previousSnapshot, snapshot, initial);
+        recordAssistantEventAudit(projectId, eventId, eventType);
         emit(initial ? "snapshot" : "workflow.changed", eventId, { ...snapshot, eventType });
         lastEventId = eventId;
       }

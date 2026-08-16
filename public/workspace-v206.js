@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-18";
+  const VERSION = "20260817-agent-rail-19";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -2590,14 +2590,18 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   async function repairFirstFrame(reviewId) {
     const project = canonicalProject();
     if (!project || !UUID_PATTERN.test(String(reviewId || ""))) return;
-    if (!window.confirm("一键修正会重新生成 1 张首帧，并在成功入库后消耗 1 次作图额度。是否继续？")) return;
     state.busy = "repair-first-frame";
     render();
     try {
-      const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/quality/${encodeURIComponent(reviewId)}/repair`, { method: "POST", body: JSON.stringify({}) });
+      const summary = await mediaRequest("/api/v1/billing/summary");
+      const imageTzPrice = Number(summary.pricing?.imageTzPrice ?? summary.pricing?.image_tz_price ?? summary.imageTzPrice ?? 0);
+      if (!Number.isFinite(imageTzPrice) || imageTzPrice <= 0 || Number(summary.wallet?.tzBalance || 0) < imageTzPrice) throw new Error("TZB余额不足。");
+      if (!window.confirm(`一键修正会重新生成 1 张首帧，预计成功入库后扣 ${imageTzPrice.toFixed(2)} TZB，失败不扣费。是否继续？`)) return;
+      const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/quality/${encodeURIComponent(reviewId)}/repair`, { method: "POST", headers: { "idempotency-key": generationIdempotencyKey("first_frame_repair") }, body: JSON.stringify({}) });
       if (result.job) state.jobs = [result.job, ...state.jobs.filter((job) => job.id !== result.job.id)];
       state.frameJobId = result.job?.id || state.frameJobId;
       if (result.job?.id) state.generationSources[result.job.id] = { kind: "frame", signature: generationInputSignature("frame") };
+      clearGenerationIdempotencyKey("first_frame_repair");
       state.pendingFirstFrame = null;
       writeState();
       scheduleTaskRefresh();
