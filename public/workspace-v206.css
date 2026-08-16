@@ -370,7 +370,7 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-thread .v206-image-confirm { max-width: 900px; width: 100%; margin: 0 auto; }
 .v206-control:has(.v206-assistant-inline) { grid-template-rows: auto minmax(0, 1fr); }
 .v206-assistant-inline { position: relative; inset: auto; top: 0 !important; min-height: 0; display: block; overflow: hidden; padding: 0; background: rgba(243, 248, 241, .72); backdrop-filter: none; }
-.v206-assistant-inline .v206-thread-shell { width: 100%; height: 100%; min-height: 0; margin: 0; border: 0; background: transparent; }
+.v206-assistant-inline .v206-thread-shell { width: 100%; height: 100%; min-height: 0; margin: 0; border: 0; background: transparent; grid-template-rows: auto minmax(0, 1fr) auto; }
 .v206-assistant-inline .v206-thread-header { min-height: 68px; padding: 11px 15px; }
 .v206-assistant-inline .v206-thread-header h1 { font-size: 18px; }
 .v206-assistant-inline .v206-thread-context { gap: 5px; padding: 7px 10px; }
