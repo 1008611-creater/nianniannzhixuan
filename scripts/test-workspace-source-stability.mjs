@@ -46,6 +46,6 @@ assert.ok(upload, "upload must exist");
 assert.match(upload[0], /if \(!syncSourceSheetBusy\(\)\) render\(\);/);
 assert.doesNotMatch(upload[0], /state\.busy = assistantReference[\s\S]{0,120}\n\s*render\(\);/);
 assert.match(workspace, /A failed preview request is a transport\/rendering problem/);
-assert.match(workspace, /state\.unavailableMedia\.add\(mediaId\);\n\s*refreshPrivateMedia\(mediaId\);/);
+assert.match(workspace, /state\.unavailableMedia\.add\(mediaId\);\r?\n\s*refreshPrivateMedia\(mediaId\);/);
 
 console.log("OK workspace source sheet survives background refresh and upload state changes");
