@@ -2087,6 +2087,23 @@ function lazyImageAttrs(priority = "lazy", fallbackSourceUrl = "", previewSource
   return `loading="${loading}" decoding="async" fetchpriority="${fetchpriority}"${imageFallbackAttrs(fallbackSourceUrl, previewSourceUrl)}`;
 }
 
+const TEMPLATE_COVER_FALLBACK = "/assets/references/premium-storefront-cover-thumb.jpg";
+
+function bindPrimaryImageProbes(scope = document) {
+  scope.querySelectorAll("img[data-primary-src]").forEach((image) => {
+    if (image.dataset.primaryProbeBound === "1") return;
+    const primarySource = image.dataset.primarySrc || "";
+    if (!primarySource || primarySource === image.currentSrc || primarySource === image.src) return;
+    image.dataset.primaryProbeBound = "1";
+    const probe = new Image();
+    probe.onload = () => {
+      image.src = primarySource;
+      image.dataset.primaryReady = "1";
+    };
+    probe.src = primarySource;
+  });
+}
+
 function materialImageAttrs(material, priority = "lazy") {
   const originalUrl = material?.url || material?.previewUrl || "";
   const previewUrl = materialThumbUrl(material);
@@ -3249,6 +3266,7 @@ function render() {
   requestAnimationFrame(() => {
     syncHeaderScrollbarCompensation();
     setupChatTextarea(document.querySelector("#workflowRequirement"));
+    bindPrimaryImageProbes();
     if (path === "/templates") {
       setupPersonalTemplateVideoPreviews();
       void ensurePersonalTemplateVideoLoad();
@@ -3261,7 +3279,7 @@ let workspaceV206StylesPromise = null;
 
 function ensureWorkspaceV206Styles() {
   if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
-  const href = "/workspace-v206.css?v=20260816-first-frame-recovery-10";
+  const href = "/workspace-v206.css?v=20260816-first-frame-recovery-11";
   const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
     || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
   if (!existing) {
@@ -3284,7 +3302,7 @@ async function ensureWorkspaceV206Mount() {
     return;
   }
   if (!workspaceV206ModulePromise) {
-    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-first-frame-recovery-10");
+    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-first-frame-recovery-11");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;
@@ -7445,11 +7463,12 @@ document.getElementById("workflowRequirement")?.focus({ preventScroll: true });
 function renderShowcaseVideoCard(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "做这个";
   const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
-  const coverAttrs = lazyImageAttrs(index === 0 ? "eager" : "lazy", item.resultCoverUrl || item.referenceImageUrl, cover);
+  const coverSource = cover || TEMPLATE_COVER_FALLBACK;
+  const coverAttrs = lazyImageAttrs(index === 0 ? "eager" : "lazy", item.resultCoverUrl || item.referenceImageUrl, coverSource);
   return `
     <article class="showcase-video-card ${index === 0 ? "featured" : ""}">
-<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(cover)}" data-title="${escapeHtml(item.title)}">
- <img src="${cover}" alt="${escapeHtml(item.title)}" ${coverAttrs}>
+<button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(coverSource)}" data-title="${escapeHtml(item.title)}">
+ <img src="${TEMPLATE_COVER_FALLBACK}" data-primary-src="${escapeHtml(coverSource)}" alt="${escapeHtml(item.title)}" ${coverAttrs}>
  </button>
       <div class="showcase-video-caption">
         <div>
@@ -7857,9 +7876,10 @@ function renderTemplateVideoSection({ title, count, items }) {
 function renderTemplateQuickPick(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "用这个动作";
   const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
+  const coverSource = cover || TEMPLATE_COVER_FALLBACK;
   return `
     <button class="template-quick-pick ${index === 0 ? "featured" : ""}" type="button" data-action="import-workflow-template" data-reference="${item.id}" ${state.isBusy ? "disabled" : ""}${pendingAttrs(`import-template:${item.id}`)}${disabledHint(state.isBusy && !isPendingAction(`import-template:${item.id}`), "另一个模板正在导入")}${disabledReason({ condition: state.isBusy && !isPendingAction(`import-template:${item.id}`), text: "另一个模板正在导入" })}>
-      <span class="template-quick-pick-media"><img src="${cover}" alt="" ${lazyImageAttrs("eager", item.resultCoverUrl || item.referenceImageUrl, cover)}></span>
+      <span class="template-quick-pick-media"><img src="${TEMPLATE_COVER_FALLBACK}" data-primary-src="${escapeHtml(coverSource)}" alt="" ${lazyImageAttrs("eager", item.resultCoverUrl || item.referenceImageUrl, coverSource)}></span>
       <span class="template-quick-pick-copy"><em>${escapeHtml(item.badge || "动作模板")}</em><b>${escapeHtml(item.title)}</b><small>${importLabel}</small></span>
     </button>
   `;
