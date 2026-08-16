@@ -1922,7 +1922,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function assistantThreadSheet() {
     return `<section class="v206-thread v206-assistant-inline" data-v206-thread role="region" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
-        <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${chatMessagesMarkup()}${guidedAgentMarkup()}</div>
+        <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${chatMessagesMarkup()}</div>
         <div class="v206-thread-compose">${assistantComposerMarkup(true)}</div>
       </div>
     </section>`;
