@@ -3256,7 +3256,7 @@ async function ensureWorkspaceV206Mount() {
     return;
   }
   if (!workspaceV206ModulePromise) {
-    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-workspace-entry-stable-01");
+    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-workspace-entry-stable-02");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;
