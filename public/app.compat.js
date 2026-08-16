@@ -3261,7 +3261,7 @@ let workspaceV206StylesPromise = null;
 
 function ensureWorkspaceV206Styles() {
   if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
-  const href = "/workspace-v206.css?v=20260816-agent-rail-default-01";
+  const href = "/workspace-v206.css?v=20260816-agent-rail-default-02";
   const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
     || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
   if (!existing) {
@@ -3284,7 +3284,7 @@ async function ensureWorkspaceV206Mount() {
     return;
   }
   if (!workspaceV206ModulePromise) {
-    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-agent-rail-default-01");
+    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260816-agent-rail-default-02");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;

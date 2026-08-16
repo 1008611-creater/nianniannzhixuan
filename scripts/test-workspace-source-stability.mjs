@@ -9,8 +9,8 @@ const workspaceEntryCss = await readFile(new URL("../public/workspace-entry.css"
 
 assert.match(legacy, /path === "\/workspace" && app\.querySelector\("#v206-app"\).*return;/);
 assert.match(legacy, /if \(nextPath === "\/workspace"\)[\s\S]{0,700}window\.history\.pushState/);
-assert.match(legacy, /workspaceV206ModulePromise = import\("\/workspace-v206\.js\?v=20260816-agent-rail-default-01"\)/);
-assert.match(legacy, /href = "\/workspace-v206\.css\?v=20260816-agent-rail-default-01"/);
+assert.match(legacy, /workspaceV206ModulePromise = import\("\/workspace-v206\.js\?v=20260816-agent-rail-default-02"\)/);
+assert.match(legacy, /href = "\/workspace-v206\.css\?v=20260816-agent-rail-default-02"/);
 assert.match(legacy, /function startTaskFeedbackTicker\(\)[\s\S]{0,180}normalizePath\(\) === "\/workspace"/);
 
 assert.match(workspace, /function sourceSheetMounted\(\)/);
@@ -20,6 +20,8 @@ assert.match(workspace, /function syncSourceSheetToast\(\)/);
 assert.match(workspace, /\$\{assistantThreadSheet\(\)\}/);
 assert.match(workspace, /if \(state\.view === "assistant-thread"\) return ""/);
 assert.match(workspace, /class="v206-stage-replace"/);
+assert.match(workspace, /visibleChat = state\.chat\.filter/);
+assert.match(workspace, /已记录这条制作要求/);
 assert.match(workspace, /sessionLoaded: false/);
 assert.match(workspace, /state\.sessionLoaded = true/);
 assert.match(workspace, /if \(state\.sessionLoaded\) accountLabel\.textContent/);
@@ -41,9 +43,9 @@ assert.doesNotMatch(workspace, /void canonicalProjectsPromise\.then/);
 assert.match(workspace, /if \(canonicalProjects\.error\)/);
 
 const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
-assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260816-agent-rail-default-01"/);
+assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260816-agent-rail-default-02"/);
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
-assert.match(indexHtml, /app\.compat\.js\?v=20260816-agent-rail-default-01/);
+assert.match(indexHtml, /app\.compat\.js\?v=20260816-agent-rail-default-02/);
 
 const upload = workspace.match(/async function upload\(target, file, options = \{\}\) \{[\s\S]*?\n  async function ensureProject/);
 assert.ok(upload, "upload must exist");

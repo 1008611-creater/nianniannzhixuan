@@ -1182,7 +1182,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function chatMessagesMarkup() {
     const assistantMessage = (message, greeting = false) => `<article class="v206-inline-message assistant${greeting ? " v206-assistant-greeting" : ""}"${greeting ? " data-v206-assistant-greeting" : ""}><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-message-bubble"><div class="v206-message-meta"><b>念念</b><time>${esc(greeting ? message.time : formatMessageTime(message.createdAt))}</time></div><span>${esc(message.text || message.content || "")}</span>${message.proposal ? proposalMarkup(message.proposal) : ""}</div></article>`;
-    const messages = state.chat.map((message) => String(message.role || "").toLowerCase() === "user"
+    const visibleChat = state.chat.filter((message) => {
+      const role = String(message.role || "").toLowerCase();
+      const text = String(message.content || message.text || "").replace(/\s+/g, " ").trim();
+      return role === "user" || !/已记录这条制作要求/.test(text);
+    });
+    const messages = visibleChat.map((message) => String(message.role || "").toLowerCase() === "user"
       ? `<article class="v206-inline-message user"><div class="v206-message-meta"><b>你的指令</b><time>${esc(formatMessageTime(message.createdAt))}</time></div><span>${esc(message.content || message.text || "")}</span></article>`
       : assistantMessage(message)).join("");
     const greeting = assistantMessage({ text: "已读取当前素材。直接说想调整的镜头、版型或门店氛围。", time: "当前制作" }, true);
@@ -1774,7 +1779,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       <div class="v206-thread-shell">
         <header class="v206-thread-header"><div class="v206-thread-identity"><span class="v206-thread-avatar"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1><span>素材与制作助手</span></div></div></header>
         <div class="v206-thread-context" aria-label="当前制作素材">${context}</div>
-        <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${guidedAgentMarkup()}${chatMessagesMarkup()}</div>
+        <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${chatMessagesMarkup()}${guidedAgentMarkup()}</div>
         <div class="v206-thread-compose">${assistantComposerMarkup(true)}</div>
       </div>
     </section>`;
