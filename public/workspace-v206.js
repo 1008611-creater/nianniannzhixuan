@@ -1492,8 +1492,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       result.choices = [choice("查看当前素材", "workflow-step", { step: "person", primary: true }), choice("先改图", "assistant-thread"), choice("查看制作进度", "tasks")];
       return finalize();
     }
-    // A previous image-edit proposal remains available in the conversation,
-    // but must never replace the normal six-step production path.
+    if (pendingAction) {
+      result.recommendation = `方案已准备好：${pendingAction.label || "制作动作"}。确认后才会进入付费制作。`;
+      result.blocking = "等待用户确认";
+      result.requiresConfirmation = true;
+      result.choices = [choice(`确认${pendingAction.label || "制作"}`, "confirm-assistant-proposal", { proposalAction: pendingAction.id, primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: step.id })];
+      return finalize();
+    }
     if (step.id === "frame" && !workflow.frame.bound) {
       result.recommendation = "人物、商品、参考视频和背景已准备好，可以生成商品首帧。";
       result.choices = [choice("生成商品首帧", "make-frame", { primary: true }), choice("先改图", "assistant-thread"), choice("继续核对素材", "workflow-step", { step: "person" })];
@@ -1503,13 +1508,6 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       result.recommendation = "需要先生成商品首帧，才能制作成片。";
       result.blocking = "缺少商品首帧";
       result.choices = [choice("生成商品首帧", "workflow-step", { step: "frame", primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: "person" })];
-      return finalize();
-    }
-    if (pendingAction) {
-      result.recommendation = `方案已准备好：${pendingAction.label || "制作动作"}。确认后才会进入付费制作。`;
-      result.blocking = "等待用户确认";
-      result.requiresConfirmation = true;
-      result.choices = [choice(`确认${pendingAction.label || "制作"}`, "confirm-assistant-proposal", { proposalAction: pendingAction.id, primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: step.id })];
       return finalize();
     }
     if (missingTarget) {

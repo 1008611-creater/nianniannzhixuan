@@ -50,7 +50,8 @@ assert.match(frontend, /\["failed", "error", "blocked", "retryable_failed", "nee
 assert.match(frontend, /首帧分析未完成，可以重新分析；当前素材不会丢失。/);
 assert.match(frontend, /step\.id === "frame" && state\.firstFrameDraftError/);
 assert.match(frontend, /retry-first-frame-analysis/);
-assert.match(frontend, /previous image-edit proposal remains available in the conversation[\s\S]*step\.id === "frame" && !workflow\.frame\.bound/);
+const decisionSnapshot = frontend.match(/function agentDecisionSnapshot\(\) \{[\s\S]*?\n  function materialJudgment/)?.[0] || "";
+assert.ok(decisionSnapshot.indexOf("if (pendingAction)") < decisionSnapshot.indexOf('if (step.id === "frame" && !workflow.frame.bound)'), "a pending image-edit confirmation must take precedence over the generic first-frame prompt");
 assert.match(frontend, /step\.id === "frame" && pendingDraft[\s\S]*确认并生成首帧/);
 assert.match(frontend, /pendingDraft\?\.id \|\| ""/);
 assert.match(frontend, /function persistentPendingFirstFrame\(\)/);
