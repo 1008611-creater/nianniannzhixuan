@@ -1388,6 +1388,18 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       </div>
     </form>`;
   }
+  function bindAssistantComposerInputs() {
+    root.querySelectorAll("[data-v206-assistant-input]").forEach((input) => {
+      const resize = () => {
+        input.style.height = "auto";
+        const min = input.id.startsWith("v206-thread") ? 48 : 40;
+        const max = 136;
+        input.style.height = `${Math.min(max, Math.max(min, input.scrollHeight))}px`;
+      };
+      input.addEventListener("input", resize);
+      resize();
+    });
+  }
   function concisePanelText(value, fallback = "") {
     const text = String(value || fallback).replace(/\s+/g, " ").trim();
     return text.length > 110 ? `${text.slice(0, 110)}…` : text;
@@ -1813,6 +1825,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     });
     bindStageMedia();
     bindMaterialVideoPreviews();
+    bindAssistantComposerInputs();
   }
   function bindMaterialVideoPreviews() {
     root.querySelectorAll(".v206-material-media video").forEach((video) => {

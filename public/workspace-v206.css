@@ -200,7 +200,7 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-assistant-dock > header button:hover { border-color: rgba(40, 76, 56, .42); background: rgba(232, 241, 231, .7); }
 .v206-assistant-dock > header button:focus-visible { outline: 2px solid rgba(40, 76, 56, .48); outline-offset: 2px; }
 .v206-assistant-dock .v206-assistant-avatar { width: 26px; height: 26px; font-size: 12px; }
-.v206-composer-row { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; gap: 6px; padding: 6px 6px 4px; }
+.v206-composer-row { min-width: 0; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: end; gap: 10px; padding: 8px; }
 .v206-composer-tools { min-width: 0; display: flex; align-items: center; gap: 4px; }
 .v206-composer-tool { width: 40px; height: 40px; display: grid; flex: 0 0 40px; place-items: center; border: 1px solid rgba(40, 76, 56, .22); border-radius: 8px; padding: 0; background: rgba(255, 255, 252, .42); color: var(--forest); cursor: pointer; font-size: 18px; line-height: 1; transition-property: scale, background-color, border-color; transition-duration: 150ms; transition-timing-function: ease-out; }
 .v206-composer-tool:hover { border-color: rgba(40, 76, 56, .38); background: rgba(232, 241, 231, .62); }
@@ -209,7 +209,7 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-composer-tool input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .v206-assistant-dock .v206-mention-row { position: absolute; z-index: 6; right: 15px; bottom: 100%; left: 15px; flex-wrap: nowrap; overflow-x: auto; padding: 6px; border: 1px solid rgba(40, 76, 56, .2); background: rgba(247, 250, 245, .98); box-shadow: 0 -8px 22px rgba(35, 65, 47, .1); scrollbar-width: thin; }
 .v206-assistant-dock .v206-mention { flex: 0 0 auto; white-space: nowrap; }
-.v206-assistant-dock .v206-assistant-composer textarea { min-width: 0; min-height: 40px; max-height: 40px; border: 1px solid rgba(40, 76, 56, .22); border-radius: 8px; padding: 6px 8px; resize: none; font-size: 11px; line-height: 1.35; }
+.v206-assistant-dock .v206-assistant-composer textarea { min-width: 0; min-height: 40px; max-height: 136px; border: 1px solid rgba(40, 76, 56, .22); border-radius: 8px; padding: 8px 10px; resize: none; overflow-y: auto; font-size: 11px; line-height: 1.4; }
 .v206-assistant-dock .v206-send { min-height: 40px; border-radius: 8px; }
 .v206-decision-head { min-height: 82px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px 15px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 252, .18); }
 .v206-decision-summary { min-width: 0; display: grid; gap: 3px; }
@@ -303,7 +303,7 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-mention-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 7px 8px 0; }
 .v206-mention { min-height: 24px; border: 1px solid rgba(40, 76, 56, .28); padding: 0 6px; background: rgba(255, 255, 252, .16); color: var(--muted); cursor: pointer; font-size: 11px; }
 .v206-mention.active { border-color: var(--forest); color: var(--forest); }
-.v206-assistant-composer textarea { width: 100%; min-width: 0; min-height: 84px; max-height: 136px; border: 1px solid rgba(40, 76, 56, .22); border-radius: 8px; padding: 10px; background: transparent; color: var(--ink); resize: vertical; }
+.v206-assistant-composer textarea { width: 100%; min-width: 0; min-height: 40px; max-height: 136px; border: 1px solid rgba(40, 76, 56, .22); border-radius: 8px; padding: 8px 10px; background: transparent; color: var(--ink); resize: none; overflow-y: auto; field-sizing: content; }
 .v206-command-foot { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 8px 8px; color: var(--muted); font-size: 11px; }
 .v206-command-foot span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v206-send { min-height: 40px; border: 0; border-radius: 8px; padding: 0 12px; background: var(--brand-action); color: #fffdf8; cursor: pointer; font-weight: 700; transition-property: scale, background-color; transition-duration: 150ms; transition-timing-function: ease-out; }
@@ -695,7 +695,7 @@ html:has(.v206-canonical-slot), body:has(.v206-canonical-slot) { height: 100%; m
 .v206-thread .v206-proposal-action button { min-height: 34px; border-radius: 8px; padding: 0 12px; background: var(--brand-action); font-weight: 750; }
 .v206-thread-compose { gap: 8px; padding: 12px 22px 18px; background: rgba(255, 255, 252, .9); }
 .v206-thread .v206-assistant-composer { border: 1px solid rgba(40, 76, 56, .2); border-radius: 13px; background: #fff; box-shadow: 0 8px 24px rgba(35, 65, 47, .08); }
-.v206-thread textarea { min-height: 62px; border: 0; border-radius: 13px; padding: 13px 14px; outline: none; }
+.v206-thread textarea { min-height: 48px; max-height: 136px; border: 0; border-radius: 13px; padding: 11px 14px; outline: none; resize: none; overflow-y: auto; field-sizing: content; }
 .v206-thread textarea:focus { box-shadow: inset 0 0 0 2px rgba(47, 121, 80, .16); }
 .v206-thread .v206-command-foot { padding: 0 10px 9px; }
 .v206-thread .v206-send { min-height: 34px; border-radius: 8px; padding: 0 15px; }
