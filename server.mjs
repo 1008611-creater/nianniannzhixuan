@@ -122,6 +122,30 @@ function assistantEventId(snapshot) {
   return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex").slice(0, 24);
 }
 
+function assistantEventType(previous, snapshot, initial = false) {
+  if (initial || !previous) return "PROJECT_RESTORED";
+  const previousNodes = new Map((previous.nodes || []).map((node) => [node.role, node]));
+  for (const node of snapshot.nodes || []) {
+    const before = previousNodes.get(node.role);
+    if (!before || before.mediaId !== node.mediaId || before.status !== node.status) {
+      return before?.mediaId ? "ASSET_REPLACED" : "ASSET_BOUND";
+    }
+  }
+  const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
+  for (const job of snapshot.jobs || []) {
+    const before = previousJobs.get(job.id);
+    if (!before || before.status === job.status) continue;
+    const kind = String(job.kind || "").toUpperCase();
+    const status = String(job.status || "").toLowerCase();
+    const failed = /failed|error|blocked|review_required|needs_review/.test(status);
+    const completed = /completed|finished|succeeded|success|ready/.test(status);
+    if (kind === "FIRST_FRAME") return failed ? "FIRST_FRAME_FAILED" : completed ? "FIRST_FRAME_READY" : "FIRST_FRAME_ANALYZING";
+    if (kind === "ACTION_TRANSFER") return failed ? "VIDEO_FAILED" : completed ? "VIDEO_COMPLETED" : "VIDEO_QUEUED";
+    if (kind === "IMAGE_ASSET" && failed) return "ASSET_SAVE_FAILED";
+  }
+  return "PROJECT_RESTORED";
+}
+
 async function fetchAssistantState(pathname, headers, signal) {
   const requestHeaders = new Headers(headers);
   requestHeaders.set("accept", "application/json");
@@ -137,6 +161,7 @@ async function streamAssistantEvents(request, response, projectId) {
   let heartbeat;
   let controller;
   let lastEventId = request.headers["last-event-id"] || "";
+  let previousSnapshot = null;
   const write = (chunk) => {
     if (!closed && !response.destroyed) response.write(chunk);
   };
@@ -169,9 +194,11 @@ async function streamAssistantEvents(request, response, projectId) {
       const snapshot = assistantEventSnapshot(projectId, projectPayload, jobsPayload);
       const eventId = assistantEventId(snapshot);
       if (initial || eventId !== lastEventId) {
-        emit(initial ? "snapshot" : "workflow.changed", eventId, snapshot);
+        const eventType = assistantEventType(previousSnapshot, snapshot, initial);
+        emit(initial ? "snapshot" : "workflow.changed", eventId, { ...snapshot, eventType });
         lastEventId = eventId;
       }
+      previousSnapshot = snapshot;
     } catch (error) {
       if (!closed && error?.name !== "AbortError") emit("error", `error-${Date.now()}`, { category: "state_unavailable" });
     } finally {

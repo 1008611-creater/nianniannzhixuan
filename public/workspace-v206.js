@@ -1096,7 +1096,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     assistantEventIds.add(event.id);
     if (assistantEventIds.size > 40) assistantEventIds.delete(assistantEventIds.values().next().value);
     const previous = assistantEventSnapshot;
-    assistantEventSnapshot = event.snapshot || null;
+    const snapshot = event.snapshot || event.payload || event;
+    const eventType = String(event.eventType || snapshot?.eventType || "").toUpperCase();
+    if (snapshot && snapshot.eventType) {
+      const { eventType: _eventType, ...cleanSnapshot } = snapshot;
+      assistantEventSnapshot = cleanSnapshot;
+    } else assistantEventSnapshot = snapshot || null;
     if (!previous || !assistantEventSnapshot) return;
     const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
     const changedJobs = (assistantEventSnapshot.jobs || []).filter((job) => {
@@ -1105,13 +1110,26 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     });
     const terminal = changedJobs.find((job) => /^(completed|succeeded|success|failed|error|retryable_failed)$/i.test(String(job.status || "")));
     const nodeChanged = JSON.stringify(previous.nodes || []) !== JSON.stringify(assistantEventSnapshot.nodes || []);
-    const content = terminal && /failed|error|retryable_failed/i.test(String(terminal.status || ""))
-      ? "任务没有完成，本次不会扣费。可以重试，或先调整素材。"
-      : terminal
-        ? "任务已经完成，我正在同步当前项目结果。接下来可以查看结果，或继续调整素材。"
-        : nodeChanged
-          ? "素材已保存到当前项目，我已重新核对下一步。"
-          : "制作状态已更新，我正在同步当前项目。";
+    const messages = {
+      ASSET_BOUND: "素材已保存到当前项目，我已重新核对下一步。",
+      ASSET_REPLACED: "替换素材已保存，我会按新素材重新判断后续步骤。",
+      ASSET_SAVE_FAILED: "素材保存没有完成，本次不会扣费。可以重试或更换素材。",
+      FIRST_FRAME_ANALYZING: "首帧正在分析，完成后我会发出确认选项，不会自动扣费。",
+      FIRST_FRAME_READY: "首帧已经生成并入库，我正在同步当前项目结果。",
+      FIRST_FRAME_FAILED: "首帧没有生成可用结果，本次不会扣费。可以重试或先改图。",
+      VIDEO_QUEUED: "成片已进入制作队列，完成后我会通知你，不需要手动刷新。",
+      VIDEO_COMPLETED: "成片已经完成并入库，可以打开播放或继续调整素材。",
+      VIDEO_FAILED: "成片没有完成，本次不会扣费。可以重试、改图或查看失败任务。",
+      PROJECT_RESTORED: "我已恢复当前项目状态，接下来会按未完成步骤继续带你操作。",
+    };
+    const content = messages[eventType]
+      || (terminal && /failed|error|retryable_failed/i.test(String(terminal.status || ""))
+        ? "任务没有完成，本次不会扣费。可以重试，或先调整素材。"
+        : terminal
+          ? "任务已经完成，我正在同步当前项目结果。接下来可以查看结果，或继续调整素材。"
+          : nodeChanged
+            ? "素材已保存到当前项目，我已重新核对下一步。"
+            : "制作状态已更新，我正在同步当前项目。");
     state.chat.push({ id: `local-assistant-event:${event.id}`, role: "assistant", content, createdAt: new Date().toISOString() });
     renderUnlessSourcesOpen();
   }
@@ -1129,12 +1147,18 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       taskRefreshTimer = 0;
     };
     source.addEventListener("snapshot", (event) => {
-      try { assistantEventSnapshot = JSON.parse(event.data); } catch {}
+      try {
+        const snapshot = JSON.parse(event.data);
+        if (snapshot?.eventType) {
+          const { eventType: _eventType, ...cleanSnapshot } = snapshot;
+          assistantEventSnapshot = cleanSnapshot;
+        } else assistantEventSnapshot = snapshot;
+      } catch {}
     });
     source.addEventListener("workflow.changed", (event) => {
       try {
         const snapshot = JSON.parse(event.data);
-        appendAssistantEventMessage({ id: event.lastEventId || `event-${Date.now()}`, snapshot });
+        appendAssistantEventMessage({ id: event.lastEventId || `event-${Date.now()}`, snapshot, eventType: snapshot.eventType });
         void refreshTaskState();
       } catch {}
     });
