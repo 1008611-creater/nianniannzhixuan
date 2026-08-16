@@ -392,8 +392,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function assetFor(id) {
     if (id === "frame" && derivedOutputIsInvalidated("frame")) return null;
-    const asset = state.selected[id] || null;
-    return assetUnavailable(asset) ? null : asset;
+    // A failed preview request is a transport/rendering problem, not an
+    // assignment change. Keep the bound asset visible while its private URL
+    // is refreshed so a transient media error cannot blank the workspace.
+    return state.selected[id] || null;
   }
   function pendingAssignmentFor(projectId, slot) {
     const pending = state.pendingAssignments?.[projectId]?.[slot];
@@ -1657,7 +1659,6 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       if (!mediaId || state.unavailableMedia?.has(mediaId)) return;
       state.unavailableMedia ||= new Set();
       state.unavailableMedia.add(mediaId);
-      renderUnlessSourcesOpen();
       refreshPrivateMedia(mediaId);
     };
     if (media.tagName === "VIDEO") {
