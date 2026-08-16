@@ -885,7 +885,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     state.assistantThreads = assistantThreads.threads || [];
     state.notifications = notificationData.notifications || [];
     state.unreadNotifications = Number(notificationData.unreadCount || 0);
-    renderUnlessSourcesOpen();
+    // Keep the first workspace paint stable while the assistant messages are
+    // hydrated below; rendering here caused a visible second full-page remount.
     scheduleTaskRefresh();
     const thread = state.assistantThreads.find((item) => item.id === state.assistantThreadId && item.projectId === projectId)
       || state.assistantThreads.find((item) => item.projectId === projectId);
