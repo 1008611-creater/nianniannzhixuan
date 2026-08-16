@@ -1342,6 +1342,77 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     }
     return null;
   }
+  function agentDecisionSnapshot() {
+    const step = currentWorkflowStep();
+    const workflow = workflowSnapshot();
+    const video = activeVideoAsset();
+    const missing = readiness().missing || [];
+    const missingTarget = missing[0] || "";
+    const presentation = currentTaskPresentation();
+    const qualityStatus = String(canonicalProject()?.firstFrameQuality?.status || "").toLowerCase();
+    const pendingAction = pendingAssistantAction();
+    const label = (target) => slots[target]?.title || target;
+    const choice = (labelText, action, extra = {}) => ({ label: labelText, action, ...extra });
+    const result = {
+      step: step.id,
+      workflow,
+      missing,
+      blocking: "",
+      recommendation: "按人物、商品、视频、背景、首帧、成片的顺序完成当前制作。",
+      requiresConfirmation: false,
+      choices: [],
+    };
+    if (video?.url) {
+      result.recommendation = "成片已经完成。先确认效果，或继续优化当前素材。";
+      result.choices = [choice("打开成片", "open-result", { primary: true }), choice("继续改图", "assistant-thread"), choice("查看历史", "video-history")];
+      return result;
+    }
+    if (presentation?.active) {
+      result.recommendation = `我正在${presentation.kind}，完成后会自动更新，不需要手动刷新。`;
+      result.blocking = "任务进行中";
+      result.choices = [choice("查看制作进度", "tasks", { primary: true }), choice("先看当前素材", "workflow-step", { step: step.id }), choice("继续改图", "assistant-thread")];
+      return result;
+    }
+    if (presentation?.failed) {
+      result.recommendation = `${presentation.kind}没有生成可用结果，本次没有扣费。可以重新提交或先调整素材。`;
+      result.blocking = "任务失败，可恢复";
+      const retry = presentation.kind === "首帧" ? choice("重新生成首帧", "make-frame", { primary: true }) : choice("重新制作成片", "make-video", { primary: true });
+      result.choices = [retry, choice("先改图", "assistant-thread"), choice("查看失败任务", "tasks")];
+      result.requiresConfirmation = true;
+      return result;
+    }
+    if (pendingAction) {
+      result.recommendation = `方案已准备好：${pendingAction.label || "制作动作"}。确认后才会进入付费制作。`;
+      result.blocking = "等待用户确认";
+      result.requiresConfirmation = true;
+      result.choices = [choice(`确认${pendingAction.label || "制作"}`, "confirm-assistant-proposal", { proposalAction: pendingAction.id, primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: step.id })];
+      return result;
+    }
+    if (missingTarget) {
+      result.recommendation = `下一步先准备${label(missingTarget)}。添加后我会自动检查并带你进入下一步。`;
+      result.blocking = `缺少${label(missingTarget)}`;
+      result.choices = [choice(`添加${label(missingTarget)}`, "prepare-required-material", { target: missingTarget, primary: true }), choice("让我帮你改图", "assistant-thread"), choice("查看当前步骤", "workflow-step", { step: step.id })];
+      return result;
+    }
+    if (step.id === "frame") {
+      result.recommendation = qualityStatus === "repair_recommended" ? "首帧核验发现需要调整的地方，建议先修正再制作成片。" : "人物、商品、参考视频和背景已准备好，可以生成商品首帧。";
+      result.requiresConfirmation = qualityStatus !== "repair_recommended";
+      result.choices = qualityStatus === "repair_recommended"
+        ? [choice("一键修正首帧", "repair-first-frame", { reviewId: canonicalProject()?.firstFrameQuality?.id || "", primary: true }), choice("先改图", "assistant-thread"), choice("查看首帧问题", "workflow-step", { step: "frame" })]
+        : [choice("直接生成首帧", "make-frame", { primary: true }), choice("先改图", "assistant-thread"), choice("继续核对素材", "workflow-step", { step: "person" })];
+      return result;
+    }
+    if (step.id === "final") {
+      result.recommendation = "首帧已经准备好。下一步可以核对费用并制作成片，也可以先改首帧。";
+      result.requiresConfirmation = true;
+      result.choices = [choice("核对费用并制作视频", "make-video", { primary: true }), choice("先改首帧", "assistant-thread"), choice("查看素材状态", "workflow-step", { step: "frame" })];
+      return result;
+    }
+    const next = workflowSteps[workflowSteps.indexOf(step) + 1];
+    result.recommendation = `${step.title}已就绪。接下来继续${next ? next.title : "制作"}。`;
+    result.choices = [choice(next ? `继续${next.title}` : "继续制作", next ? "workflow-step" : "workflow-next", { step: next?.id, primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: step.id })];
+    return result;
+  }
   function materialJudgment() {
     const selected = displayAssetFor(state.target);
     if (state.target === "frame") {
@@ -1354,76 +1425,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return selected.isTemplateSample ? "模板示例" : "这份素材已进入当前项目，生成首帧时会与另外两份素材一起核对。";
   }
   function assistantDecisionMarkup() {
-    const quality = canonicalProject()?.firstFrameQuality;
-    const qualityStatus = String(quality?.status || "").toLowerCase();
-    const video = activeVideoAsset();
-    const harness = canonicalProject()?.workspaceProgress?.harness;
-    let text = latestAssistantJudgment() || materialJudgment();
-    let action = "";
-    if (video?.url) {
-      text = "成片已经完成并保存好了。你可以先打开成片确认效果；下载和历史版本都在成片查看页里。";
-      action = `<div class="v206-niannian-actions"><button type="button" class="v206-niannian-primary" data-v206-action="open-result">打开成片</button><button type="button" class="v206-niannian-link" data-v206-action="video-history">查看历史版本</button></div>`;
-    } else if (qualityStatus === "repair_recommended") {
-      text = "我已经自动核验了首帧，发现有需要调整的地方。先一键修正，我会修正后再次核验。";
-    } else if (qualityStatus === "passed") {
-      text = "我已经自动核验了首帧，背景、商品和人物构图可以继续使用。下一步可以制作视频。";
-    } else if (state.firstFrameDraftAnalyzing) {
-      text = "我正在分析当前人物、商品、背景和参考视频；分析完成后会自动把确认结果放在这里，不需要重新提交。";
-    } else if (currentTaskPresentation()?.active) {
-      const running = currentTaskPresentation();
-      text = `我正在${running.kind}，完成后会自动更新这里的进度，不需要你手动刷新。`;
-    } else if (harness?.blocker) {
-      text = `我已经检查了当前素材：${harness.blocker}。补好后我会继续帮你推进，不需要重新导入项目。`;
-    }
-    return `<article class="v206-niannian-decision ${video?.url ? "is-complete" : ""}" aria-label="念念主动消息" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>刚刚</time></div><p>${esc(text)}</p>${action}</div></article>`;
+    const decision = agentDecisionSnapshot();
+    const buttons = decision.choices.slice(0, 3).map((item) => `<button type="button" class="${item.primary ? "v206-niannian-primary" : "v206-niannian-link"}" data-v206-action="${item.action}"${item.target ? ` data-target="${item.target}"` : ""}${item.step ? ` data-step="${item.step}"` : ""}${item.reviewId ? ` data-review-id="${item.reviewId}"` : ""}${item.proposalAction ? ` data-proposal-action="${item.proposalAction}"` : ""}${state.busy ? " disabled" : ""}>${esc(item.label)}</button>`).join("");
+    return `<article class="v206-niannian-decision ${decision.workflow.final.bound ? "is-complete" : ""}" aria-label="念念主动消息" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>下一步</time></div><p>${esc(decision.recommendation)}</p><div class="v206-niannian-actions">${buttons}</div></div></article>`;
   }
   function guidedAgentMarkup() {
-    const step = currentWorkflowStep();
-    const video = activeVideoAsset();
-    const missing = readiness().missing || [];
-    const missingTarget = missing[0] || "";
-    const label = (target) => slots[target]?.title || target;
-    let text = "我会按人物、商品、视频、背景、首帧、成片的顺序带你完成。";
-    let choices = [];
-    if (video?.url) {
-      text = "成片已经完成。你想先确认效果，还是继续优化？";
-      choices = [
-        { label: "打开成片", action: "open-result", primary: true },
-        { label: "继续改图", action: "assistant-thread" },
-        { label: "查看历史", action: "video-history" },
-      ];
-    } else if (missingTarget) {
-      text = `下一步先准备${label(missingTarget)}。添加后我会自动检查并带你进入下一步。`;
-      choices = [
-        { label: `添加${label(missingTarget)}`, action: "prepare-required-material", target: missingTarget, primary: true },
-        { label: "让我帮你改图", action: "assistant-thread" },
-        { label: "先看当前步骤", action: "workflow-step", step: step.id },
-      ];
-    } else if (step.id === "frame") {
-      text = "人物、商品、参考视频和背景已准备好。要不要现在生成商品首帧？";
-      choices = [
-        { label: "直接生成首帧", action: "make-frame", primary: true },
-        { label: "先改图", action: "assistant-thread" },
-        { label: "继续核对素材", action: "workflow-step", step: "person" },
-      ];
-    } else if (step.id === "final") {
-      text = "首帧已经准备好。下一步可以制作成片，也可以先让念念再检查一次。";
-      choices = [
-        { label: "制作成片", action: "make-video", primary: true },
-        { label: "先改首帧", action: "assistant-thread" },
-        { label: "查看素材状态", action: "workflow-step", step: "frame" },
-      ];
-    } else {
-      const next = workflowSteps[workflowSteps.indexOf(step) + 1];
-      text = `${step.title}已就绪。接下来要继续${next ? next.title : "制作"}吗？`;
-      choices = [
-        { label: next ? `继续${next.title}` : "继续制作", action: next ? "workflow-step" : "workflow-next", step: next?.id, primary: true },
-        { label: "先改图", action: "assistant-thread" },
-        { label: "查看当前素材", action: "workflow-step", step: step.id },
-      ];
-    }
-    const buttons = choices.map((choice) => `<button type="button" class="${choice.primary ? "v206-niannian-primary" : "v206-niannian-link"}" data-v206-action="${choice.action}"${choice.target ? ` data-target="${choice.target}"` : ""}${choice.step ? ` data-step="${choice.step}"` : ""}>${esc(choice.label)}</button>`).join("");
-    return `<article class="v206-niannian-decision" aria-label="念念流程引导" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>下一步</time></div><p>${esc(text)}</p><div class="v206-niannian-actions">${buttons}</div></div></article>`;
+    return assistantDecisionMarkup();
   }
   function assistantDockMarkup() {
     return `<section class="v206-assistant-dock" aria-label="念念改图对话">${assistantComposerMarkup()}</section>`;

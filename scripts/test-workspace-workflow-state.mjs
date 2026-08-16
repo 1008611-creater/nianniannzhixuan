@@ -5,7 +5,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "../public/workspace-wo
 const workspaceSource = await readFile(new URL("../public/workspace-v206.js", import.meta.url), "utf8");
 assert.match(workspaceSource, /from "\.\/workspace-workflow-state\.js\?v=[^"]+"/, "workspace state module must be versioned with its entry script");
 assert.match(workspaceSource, /\$\{guidedAgentMarkup\(\)\}/, "the workspace control panel must expose proactive guided agent choices");
-assert.match(workspaceSource, /label: "打开成片", action: "open-result"/, "a completed final video must expose its result action in the guided agent");
+assert.match(workspaceSource, /function agentDecisionSnapshot\(\)/, "the agent must have one workflow decision owner");
+assert.match(workspaceSource, /result\.choices = \[choice\("打开成片", "open-result"/, "a completed final video must expose its result action in the decision snapshot");
+assert.match(workspaceSource, /decision\.choices\.slice\(0, 3\)/, "the agent must cap each decision to three choices");
+assert.match(workspaceSource, /确认后才会进入付费制作/, "paid actions must remain confirmation-gated");
 
 const projectId = "project-current";
 const asset = (mediaId, url = `/api/v1/media/${mediaId}/content`) => ({ mediaId, url, kind: "image" });
