@@ -37,7 +37,7 @@ assert.match(workspace, /void canonicalProjectsPromise\.then/);
 assert.match(workspace, /if \(canonicalProjects\.error\)/);
 
 const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
-assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260816-agent-dialog-01"/);
+assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260816-workspace-media-stable-01"/);
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
 assert.match(indexHtml, /app\.compat\.js\?v=20260816-agent-dialog-03/);
 
