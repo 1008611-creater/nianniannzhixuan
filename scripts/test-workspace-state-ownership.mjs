@@ -15,7 +15,8 @@ assert.match(workspace, /first-frame\/drafts\/\$\{pending\.draft\.id\}\/confirm[
 assert.match(workspace, /first-frame\/drafts\/\$\{draft\.id\}\/confirm[\s\S]{0,180}idempotency-key.*generationIdempotencyKey\("first_frame"\)/);
 assert.match(workspace, /pendingVideo: normalizePendingVideo\(stored\.pendingVideo\)/, "video quote confirmation must survive refresh");
 assert.match(workspace, /pendingVideo: normalizePendingVideo\(state\.pendingVideo\)/, "video quote state must be persisted without raw provider data");
-assert.match(workspace, /first_frame_repair[\s\S]{0,220}idempotency-key/, "first-frame repair must be idempotent");
+assert.match(workspace, /generationIdempotencyKey\("first_frame_repair"\)/, "first-frame repair must use a stable idempotency key");
+assert.match(workspace, /first-frame\/quality\/\$\{encodeURIComponent\(reviewId\)\}\/repair[\s\S]{0,260}idempotency-key/, "first-frame repair request must send its idempotency key");
 assert.match(workspace, /一键修正会重新生成 1 张首帧，预计成功入库后扣/, "first-frame repair must show its cost before confirmation");
 assert.match(workspace, /mutation !== state\.sourceMutation/);
 assert.match(workspace, /source\.signature !== generationInputSignature\(source\.kind\)/);
