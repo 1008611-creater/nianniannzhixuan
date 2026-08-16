@@ -1309,16 +1309,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return true;
   }
   function assistantComposerMarkup(thread = false) {
-    const referenceButtons = availableMaterials().filter((item) => item.kind === "image").slice(0, 8).map((item) => `<button type="button" class="v206-mention ${state.assistantRefs.includes(item.id) ? "active" : ""}" data-v206-action="mention" data-material="${esc(item.id)}">@${esc(item.label)}</button>`).join("");
     const inputId = thread ? "v206-thread-assistant" : "v206-assistant";
-    const hint = state.assistantRefs.length ? `已引用 ${state.assistantRefs.length} 张素材 · ` : "";
-    const mentionsVisible = thread || state.assistantMentionsOpen;
     return `<form class="v206-assistant-composer ${thread ? "thread" : "dock"}" data-v206-form="assistant">
-      ${mentionsVisible ? `<div class="v206-mention-row" aria-label="引用当前图片素材">${referenceButtons || "<span>素材库还没有图片，先添加一张。</span>"}</div>` : ""}
       <div class="v206-composer-row">
         <div class="v206-composer-tools" aria-label="添加对话素材">
           <label class="v206-composer-tool" for="${inputId}-upload" aria-label="添加图片" title="添加图片"><span aria-hidden="true">＋</span><input id="${inputId}-upload" type="file" data-v206-assistant-upload accept="image/jpeg,image/png,image/webp"></label>
-          <button type="button" class="v206-composer-tool" data-v206-action="toggle-assistant-mentions" aria-label="引用素材" title="引用素材"><span aria-hidden="true">@</span></button>
         </div>
         <textarea id="${inputId}" data-v206-assistant-input name="assistant" rows="2" placeholder="告诉念念想怎么改图…">${esc(state.assistantText)}</textarea>
         <button class="v206-send" type="submit" ${state.busy ? "disabled" : ""}>发送</button>
@@ -2370,7 +2365,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     render();
     try {
       await ensureCanonicalProject();
-      const mediaIds = await resolveAssistantMediaIds();
+      const mediaIds = await resolveAssistantMediaIds(text);
       const thread = await ensureAssistantThread();
       const result = await mediaRequest(`/api/v1/assistant/threads/${thread.id}/messages`, { method: "POST", body: JSON.stringify({ content: text, mediaIds }) });
       state.chat.push(result.userMessage, result.assistantMessage);
@@ -2555,9 +2550,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const videoOnly = /(视频|成片|动作迁移)/i.test(normalized) && !/(图片|首帧|背景|人物|商品|衣服|服装|场景|构图|画面)/i.test(normalized);
     return imageTarget && editAction && !videoOnly;
   }
-  async function resolveAssistantMediaIds() {
+  async function resolveAssistantMediaIds(text = "") {
     const ids = [];
-    for (const referenceId of state.assistantRefs) {
+    const normalizedText = String(text || "").toLocaleLowerCase("zh-CN");
+    const textReferences = availableMaterials()
+      .filter((item) => item.kind === "image" && item.label && normalizedText.includes(String(item.label).toLocaleLowerCase("zh-CN")))
+      .map((item) => item.id);
+    for (const referenceId of [...new Set([...state.assistantRefs, ...textReferences])]) {
       const item = findMaterial(referenceId);
       if (!item || item.kind !== "image") continue;
       if (item.mediaId) ids.push(item.mediaId);
