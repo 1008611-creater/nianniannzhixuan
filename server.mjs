@@ -127,7 +127,10 @@ function assistantEventType(previous, snapshot, initial = false) {
   const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
   for (const job of snapshot.jobs || []) {
     const before = previousJobs.get(job.id);
-    if (!before || before.status === job.status) continue;
+    // A newly-created job is itself a transition. Skipping it meant the
+    // first queued/processing update after a paid confirmation produced no
+    // proactive assistant message until the next status change.
+    if (before && before.status === job.status) continue;
     const kind = String(job.kind || "").toUpperCase();
     const status = String(job.status || "").toLowerCase();
     const failed = /failed|error|blocked|review_required|needs_review/.test(status);

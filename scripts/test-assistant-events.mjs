@@ -14,6 +14,8 @@ assert.match(server, /function assistantEventType\(previous, snapshot/);
 assert.match(server, /FIRST_FRAME_READY/);
 assert.match(server, /VIDEO_COMPLETED/);
 assert.match(server, /const previousJobs = new Map[\s\S]{0,1200}const previousNodes = new Map/);
+assert.match(server, /newly-created job is itself a transition/);
+assert.match(server, /if \(before && before\.status === job\.status\) continue/);
 assert.match(server, /job\.projectId === projectId \|\| job\.project\?\.id === projectId/);
 const eventSnapshot = server.match(/function assistantEventSnapshot\([\s\S]*?\n\}\n\nfunction assistantEventId/)?.[0] || "";
 assert.doesNotMatch(eventSnapshot, /url|token|apiKey/i);
