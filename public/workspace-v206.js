@@ -272,7 +272,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function esc(value) { return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char])); }
   function hasVideo(url) { return /\.(mp4|mov|webm)(?:[?#]|$)/i.test(String(url || "")); }
-  function publicPreview(asset) { return asset?.preview || asset?.url || ""; }
+  function mediaCdnAssetUrl(url) {
+    const source = String(url || "");
+    const cdnOrigin = String(window.__NN_MEDIA_CDN_ORIGIN || "").replace(/\/$/, "");
+    return cdnOrigin && /^\/assets\//i.test(source) ? `${cdnOrigin}${source}` : source;
+  }
+  function publicPreview(asset) { return mediaCdnAssetUrl(asset?.preview || asset?.url || ""); }
   function canonicalProject() {
     if (requestedProjectId) return state.canonicalProjects.find((project) => project.id === requestedProjectId) || null;
     return state.canonicalProjects.find((project) => project.id === state.canonicalProjectId)
@@ -680,7 +685,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const hasSourceFallback = unavailable && Boolean(selected.fallbackUrl);
       return {
         mode: hasSourceFallback ? (selected.kind === "video" ? "video" : "image") : (unavailable ? "video" : (selected.kind === "video" ? "video" : "image")),
-        url: unavailable ? (selected.fallbackUrl || fallback) : selected.url,
+        url: mediaCdnAssetUrl(unavailable ? (selected.fallbackUrl || fallback) : selected.url),
         displayUrl: unavailable ? (selected.fallbackUrl || fallback) : publicPreview(selected),
         mediaId: unavailable ? "" : selected.mediaId,
         poster: unavailable ? "" : (selected.preview || ""),
@@ -695,7 +700,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       return {
         mode: "image",
         url: template.cover,
-        displayUrl: template.cover,
+        displayUrl: mediaCdnAssetUrl(template.cover),
         mediaId: "",
         title: "同款模板首帧",
         note: `当前正在使用${template.title}的首帧与动作参考。生成后会替换为你的商品首帧。`,
@@ -1103,10 +1108,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (!src) return "<span>+</span>";
     const mediaId = asset?.mediaId ? ` data-v206-media-id="${esc(asset.mediaId)}"` : "";
     if (asset?.kind === "video" || hasVideo(src)) {
-      if (asset.preview) return `<img src="${esc(asset.preview)}"${mediaId} alt="${esc(alt)}" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('video'),{src:'${esc(asset.url)}',muted:true,playsInline:true,preload:'metadata'}))">`;
+      if (asset.preview) return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('video'),{src:'${esc(mediaCdnAssetUrl(asset.url))}',muted:true,playsInline:true,preload:'metadata'}))">`;
       return `<i class="v206-video-card-fallback" aria-hidden="true">视频</i><video src="${esc(src)}"${mediaId} aria-label="${esc(alt)}" muted playsinline preload="metadata"></video>`;
     }
-    const fallback = asset?.url && asset.url !== src ? ` onerror="this.onerror=null;this.src='${esc(asset.url)}'"` : "";
+    const fallback = asset?.url && asset.url !== src ? ` onerror="this.onerror=null;this.src='${esc(mediaCdnAssetUrl(asset.url))}'"` : "";
     return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}"${fallback}>`;
   }
   function currentWorkflowStep() {
@@ -1153,7 +1158,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         : `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
       : stage.mode === "image"
         ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.displayUrl || stage.url)}" alt="${esc(stage.label)}预览"></div>`
-        : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stage.url)}" ${stagePoster ? `poster="${esc(stagePoster)}"` : ""} controls playsinline preload="metadata"></video>`;
+        : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(mediaCdnAssetUrl(stage.url))}" ${stagePoster ? `poster="${esc(stagePoster)}"` : ""} controls playsinline preload="metadata"></video>`;
     const project = activeProject();
     const projectTitle = project?.title || "当前项目";
     const stageProjectTitle = projectTitle.length > 18 ? `${projectTitle.slice(0, 18)}…` : projectTitle;
