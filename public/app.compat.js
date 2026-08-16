@@ -1992,8 +1992,23 @@ function configuredMediaCdnOrigin() {
   return String(meta?.getAttribute("content") || "").trim().replace(/\/$/, "");
 }
 
+function mediaCdnAssetUrl(url) {
+  const source = String(url || "");
+  const cdnOrigin = configuredMediaCdnOrigin();
+  if (!cdnOrigin || !source) return source;
+  try {
+    const parsed = new URL(source, window.location.origin);
+    if (parsed.pathname.startsWith("/assets/") && parsed.origin === window.location.origin) {
+      return `${cdnOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  } catch {}
+  return source;
+}
+
 function publicAssetUrl(url) {
   if (!url) return "";
+  const cdnUrl = mediaCdnAssetUrl(url);
+  if (cdnUrl !== String(url)) return cdnUrl;
   if (/^(https?:|blob:|data:)/i.test(url)) return url;
   const cdnOrigin = configuredMediaCdnOrigin();
   if (cdnOrigin && /^\/assets\//i.test(url)) return `${cdnOrigin}${url}`;
@@ -2005,6 +2020,8 @@ function publicAssetUrl(url) {
 
 function displayAssetUrl(url) {
 if (!url) return "";
+const cdnUrl = mediaCdnAssetUrl(url);
+if (cdnUrl !== String(url)) return cdnUrl;
 if (/^(https?:|blob:|data:)/i.test(url)) return url;
 const cdnOrigin = configuredMediaCdnOrigin();
 if (cdnOrigin && /^\/assets\//i.test(url)) return `${cdnOrigin}${url}`;
