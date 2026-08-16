@@ -245,6 +245,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       currentJobSnapshots: state.currentJobSnapshots,
       pendingAssignments: state.pendingAssignments,
       pendingAgentImageEdit: state.pendingAgentImageEdit,
+      pendingFirstFrame: persistentPendingFirstFrame(),
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
   }
@@ -796,14 +797,28 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     finally { window.clearTimeout(timeout); }
   }
   function firstFrameErrorMessage(error) {
-    const code = String(error?.message || "");
+    const code = String(error?.code || error?.errorCode || error?.failureCode || error?.message || "");
     if (/FIRST_FRAME_(MEDIA_NOT_READY|SOURCE_CHANGED)/.test(code)) return "人物、衣服和参考视频需要完成上传并保持不变后，才能生成首帧。";
     if (/FIRST_FRAME_REFERENCE_TIME_OUT_OF_RANGE/.test(code)) return "请选择参考视频实际时长内的画面。";
     if (/FIRST_FRAME_REFERENCE_(FRAME_INVALID|VIDEO_INVALID)/.test(code)) return "当前参考画面过黑、无法解码或不能使用，请换一个时间点或参考视频。";
     if (/TZ_BALANCE_INSUFFICIENT_FOR_IMAGE/.test(code)) return "TZB 余额不足，请先到账号页充值。";
     if (/FIRST_FRAME_(DRAFT_EXPIRED|DRAFT_NOT_READY)/.test(code)) return "当前首帧分析已失效，请重新分析后再确认。";
     if (/FIRST_FRAME_MATERIAL_RISK_CONFIRM_REQUIRED/.test(code)) return "请先确认素材风险，或按建议调整素材。";
+    if (/FIRST_FRAME_(PROVIDER|UPSTREAM)_(TIMEOUT|UNAVAILABLE)|MEDIA_REQUEST_FAILED_5\d\d|TIMEOUT/.test(code)) return "首帧分析服务暂时不可用，可以稍后重试；当前素材不会丢失。";
     return "暂时无法准备首帧，请稍后再试。";
+  }
+  function firstFrameDraftFailureMessage(draft) {
+    const code = String(draft?.failureCode || draft?.errorCode || draft?.code || draft?.error?.code || "");
+    const mapped = code ? firstFrameErrorMessage({ message: code }) : "";
+    if (mapped && mapped !== "暂时无法准备首帧，请稍后再试。") return mapped;
+    const detail = String(draft?.failureMessage || draft?.error?.message || draft?.message || "").replace(/https?:\/\/\S+|[A-Za-z0-9_-]{24,}/g, "").replace(/\s+/g, " ").trim();
+    return detail ? `首帧分析未完成：${concisePanelText(detail, "请稍后重试")}` : "首帧分析未完成，可以重新分析；当前素材不会丢失。";
+  }
+  function firstFrameDraftStatus(draft) {
+    const status = String(draft?.status || "").toLowerCase();
+    if (["ready", "analyzing"].includes(status)) return status;
+    if (["failed", "error", "blocked", "retryable_failed", "needs_review", "review_required", "expired"].includes(status)) return "failed";
+    return "missing";
   }
   async function sha256(file) {
     if (typeof window.NianNianUploadHash?.sha256File === "function") {
@@ -882,6 +897,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (project && !state.projectId) state.projectId = project.id;
     if (state.session && project?.id) mediaRequest("/api/v1/workspace/opened", { method: "POST", body: JSON.stringify({ projectId: project.id }) }).catch(() => {});
     if (state.session) await loadSecondaryWorkspaceState(project?.id || "");
+    restorePersistedPendingFirstFrame();
   }
 
   async function loadSecondaryWorkspaceState(projectId) {
@@ -921,28 +937,63 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (Number.isFinite(state.motionReferenceTime) && state.motionReferenceTime >= 0) payload.referenceTimeSeconds = state.motionReferenceTime;
     return payload;
   }
+  function persistentPendingFirstFrame() {
+    const pending = state.pendingFirstFrame;
+    const draft = pending?.draft;
+    const project = canonicalProject();
+    if (!draft?.id || firstFrameDraftStatus(draft) !== "ready" || !project?.id) return null;
+    return {
+      projectId: project.id,
+      snapshot: firstFrameRecoverySnapshot(),
+      draft: { id: draft.id, status: "ready", canConfirm: draft.canConfirm !== false, softRisks: Array.isArray(draft.softRisks) ? draft.softRisks : [], hardBlocks: Array.isArray(draft.hardBlocks) ? draft.hardBlocks : [] },
+      personLabel: pending.personLabel || "人物",
+      clothesLabel: pending.clothesLabel || "衣服",
+      motionLabel: pending.motionLabel || "参考视频",
+      sampleInputs: Array.isArray(pending.sampleInputs) ? pending.sampleInputs : [],
+    };
+  }
+  function restorePersistedPendingFirstFrame() {
+    const saved = stored.pendingFirstFrame;
+    const project = canonicalProject();
+    if (state.pendingFirstFrame?.draft || !saved?.draft?.id || saved.projectId !== project?.id || saved.snapshot !== firstFrameRecoverySnapshot()) return false;
+    if (firstFrameDraftStatus(saved.draft) !== "ready" || saved.draft.canConfirm === false) return false;
+    state.pendingFirstFrame = { draft: { ...saved.draft, status: "ready" }, personLabel: String(saved.personLabel || "人物"), clothesLabel: String(saved.clothesLabel || "衣服"), motionLabel: String(saved.motionLabel || "参考视频"), sampleInputs: Array.isArray(saved.sampleInputs) ? saved.sampleInputs : [], recoveredFromStorage: true };
+    state.firstFrameDraftAnalyzing = false;
+    state.firstFrameDraftError = "";
+    setWorkflowStep("frame");
+    return true;
+  }
   function pendingFirstFrameProjection(draft) {
     const person = displayAssetFor("person"); const clothes = displayAssetFor("outfit"); const motion = displayAssetFor("motion");
     return { draft, personLabel: person?.label || "人物", clothesLabel: clothes?.label || "衣服", motionLabel: motion?.label || "参考视频", sampleInputs: [person?.isTemplateSample ? "人物" : "", clothes?.isTemplateSample ? "衣服" : "", motion?.isTemplateSample ? "动作" : ""].filter(Boolean) };
   }
   function applyPendingFirstFrameDraft(draft) {
-    if (!draft) return false;
-    const status = String(draft.status || "").toLowerCase();
+    const status = firstFrameDraftStatus(draft);
     if (status === "ready" && draft.canConfirm !== false) {
       state.pendingFirstFrame = pendingFirstFrameProjection(draft);
       state.firstFrameDraftAnalyzing = false;
       state.firstFrameDraftError = "";
       setWorkflowStep("frame");
-      return true;
+      writeState();
+      return "ready";
     }
     if (status === "analyzing") {
       state.pendingFirstFrame = null;
       state.firstFrameDraftAnalyzing = true;
       state.firstFrameDraftError = "";
       setWorkflowStep("frame");
-      return true;
+      writeState();
+      return "analyzing";
     }
-    return false;
+    if (status === "failed") {
+      state.pendingFirstFrame = null;
+      state.firstFrameDraftAnalyzing = false;
+      state.firstFrameDraftError = firstFrameDraftFailureMessage(draft);
+      setWorkflowStep("frame");
+      writeState();
+      return "failed";
+    }
+    return "missing";
   }
   function waitForFirstFrameDraftRecovery() {
     return new Promise((resolve) => {
@@ -970,11 +1021,20 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       try {
         const result = await mediaRequest(`/api/v1/projects/${project.id}/first-frame/drafts`);
         if (run !== firstFrameDraftRecoveryRun || state.view === "sources") return { recovered: false, reason: "superseded" };
-        if (applyPendingFirstFrameDraft(result.draft)) {
+        const draftStatus = applyPendingFirstFrameDraft(result.draft);
+        if (draftStatus === "ready" || draftStatus === "analyzing") {
           renderUnlessSourcesOpen();
-          if (String(result.draft?.status || "").toLowerCase() === "ready") return { recovered: true, status: "ready" };
+          if (draftStatus === "ready") return { recovered: true, status: "ready" };
           if (attempt + 1 < attempts) await waitForFirstFrameDraftRecovery();
           continue;
+        }
+        if (draftStatus === "failed") {
+          renderUnlessSourcesOpen();
+          return { recovered: false, reason: "failed" };
+        }
+        if (state.pendingFirstFrame?.recoveredFromStorage) {
+          renderUnlessSourcesOpen();
+          return { recovered: true, status: "ready", reason: "local-recovery" };
         }
         if (waitForMissing && attempt + 1 < attempts) {
           state.firstFrameDraftAnalyzing = true;
@@ -986,8 +1046,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         state.firstFrameDraftAnalyzing = false;
         renderUnlessSourcesOpen();
         return { recovered: false, reason: "missing" };
-      } catch {
-        if (attempt + 1 < attempts) await waitForFirstFrameDraftRecovery();
+      } catch (error) {
+        state.firstFrameDraftError = firstFrameErrorMessage(error);
+        if (attempt + 1 < attempts && shouldReconcileFirstFrameDraft(error)) await waitForFirstFrameDraftRecovery();
+        else {
+          state.firstFrameDraftAnalyzing = false;
+          renderUnlessSourcesOpen();
+          return { recovered: false, reason: "error" };
+        }
       }
     }
     state.pendingFirstFrame = null;
@@ -1346,6 +1412,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const presentation = currentTaskPresentation();
     const qualityStatus = String(canonicalProject()?.firstFrameQuality?.status || "").toLowerCase();
     const pendingAction = pendingAssistantAction();
+    const pendingDraft = state.pendingFirstFrame?.draft || null;
     const label = (target) => slots[target]?.title || target;
     const choice = (labelText, action, extra = {}) => ({ label: labelText, action, ...extra });
     const result = {
@@ -1359,7 +1426,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     };
     const finalize = () => {
       const stateKey = Object.entries(workflow).map(([key, value]) => `${key}:${value?.status || ""}:${value?.bound ? "1" : "0"}:${value?.task?.id || ""}`).join("|");
-      result.id = [step.id, stateKey, missing.join(","), pendingAction?.id || "", pendingAction?.status || "", presentation?.task?.id || ""].join("::").replace(/[^A-Za-z0-9:|,_-]/g, "_");
+      result.id = [step.id, stateKey, missing.join(","), pendingDraft?.id || "", pendingDraft?.status || "", state.firstFrameDraftError || "", pendingAction?.id || "", pendingAction?.status || "", presentation?.task?.id || ""].join("::").replace(/[^A-Za-z0-9:|,_-]/g, "_");
       return result;
     };
     if (video?.url) {
@@ -1379,6 +1446,44 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const retry = presentation.kind === "首帧" ? choice("重新生成首帧", "make-frame", { primary: true }) : choice("重新制作成片", "make-video", { primary: true });
       result.choices = [retry, choice("先改图", "assistant-thread"), choice("查看失败任务", "tasks")];
       result.requiresConfirmation = true;
+      return finalize();
+    }
+    if (step.id === "frame" && state.firstFrameDraftError) {
+      result.recommendation = state.firstFrameDraftError;
+      result.blocking = "首帧分析未完成，可恢复";
+      result.choices = [choice("重新分析首帧", "retry-first-frame-analysis", { primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: "frame" })];
+      return finalize();
+    }
+    if (step.id === "frame" && pendingDraft) {
+      const hardBlocks = Array.isArray(pendingDraft.hardBlocks) ? pendingDraft.hardBlocks : [];
+      if (hardBlocks.length || pendingDraft.canConfirm === false) {
+        result.recommendation = "首帧分析发现当前素材需要先调整，处理后再生成。";
+        result.blocking = "首帧素材需要调整";
+        result.choices = [choice("查看首帧分析", "workflow-step", { step: "frame", primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: "person" })];
+        return finalize();
+      }
+      result.recommendation = "首帧分析已完成。确认后才会开始付费生成，成功私有入库后扣费。";
+      result.requiresConfirmation = true;
+      result.choices = [choice("确认并生成首帧", "confirm-first-frame-inline", { primary: true }), choice("先改图", "assistant-thread"), choice("查看分析依据", "workflow-step", { step: "frame" })];
+      return finalize();
+    }
+    if (step.id === "frame" && state.firstFrameDraftAnalyzing) {
+      result.recommendation = "正在分析当前素材；分析完成后会显示确认生成，不会自动扣费。";
+      result.blocking = "首帧分析中";
+      result.choices = [choice("查看当前素材", "workflow-step", { step: "person", primary: true }), choice("先改图", "assistant-thread"), choice("查看制作进度", "tasks")];
+      return finalize();
+    }
+    // A previous image-edit proposal remains available in the conversation,
+    // but must never replace the normal six-step production path.
+    if (step.id === "frame" && !workflow.frame.bound) {
+      result.recommendation = "人物、商品、参考视频和背景已准备好，可以生成商品首帧。";
+      result.choices = [choice("生成商品首帧", "make-frame", { primary: true }), choice("先改图", "assistant-thread"), choice("继续核对素材", "workflow-step", { step: "person" })];
+      return finalize();
+    }
+    if (step.id === "final" && !workflow.frame.bound) {
+      result.recommendation = "需要先生成商品首帧，才能制作成片。";
+      result.blocking = "缺少商品首帧";
+      result.choices = [choice("生成商品首帧", "workflow-step", { step: "frame", primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: "person" })];
       return finalize();
     }
     if (pendingAction) {
@@ -2198,6 +2303,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     state.firstFrameDraftAnalyzing = true;
     setWorkflowStep("frame");
     state.busy = "frame";
+    writeState();
     render();
     flash("正在分析人物、商品、背景和参考视频，准备首帧提示词。", "info");
     try {
@@ -2205,8 +2311,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const payload = currentFirstFrameDraftPayload();
       if (!payload) throw new Error("FIRST_FRAME_MEDIA_NOT_READY");
       const result = await firstFrameDraftRequest(`/api/v1/projects/${project.id}/first-frame/drafts`, { method: "POST", body: JSON.stringify(payload) });
-      if (!applyPendingFirstFrameDraft(result.draft)) throw new Error("FIRST_FRAME_DRAFT_RESPONSE_INVALID");
-      if (String(result.draft?.status || "").toLowerCase() === "analyzing") void reconcilePendingFirstFrameDraft({ waitForMissing: true });
+      const draftStatus = applyPendingFirstFrameDraft(result.draft);
+      if (draftStatus === "missing") throw new Error("FIRST_FRAME_DRAFT_RESPONSE_INVALID");
+      if (draftStatus === "failed") {
+        flash(state.firstFrameDraftError, "warning");
+        return;
+      }
+      if (draftStatus === "analyzing") void reconcilePendingFirstFrameDraft({ waitForMissing: true });
       if (result.draft?.softRisks?.length) flash("念念发现这组素材可能影响首帧效果，你可以调整，也可以确认继续生成。", "warning");
     } catch (error) {
       if (shouldReconcileFirstFrameDraft(error)) {
@@ -2214,7 +2325,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         state.firstFrameDraftAnalyzing = true;
         render();
         const recovered = await reconcilePendingFirstFrameDraft({ waitForMissing: true });
-        if (!recovered.recovered) {
+        if (!recovered.recovered && recovered.reason !== "failed" && !state.firstFrameDraftError) {
           state.firstFrameDraftError = "没有找到可恢复的首帧分析。当前素材如未变化，可以重新分析。";
           flash(state.firstFrameDraftError, "warning");
         }
@@ -2744,7 +2855,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (action === "workflow-skip") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.min(index + 1, workflowSteps.length - 1)].id); render(); return; }
     if (action === "source") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; setWorkflowStep(target); render(); return; }
     if (action === "adjust-first-frame-material") { const target = slots[button.dataset.target] ? button.dataset.target : "person"; openSources(target, "mine"); return; }
-    if (action === "retry-first-frame-analysis") { state.pendingFirstFrame = null; state.firstFrameDraftAnalyzing = false; state.firstFrameDraftError = ""; state.view = null; makeFrame(); return; }
+    if (action === "retry-first-frame-analysis") { state.pendingFirstFrame = null; state.firstFrameDraftAnalyzing = false; state.firstFrameDraftError = ""; state.view = null; writeState(); makeFrame(); return; }
     if (action === "toggle-assistant-mentions") { state.assistantMentionsOpen = !state.assistantMentionsOpen; render(); return; }
     if (action === "assistant-thread") { root?.querySelector("[data-v206-assistant-input]")?.focus(); return; }
     if (action === "sources" || action === "templates" || action === "tasks" || action === "settings") {
