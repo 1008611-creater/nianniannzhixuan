@@ -1920,10 +1920,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet compact" aria-label="重命名项目"><header class="v206-sheet-header"><div><h2>重命名项目</h2><p>项目编号不会因为改名而重复使用。</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭重命名">×</button></header><div class="v206-sheet-body"><form class="v206-form-grid" data-v206-form="rename-project"><label>项目名称<input name="projectName" maxlength="120" required value="${esc(state.projectNameDraft || project?.title || "")}" data-v206-project-name></label><div class="v206-form-actions"><button type="button" data-v206-action="close">取消</button><button class="primary" type="submit" ${state.busy ? "disabled" : ""}>保存名称</button></div></form></div></aside>`;
   }
   function assistantThreadSheet() {
-    const project = activeProject();
     return `<section class="v206-thread v206-assistant-inline" data-v206-thread role="region" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
-        <header class="v206-thread-header"><div class="v206-thread-identity"><span class="v206-thread-avatar"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1><span>素材与制作助手</span></div></div></header>
         <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${chatMessagesMarkup()}${guidedAgentMarkup()}</div>
         <div class="v206-thread-compose">${assistantComposerMarkup(true)}</div>
       </div>
