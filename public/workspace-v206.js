@@ -1573,6 +1573,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function controlMarkup() {
     const step = currentWorkflowStep();
+    const assistantOpen = state.view === "assistant-thread";
     const primary = primaryDecisionAction(step);
     const primaryAttributes = primary ? `${primary.target ? ` data-target="${esc(primary.target)}"` : ""}${primary.proposalAction ? ` data-proposal-action="${esc(primary.proposalAction)}"` : ""}${primary.step ? ` data-step="${esc(primary.step)}"` : ""}${primary.reviewId ? ` data-review-id="${esc(primary.reviewId)}"` : ""}` : "";
     const index = workflowSteps.indexOf(step);
@@ -1581,11 +1582,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const completedFinal = step.id === "final" && Boolean(activeVideoAsset()?.url);
     return `<aside class="v206-control" data-v206-inspector>
       ${workflowTabsMarkup()}
-      ${workflowQuickToolsMarkup(workflowSourceActionMarkup(step))}
+      ${assistantOpen ? assistantThreadSheet() : `${workflowQuickToolsMarkup(workflowSourceActionMarkup(step))}
       ${workflowStepBodyMarkup(step)}
       ${completedFinal ? "" : `<div class="v206-workflow-actions">${previous ? `<button type="button" class="v206-workflow-back" data-v206-action="workflow-previous">上一步</button>` : '<span></span>'}${skip}${primary ? `<button type="button" class="v206-primary" data-v206-action="${primary.name}"${primaryAttributes} ${state.busy ? "disabled" : ""}>${esc(primary.label)}</button>` : ""}</div>`}
       ${guidedAgentMarkup()}
-      ${assistantDockMarkup()}
+      ${assistantDockMarkup()}`}
     </aside>`;
   }
   function taskBarMarkup() {
@@ -1757,7 +1758,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     media.style.height = `${Math.floor(fittedHeight)}px`;
   }
   function overlayMarkup() {
-    if (state.view === "assistant-thread") return assistantThreadSheet();
+    if (state.view === "assistant-thread") return "";
     if (state.view === "sources") return sourcesSheet();
     if (state.view === "templates") return templateSheet();
     if (state.view === "tasks") return tasksSheet();
@@ -1774,7 +1775,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function assistantThreadSheet() {
     const project = activeProject();
     const context = Object.entries(slots).map(([id, meta]) => `<span class="v206-thread-context-item"><b>${esc(meta.title)}</b>${esc(displayAssetFor(id)?.label || "待补充")}</span>`).join("");
-    return `<section class="v206-thread" data-v206-thread role="dialog" aria-modal="true" aria-labelledby="v206-thread-title">
+    return `<section class="v206-thread v206-assistant-inline" data-v206-thread role="region" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
         <header class="v206-thread-header"><div class="v206-thread-identity"><span class="v206-thread-avatar"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div><p>当前制作 / ${esc(project?.title || currentTemplate().title)}</p><h1 id="v206-thread-title">念念</h1><span>素材与制作助手</span></div></div><div class="v206-thread-header-actions"><button type="button" data-v206-action="close" aria-label="收起念念完整对话">收起会话</button></div></header>
         <div class="v206-thread-context" aria-label="当前制作素材">${context}</div>

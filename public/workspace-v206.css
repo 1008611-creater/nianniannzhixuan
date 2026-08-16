@@ -366,6 +366,19 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .v206-thread textarea { width: 100%; min-height: 72px; max-height: 152px; border: 1px solid rgba(40, 76, 56, .22); padding: 12px; background: transparent; color: var(--ink); resize: vertical; }
 .v206-thread .v206-command-foot { padding: 0 10px 10px; }
 .v206-thread .v206-image-confirm { max-width: 900px; width: 100%; margin: 0 auto; }
+.v206-control:has(.v206-assistant-inline) { grid-template-rows: auto minmax(0, 1fr); }
+.v206-assistant-inline { position: relative; inset: auto; min-height: 0; display: block; overflow: hidden; background: rgba(243, 248, 241, .72); backdrop-filter: none; }
+.v206-assistant-inline .v206-thread-shell { width: 100%; height: 100%; min-height: 0; margin: 0; border: 0; background: transparent; }
+.v206-assistant-inline .v206-thread-header { min-height: 68px; padding: 11px 15px; }
+.v206-assistant-inline .v206-thread-header h1 { font-size: 18px; }
+.v206-assistant-inline .v206-thread-context { gap: 5px; padding: 7px 10px; }
+.v206-assistant-inline .v206-thread-context-item { min-width: 0; max-width: none; flex: 1 1 0; padding: 6px 7px; font-size: 10px; }
+.v206-assistant-inline .v206-thread-history { gap: 10px; padding: 14px 12px 18px; }
+.v206-assistant-inline .v206-thread .v206-inline-message,
+.v206-assistant-inline .v206-inline-message { width: 100%; max-width: none; font-size: 12px; }
+.v206-assistant-inline .v206-thread-compose { padding: 9px 10px 10px; }
+.v206-assistant-inline .v206-assistant-composer { max-width: none; }
+.v206-assistant-inline .v206-assistant-composer textarea { min-height: 48px; max-height: 96px; font-size: 12px; }
 .v206-asset-target { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .v206-asset-target b { display: block; color: var(--ink); font-size: 16px; }
 .v206-asset-target span { color: var(--muted); font-size: 12px; }
