@@ -3233,7 +3233,7 @@ let workspaceV206StylesPromise = null;
 
 function ensureWorkspaceV206Styles() {
   if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
-  const href = "/workspace-v206.css?v=20260816-agent-dialog-01";
+  const href = "/workspace-v206.css?v=20260816-agent-dialog-02";
   const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
     || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
   if (!existing) {
