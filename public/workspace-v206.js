@@ -1362,16 +1362,21 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       requiresConfirmation: false,
       choices: [],
     };
+    const finalize = () => {
+      const stateKey = Object.entries(workflow).map(([key, value]) => `${key}:${value?.status || ""}:${value?.bound ? "1" : "0"}:${value?.task?.id || ""}`).join("|");
+      result.id = [step.id, stateKey, missing.join(","), pendingAction?.id || "", pendingAction?.status || "", presentation?.task?.id || ""].join("::").replace(/[^A-Za-z0-9:|,_-]/g, "_");
+      return result;
+    };
     if (video?.url) {
       result.recommendation = "成片已经完成。先确认效果，或继续优化当前素材。";
       result.choices = [choice("打开成片", "open-result", { primary: true }), choice("继续改图", "assistant-thread"), choice("查看历史", "video-history")];
-      return result;
+      return finalize();
     }
     if (presentation?.active) {
       result.recommendation = `我正在${presentation.kind}，完成后会自动更新，不需要手动刷新。`;
       result.blocking = "任务进行中";
       result.choices = [choice("查看制作进度", "tasks", { primary: true }), choice("先看当前素材", "workflow-step", { step: step.id }), choice("继续改图", "assistant-thread")];
-      return result;
+      return finalize();
     }
     if (presentation?.failed) {
       result.recommendation = `${presentation.kind}没有生成可用结果，本次没有扣费。可以重新提交或先调整素材。`;
@@ -1379,20 +1384,20 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const retry = presentation.kind === "首帧" ? choice("重新生成首帧", "make-frame", { primary: true }) : choice("重新制作成片", "make-video", { primary: true });
       result.choices = [retry, choice("先改图", "assistant-thread"), choice("查看失败任务", "tasks")];
       result.requiresConfirmation = true;
-      return result;
+      return finalize();
     }
     if (pendingAction) {
       result.recommendation = `方案已准备好：${pendingAction.label || "制作动作"}。确认后才会进入付费制作。`;
       result.blocking = "等待用户确认";
       result.requiresConfirmation = true;
       result.choices = [choice(`确认${pendingAction.label || "制作"}`, "confirm-assistant-proposal", { proposalAction: pendingAction.id, primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: step.id })];
-      return result;
+      return finalize();
     }
     if (missingTarget) {
       result.recommendation = `下一步先准备${label(missingTarget)}。添加后我会自动检查并带你进入下一步。`;
       result.blocking = `缺少${label(missingTarget)}`;
       result.choices = [choice(`添加${label(missingTarget)}`, "prepare-required-material", { target: missingTarget, primary: true }), choice("让我帮你改图", "assistant-thread"), choice("查看当前步骤", "workflow-step", { step: step.id })];
-      return result;
+      return finalize();
     }
     if (step.id === "frame") {
       result.recommendation = qualityStatus === "repair_recommended" ? "首帧核验发现需要调整的地方，建议先修正再制作成片。" : "人物、商品、参考视频和背景已准备好，可以生成商品首帧。";
@@ -1400,18 +1405,18 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       result.choices = qualityStatus === "repair_recommended"
         ? [choice("一键修正首帧", "repair-first-frame", { reviewId: canonicalProject()?.firstFrameQuality?.id || "", primary: true }), choice("先改图", "assistant-thread"), choice("查看首帧问题", "workflow-step", { step: "frame" })]
         : [choice("直接生成首帧", "make-frame", { primary: true }), choice("先改图", "assistant-thread"), choice("继续核对素材", "workflow-step", { step: "person" })];
-      return result;
+      return finalize();
     }
     if (step.id === "final") {
       result.recommendation = "首帧已经准备好。下一步可以核对费用并制作成片，也可以先改首帧。";
       result.requiresConfirmation = true;
       result.choices = [choice("核对费用并制作视频", "make-video", { primary: true }), choice("先改首帧", "assistant-thread"), choice("查看素材状态", "workflow-step", { step: "frame" })];
-      return result;
+      return finalize();
     }
     const next = workflowSteps[workflowSteps.indexOf(step) + 1];
     result.recommendation = `${step.title}已就绪。接下来继续${next ? next.title : "制作"}。`;
     result.choices = [choice(next ? `继续${next.title}` : "继续制作", next ? "workflow-step" : "workflow-next", { step: next?.id, primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: step.id })];
-    return result;
+    return finalize();
   }
   function materialJudgment() {
     const selected = displayAssetFor(state.target);
@@ -1426,7 +1431,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function assistantDecisionMarkup() {
     const decision = agentDecisionSnapshot();
-    const buttons = decision.choices.slice(0, 3).map((item) => `<button type="button" class="${item.primary ? "v206-niannian-primary" : "v206-niannian-link"}" data-v206-action="${item.action}"${item.target ? ` data-target="${item.target}"` : ""}${item.step ? ` data-step="${item.step}"` : ""}${item.reviewId ? ` data-review-id="${item.reviewId}"` : ""}${item.proposalAction ? ` data-proposal-action="${item.proposalAction}"` : ""}${state.busy ? " disabled" : ""}>${esc(item.label)}</button>`).join("");
+    const buttons = decision.choices.slice(0, 3).map((item) => `<button type="button" class="${item.primary ? "v206-niannian-primary" : "v206-niannian-link"}" data-v206-action="${item.action}" data-v206-decision-id="${esc(decision.id)}"${item.target ? ` data-target="${item.target}"` : ""}${item.step ? ` data-step="${item.step}"` : ""}${item.reviewId ? ` data-review-id="${item.reviewId}"` : ""}${item.proposalAction ? ` data-proposal-action="${item.proposalAction}"` : ""}${state.busy ? " disabled" : ""}>${esc(item.label)}</button>`).join("");
     return `<article class="v206-niannian-decision ${decision.workflow.final.bound ? "is-complete" : ""}" aria-label="念念主动消息" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>下一步</time></div><p>${esc(decision.recommendation)}</p><div class="v206-niannian-actions">${buttons}</div></div></article>`;
   }
   function guidedAgentMarkup() {
@@ -2729,6 +2734,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function handleAction(button) {
     const action = button.dataset.v206Action;
+    const stampedDecision = button.dataset.v206DecisionId;
+    if (stampedDecision && stampedDecision !== agentDecisionSnapshot().id) {
+      flash("当前制作状态已经更新，请按最新引导操作。", "info");
+      render();
+      return;
+    }
     if (action === "close") { closeCurrentView(); return; }
     if (action === "workflow-step") { setWorkflowStep(button.dataset.step); render(); return; }
     if (action === "workflow-next") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.min(index + 1, workflowSteps.length - 1)].id); render(); return; }

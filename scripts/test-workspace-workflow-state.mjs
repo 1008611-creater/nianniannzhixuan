@@ -9,6 +9,8 @@ assert.match(workspaceSource, /function agentDecisionSnapshot\(\)/, "the agent m
 assert.match(workspaceSource, /result\.choices = \[choice\("打开成片", "open-result"/, "a completed final video must expose its result action in the decision snapshot");
 assert.match(workspaceSource, /decision\.choices\.slice\(0, 3\)/, "the agent must cap each decision to three choices");
 assert.match(workspaceSource, /确认后才会进入付费制作/, "paid actions must remain confirmation-gated");
+assert.match(workspaceSource, /data-v206-decision-id/, "agent actions must carry a decision fingerprint");
+assert.match(workspaceSource, /当前制作状态已经更新，请按最新引导操作/, "stale agent actions must be rejected visibly");
 
 const projectId = "project-current";
 const asset = (mediaId, url = `/api/v1/media/${mediaId}/content`) => ({ mediaId, url, kind: "image" });
