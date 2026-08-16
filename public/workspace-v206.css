@@ -577,7 +577,7 @@ html:has(.v206-canonical-slot), body:has(.v206-canonical-slot) { height: 100%; m
 }
 .v206-assistant-inline .v206-thread-shell {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   background: #f6f8f4;
 }
 .v206-agent-focus {

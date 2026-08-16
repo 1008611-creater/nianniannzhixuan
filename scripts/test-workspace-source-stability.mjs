@@ -9,8 +9,8 @@ const workspaceEntryCss = await readFile(new URL("../public/workspace-entry.css"
 
 assert.match(legacy, /path === "\/workspace" && app\.querySelector\("#v206-app"\).*return;/);
 assert.match(legacy, /if \(nextPath === "\/workspace"\)[\s\S]{0,700}window\.history\.pushState/);
-assert.match(legacy, /workspaceV206ModulePromise = import\("\/workspace-v206\.js\?v=20260817-agent-rail-03"\)/);
-assert.match(legacy, /href = "\/workspace-v206\.css\?v=20260817-agent-rail-03"/);
+assert.match(legacy, /workspaceV206ModulePromise = import\("\/workspace-v206\.js\?v=20260817-agent-rail-04"\)/);
+assert.match(legacy, /href = "\/workspace-v206\.css\?v=20260817-agent-rail-04"/);
 assert.match(legacy, /function startTaskFeedbackTicker\(\)[\s\S]{0,180}normalizePath\(\) === "\/workspace"/);
 
 assert.match(workspace, /function sourceSheetMounted\(\)/);
@@ -50,9 +50,9 @@ assert.doesNotMatch(workspace, /void canonicalProjectsPromise\.then/);
 assert.match(workspace, /if \(canonicalProjects\.error\)/);
 
 const workspaceHtml = await readFile(new URL("../public/workspace.html", import.meta.url), "utf8");
-assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260817-agent-rail-03"/);
+assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206\.js\?v=20260817-agent-rail-04"/);
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
-assert.match(indexHtml, /app\.compat\.js\?v=20260817-agent-rail-03/);
+assert.match(indexHtml, /app\.compat\.js\?v=20260817-agent-rail-04/);
 
 const upload = workspace.match(/async function upload\(target, file, options = \{\}\) \{[\s\S]*?\n  async function ensureProject/);
 assert.ok(upload, "upload must exist");
