@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-16";
+  const VERSION = "20260817-agent-rail-17";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -2454,7 +2454,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       message = `本次最多使用 ${Number(quote.maxTzCost || 0).toFixed(2)} TZB，成功后按实际时长结算；失败不扣。`;
     } else {
       const count = Math.max(1, Number(payload.count || 1));
-      const imageTzPrice = Number(summary.pricing?.imageTzPrice || 0);
+      const imageTzPrice = Number(
+        summary.pricing?.imageTzPrice
+        ?? summary.pricing?.image_tz_price
+        ?? summary.imageTzPrice
+        ?? 0,
+      );
       const imageTzCost = count * imageTzPrice;
       if (!Number.isFinite(imageTzPrice) || imageTzPrice <= 0 || Number(summary.wallet?.tzBalance || 0) < imageTzCost) throw new Error("TZB余额不足。");
       const inputs = Array.isArray(payload.inputs) ? payload.inputs : [];
