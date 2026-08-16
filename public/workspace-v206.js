@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260815-auth-loading-03";
+  const VERSION = "20260817-agent-rail-15";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -149,6 +149,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     pendingFirstFrame: null,
     firstFrameDraftAnalyzing: false,
     firstFrameDraftError: "",
+    firstFrameQuote: stored.firstFrameQuote && typeof stored.firstFrameQuote === "object" ? stored.firstFrameQuote : null,
+    firstFrameQuoteLoading: false,
     motionReferenceTime: null,
     videoHistory: [],
     videoReviewEnabled: false,
@@ -253,6 +255,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       pendingAgentImageEdit: state.pendingAgentImageEdit,
       pendingFirstFrame: persistentPendingFirstFrame(),
       assistantEventMessages: state.assistantEventMessages.slice(-40),
+      firstFrameQuote: state.firstFrameQuote,
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
   }
@@ -976,6 +979,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     state.firstFrameDraftAnalyzing = false;
     state.firstFrameDraftError = "";
     setWorkflowStep("frame");
+    // A restored confirmation must refresh its quote as well. Otherwise a
+    // browser reload can leave the decision message stuck at "费用核对中".
+    void refreshFirstFrameQuote();
     return true;
   }
   function pendingFirstFrameProjection(draft) {
@@ -990,6 +996,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       state.firstFrameDraftError = "";
       setWorkflowStep("frame");
       writeState();
+      void refreshFirstFrameQuote();
       return "ready";
     }
     if (status === "analyzing") {
@@ -1093,6 +1100,26 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       production: project?.production ? { status: project.production.status, statusText: project.production.statusText, outputUrls: project.production.outputUrls } : null,
       firstFrameQuality: project?.firstFrameQuality ? { id: project.firstFrameQuality.id, status: project.firstFrameQuality.status, result: project.firstFrameQuality.result } : null,
     });
+  }
+  async function refreshFirstFrameQuote() {
+    if (state.firstFrameQuoteLoading || !state.session) return;
+    state.firstFrameQuoteLoading = true;
+    try {
+      const summary = await mediaRequest("/api/v1/billing/summary");
+      const price = Number(
+        summary.pricing?.imageTzPrice
+        ?? summary.pricing?.image_tz_price
+        ?? summary.imageTzPrice
+        ?? 0,
+      );
+      state.firstFrameQuote = Number.isFinite(price) && price > 0 ? { tzCost: price, source: "billing-summary", updatedAt: new Date().toISOString() } : null;
+      writeState();
+    } catch {
+      state.firstFrameQuote = null;
+    } finally {
+      state.firstFrameQuoteLoading = false;
+      renderUnlessSourcesOpen();
+    }
   }
   function closeAssistantEventStream() {
     if (assistantEventSource) assistantEventSource.close();
@@ -1575,7 +1602,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         result.choices = [choice("查看首帧分析", "workflow-step", { step: "frame", primary: true }), choice("先改图", "assistant-thread"), choice("查看当前素材", "workflow-step", { step: "person" })];
         return finalize();
       }
-      result.recommendation = "首帧分析已完成。确认后才会开始付费生成，成功私有入库后扣费。";
+      const quoteText = state.firstFrameQuote?.tzCost != null ? `预计成功入库后扣 ${Number(state.firstFrameQuote.tzCost).toFixed(2)} TZB` : "费用正在核对";
+      result.recommendation = `首帧分析已完成。${quoteText}；确认后才会开始生成，成功私有入库后扣费，失败不扣费。`;
       result.requiresConfirmation = true;
       result.choices = [choice("确认并生成首帧", "confirm-first-frame-inline", { primary: true }), choice("先改图", "assistant-thread"), choice("查看分析依据", "workflow-step", { step: "frame" })];
       return finalize();
@@ -1675,7 +1703,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       : choices.length
         ? `<div class="v206-inline-decision warning"><span>需要你判断</span>${choices.map(firstFrameChoiceMarkup).join("")}</div>`
         : `<div class="v206-inline-decision ready"><span>念念判断</span><b>人物、衣服和参考画面已经可以生成。</b></div>`;
-    return `<section class="v206-first-frame-inline" aria-label="首帧分析结果"><div class="v206-inline-reference"><img src="${esc(draft.referencePreviewUrl)}" alt="参考视频选定帧"><span>${esc(pending.motionLabel)} · ${Number(draft.referenceTimeSeconds || 0).toFixed(2)} 秒</span></div><div class="v206-lock-list">${evidence.map(([label, value]) => `<div><span>${esc(label)}</span><b>${esc(concisePanelText(value, "已锁定"))}</b></div>`).join("")}</div>${decision}<details class="v206-controlled-prompt"><summary>查看受控提示词</summary><p>${esc(draft.compiledPrompt || "")}</p></details></section>`;
+    const cost = state.firstFrameQuote?.tzCost != null ? `成功入库后扣 ${Number(state.firstFrameQuote.tzCost).toFixed(2)} TZB` : "费用核对中";
+    return `<section class="v206-first-frame-inline" aria-label="首帧分析结果"><div class="v206-inline-reference"><img src="${esc(draft.referencePreviewUrl)}" alt="参考视频选定帧"><span>${esc(pending.motionLabel)} · ${Number(draft.referenceTimeSeconds || 0).toFixed(2)} 秒</span></div><div class="v206-lock-list">${evidence.map(([label, value]) => `<div><span>${esc(label)}</span><b>${esc(concisePanelText(value, "已锁定"))}</b></div>`).join("")}</div><div class="v206-cost-summary"><b>${esc(cost)}</b><span>使用人物、商品和参考视频生成首帧；成功私有入库后扣费，失败不扣费。</span></div>${decision}<details class="v206-controlled-prompt"><summary>查看受控提示词</summary><p>${esc(draft.compiledPrompt || "")}</p></details></section>`;
   }
   function videoQuoteMarkup() {
     const pending = state.pendingVideo;
@@ -1768,7 +1797,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       : choices.length
         ? `<div class="v206-inline-decision warning"><span>需要你判断</span>${choices.map(firstFrameChoiceMarkup).join("")}</div>`
         : `<div class="v206-inline-decision ready"><span>念念判断</span><b>人物、商品和参考画面已经可以生成。</b></div>`;
-    return `<section class="v206-workflow-special" aria-label="首帧分析结果"><div class="v206-workflow-facts"><span><b>参考画面</b>${esc(pending.motionLabel)} · ${Number(draft.referenceTimeSeconds || 0).toFixed(2)} 秒</span><span><b>生成规则</b>同一人物、同一商品、同一机位与地板角度</span></div>${decision}<details class="v206-controlled-prompt"><summary>查看受控提示词</summary><p>${esc(draft.compiledPrompt || "")}</p></details></section>`;
+    const cost = state.firstFrameQuote?.tzCost != null ? `成功入库后扣 ${Number(state.firstFrameQuote.tzCost).toFixed(2)} TZB` : "费用核对中";
+    return `<section class="v206-workflow-special" aria-label="首帧分析结果"><div class="v206-workflow-facts"><span><b>参考画面</b>${esc(pending.motionLabel)} · ${Number(draft.referenceTimeSeconds || 0).toFixed(2)} 秒</span><span><b>生成规则</b>同一人物、同一商品、同一机位与地板角度</span><span><b>费用与扣费</b>${esc(cost)}；失败不扣费</span><span><b>成功绑定</b>生成结果会保存到当前项目的商品首帧</span></div>${decision}<details class="v206-controlled-prompt"><summary>查看受控提示词</summary><p>${esc(draft.compiledPrompt || "")}</p></details></section>`;
   }
   function firstFrameDraftRecoveryMarkup() {
     if (state.pendingFirstFrame?.draft) return "";

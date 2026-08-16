@@ -26,6 +26,9 @@ assert.match(frontend, /assistantEventMessages/);
 assert.match(frontend, /localEvents = state\.assistantEventMessages\.filter/);
 assert.match(frontend, /projectId: assistantEventProjectId/);
 assert.match(frontend, /previous\?\.jobs/);
+assert.match(frontend, /refreshFirstFrameQuote/);
+assert.match(frontend, /成功私有入库后扣费，失败不扣费/);
+assert.match(frontend, /成功绑定.*当前项目的商品首帧/);
 assert.match(frontend, /eventStreamStatus === "connected"/);
 assert.ok(contract.routes.some((route) => route.path === "/api/v1/assistant/events" && route.method === "GET"));
 
