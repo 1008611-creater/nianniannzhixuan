@@ -1250,16 +1250,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function chatMessagesMarkup() {
     const assistantMessage = (message) => `<article class="v206-inline-message assistant"><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-message-bubble"><div class="v206-message-meta"><b>念念</b><time>${esc(formatMessageTime(message.createdAt))}</time></div><span>${esc(message.text || message.content || "")}</span>${message.proposal ? proposalMarkup(message.proposal) : ""}</div></article>`;
-    const seen = new Set();
     const visibleChat = state.chat.filter((message) => {
       const role = String(message.role || "").toLowerCase();
       const text = String(message.content || message.text || "").replace(/\s+/g, " ").trim();
-      if (!text || /已记录这条制作要求/.test(text)) return false;
-      const key = `${role}:${text}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return role === "user" || Boolean(message.proposal) || text.length > 12;
-    }).slice(-4);
+      return Boolean(text) && (role === "user" || role === "assistant" || Boolean(message.proposal));
+    });
     const messages = visibleChat.map((message) => String(message.role || "").toLowerCase() === "user"
       ? `<article class="v206-inline-message user"><div class="v206-message-meta"><b>你的要求</b><time>${esc(formatMessageTime(message.createdAt))}</time></div><span>${esc(message.content || message.text || "")}</span></article>`
       : assistantMessage(message)).join("");
@@ -1298,7 +1293,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const confirm = canConfirm ? `<button type="button" data-v206-action="confirm-assistant-proposal" data-proposal-action="${esc(action.id)}" ${state.busy ? "disabled" : ""}>${esc(buttonLabel)}</button>` : "";
       return `<article class="v206-proposal-action"><b>${esc(action.label || "制作动作")}</b><span>${esc(assistantActionStatus(action))}</span>${target}${price}${confirm}</article>`;
     }).join("") : `<p class="v206-proposal-empty">当前方案不需要新增制作动作。</p>`;
-    const evidence = evidenceRefs.length ? `<div class="v206-proposal-evidence">${evidenceRefs.slice(0, 4).map((ref) => `<span><b>${esc(ref.role)}</b>${esc(ref.label)}</span>`).join("")}</div>` : "";
+    const evidence = evidenceRefs.length ? `<div class="v206-proposal-evidence">${evidenceRefs.map((ref) => `<span><b>${esc(ref.role)}</b>${esc(ref.label)}</span>`).join("")}</div>` : "";
     const conflict = conflictChoices.length === 2 && !conflictResolved ? `<div class="v206-proposal-actions v206-proposal-conflict">${conflictChoices.map((choice) => `<button type="button" data-v206-action="choose-assistant-conflict" data-proposal-id="${esc(proposal.id)}" data-conflict-choice="${esc(choice.id)}" ${state.busy ? "disabled" : ""}>${esc(choice.label)}</button>`).join("")}</div>` : "";
     const details = `${items(materialAssessment, "ul")}${items(storyboard, "ol")}${items(locks, "ul")}${risks.length ? risks.map((risk) => `<p class="v206-proposal-risk">${esc(risk.issue || "存在创作风险。")} 建议：${esc(risk.alternative || "先调整素材后再确认。")}</p>`).join("") : ""}`;
     return `<section class="v206-proposal" aria-label="制作方案"><div class="v206-proposal-intro"><h3>${esc(content.title || "当前制作方案")}</h3><p>${esc(content.creativeDirection || "先以当前素材为准，确认可控范围后再制作。")}</p></div>${evidence}${conflict}<div class="v206-proposal-actions">${actionCards}</div>${details ? `<details class="v206-proposal-details"><summary>查看制作依据</summary><div>${details}</div></details>` : ""}</section>`;
@@ -1550,14 +1545,6 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const decision = agentDecisionSnapshot();
     const buttons = decision.choices.slice(0, 3).map((item) => `<button type="button" class="${item.primary ? "v206-niannian-primary" : "v206-niannian-link"}" data-v206-action="${item.action}" data-v206-decision-id="${esc(decision.id)}"${item.target ? ` data-target="${item.target}"` : ""}${item.step ? ` data-step="${item.step}"` : ""}${item.reviewId ? ` data-review-id="${item.reviewId}"` : ""}${item.proposalAction ? ` data-proposal-action="${item.proposalAction}"` : ""}${state.busy ? " disabled" : ""}>${esc(item.label)}</button>`).join("");
     return `<article class="v206-niannian-decision ${decision.workflow.final.bound ? "is-complete" : ""}" aria-label="念念主动消息" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>下一步</time></div><p>${esc(decision.recommendation)}</p><div class="v206-niannian-actions">${buttons}</div></div></article>`;
-  }
-  function assistantFocusMarkup() {
-    const decision = agentDecisionSnapshot();
-    const stepIndex = Math.max(0, workflowSteps.findIndex((step) => step.id === decision.step));
-    const prepared = ["person", "outfit", "motion", "scene", "frame"].filter((key) => decision.workflow[key]?.bound).map((key) => slots[key]?.shortTitle || slots[key]?.title).filter(Boolean);
-    const primary = decision.choices.find((item) => item.primary) || decision.choices[0];
-    const buttons = decision.choices.slice(0, 3).map((item) => `<button type="button" class="${item.primary ? "v206-agent-primary" : "v206-agent-secondary"}" data-v206-action="${item.action}" data-v206-decision-id="${esc(decision.id)}"${item.target ? ` data-target="${item.target}"` : ""}${item.step ? ` data-step="${item.step}"` : ""}${item.reviewId ? ` data-review-id="${item.reviewId}"` : ""}${item.proposalAction ? ` data-proposal-action="${item.proposalAction}"` : ""}${state.busy ? " disabled" : ""}>${esc(item.label)}</button>`).join("");
-    return `<section class="v206-agent-focus" aria-label="念念的下一步建议" data-v206-agent-focus><header><span>念念建议</span><em>${esc(`${stepIndex + 1} / ${workflowSteps.length} · ${currentWorkflowStep().shortTitle}`)}</em></header><strong>${esc(primary?.label || "继续当前制作")}</strong><p>${esc(decision.recommendation)}</p>${prepared.length ? `<small>已就绪：${esc(prepared.join("、"))}</small>` : ""}${decision.blocking ? `<i>${esc(decision.blocking)}</i>` : ""}<div class="v206-agent-actions">${buttons}</div></section>`;
   }
   function guidedAgentMarkup() {
     return assistantDecisionMarkup();
@@ -1933,7 +1920,6 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function assistantThreadSheet() {
     return `<section class="v206-thread v206-assistant-inline" data-v206-thread role="region" aria-labelledby="v206-thread-title">
       <div class="v206-thread-shell">
-        ${assistantFocusMarkup()}
         <div class="v206-thread-history" data-v206-chat-history role="log" aria-label="制作助手完整对话">${chatMessagesMarkup()}</div>
         <div class="v206-thread-compose">${assistantComposerMarkup(true)}</div>
       </div>
