@@ -1124,6 +1124,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     assistantEventSource = source;
     source.onopen = () => {
       state.eventStreamStatus = "connected";
+      if (root) root.dataset.v206EventStreamStatus = state.eventStreamStatus;
       window.clearTimeout(taskRefreshTimer);
       taskRefreshTimer = 0;
     };
@@ -1139,6 +1140,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     });
     source.onerror = () => {
       state.eventStreamStatus = "reconnecting";
+      if (root) root.dataset.v206EventStreamStatus = state.eventStreamStatus;
       scheduleTaskRefresh(5_000);
     };
   }
@@ -1869,6 +1871,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function render() {
     if (!root) return;
+    root.dataset.v206EventStreamStatus = state.eventStreamStatus || "offline";
     syncProjectSwitcher();
     const accountLabel = document.querySelector("[data-v206-account-label]");
     if (accountLabel) {
