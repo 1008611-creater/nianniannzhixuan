@@ -154,6 +154,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     videoReviewEnabled: false,
     notifications: [],
     unreadNotifications: 0,
+    assistantEventMessages: Array.isArray(stored.assistantEventMessages) ? stored.assistantEventMessages.filter((item) => item?.id && item?.projectId && item?.content).slice(-40) : [],
     showFinalVideo: true,
     mediaObserver: null,
     frameJobId: stored.frameJobId || "",
@@ -251,6 +252,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       pendingAssignments: state.pendingAssignments,
       pendingAgentImageEdit: state.pendingAgentImageEdit,
       pendingFirstFrame: persistentPendingFirstFrame(),
+      assistantEventMessages: state.assistantEventMessages.slice(-40),
     }));
     localStorage.setItem("selectedTemplateId", state.templateId);
   }
@@ -928,7 +930,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (thread) {
       state.assistantThreadId = thread.id;
       const detail = await mediaRequest(`/api/v1/assistant/threads/${thread.id}/messages`).catch(() => ({ thread: { messages: [] } }));
-      state.chat = detail.thread?.messages || [];
+      const serverMessages = Array.isArray(detail.thread?.messages) ? detail.thread.messages : [];
+      const localEvents = state.assistantEventMessages.filter((message) => message.projectId === projectId);
+      const seen = new Set();
+      state.chat = [...serverMessages, ...localEvents].filter((message) => {
+        if (!message?.id || seen.has(message.id)) return false;
+        seen.add(message.id);
+        return true;
+      });
       recoverCompletedAgentImageEdit();
       restorePendingAgentImageEdit();
     } else state.chat = [];
@@ -1102,14 +1111,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const { eventType: _eventType, ...cleanSnapshot } = snapshot;
       assistantEventSnapshot = cleanSnapshot;
     } else assistantEventSnapshot = snapshot || null;
-    if (!previous || !assistantEventSnapshot) return;
-    const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
+    if (!assistantEventSnapshot) return;
+    const previousJobs = new Map((previous?.jobs || []).map((job) => [job.id, job]));
     const changedJobs = (assistantEventSnapshot.jobs || []).filter((job) => {
       const before = previousJobs.get(job.id);
       return !before || before.status !== job.status || before.updatedAt !== job.updatedAt;
     });
     const terminal = changedJobs.find((job) => /^(completed|succeeded|success|failed|error|retryable_failed)$/i.test(String(job.status || "")));
-    const nodeChanged = JSON.stringify(previous.nodes || []) !== JSON.stringify(assistantEventSnapshot.nodes || []);
+    const nodeChanged = JSON.stringify(previous?.nodes || []) !== JSON.stringify(assistantEventSnapshot.nodes || []);
     const messages = {
       ASSET_BOUND: "素材已保存到当前项目，我已重新核对下一步。",
       ASSET_REPLACED: "替换素材已保存，我会按新素材重新判断后续步骤。",
@@ -1130,7 +1139,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
           : nodeChanged
             ? "素材已保存到当前项目，我已重新核对下一步。"
             : "制作状态已更新，我正在同步当前项目。");
-    state.chat.push({ id: `local-assistant-event:${event.id}`, role: "assistant", content, createdAt: new Date().toISOString() });
+    const localMessage = { id: `local-assistant-event:${event.id}`, projectId: assistantEventProjectId, role: "assistant", content, eventType, createdAt: new Date().toISOString() };
+    if (!state.chat.some((message) => message.id === localMessage.id)) state.chat.push(localMessage);
+    state.assistantEventMessages = [...state.assistantEventMessages.filter((message) => message.id !== localMessage.id), localMessage].slice(-40);
+    writeState();
     renderUnlessSourcesOpen();
   }
   function connectAssistantEventStream(projectId) {
@@ -1149,10 +1161,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     source.addEventListener("snapshot", (event) => {
       try {
         const snapshot = JSON.parse(event.data);
-        if (snapshot?.eventType) {
-          const { eventType: _eventType, ...cleanSnapshot } = snapshot;
-          assistantEventSnapshot = cleanSnapshot;
-        } else assistantEventSnapshot = snapshot;
+        appendAssistantEventMessage({ id: event.lastEventId || `snapshot-${Date.now()}`, snapshot, eventType: snapshot?.eventType || "PROJECT_RESTORED" });
       } catch {}
     });
     source.addEventListener("workflow.changed", (event) => {

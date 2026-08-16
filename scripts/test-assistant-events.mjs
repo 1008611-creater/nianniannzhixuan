@@ -22,6 +22,10 @@ assert.match(frontend, /workflow\.changed/);
 assert.match(frontend, /local-assistant-event:/);
 assert.match(frontend, /FIRST_FRAME_FAILED/);
 assert.match(frontend, /VIDEO_COMPLETED/);
+assert.match(frontend, /assistantEventMessages/);
+assert.match(frontend, /localEvents = state\.assistantEventMessages\.filter/);
+assert.match(frontend, /projectId: assistantEventProjectId/);
+assert.match(frontend, /previous\?\.jobs/);
 assert.match(frontend, /eventStreamStatus === "connected"/);
 assert.ok(contract.routes.some((route) => route.path === "/api/v1/assistant/events" && route.method === "GET"));
 
