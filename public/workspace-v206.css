@@ -567,6 +567,7 @@ html:has(.v206-canonical-slot), body:has(.v206-canonical-slot) { height: 100%; m
   .v206-canonical-slot .v206-sheet,
   .v206-canonical-slot .v206-thread { top: 98px; height: calc(100vh - 98px); }
 }
+.v206-thread.v206-assistant-inline { position: relative; inset: auto; top: 0 !important; width: 100%; height: 100% !important; min-height: 0; padding: 0 !important; }
 @media (max-width: 480px) {
   .v206-canonical-slot .v206-canvas {
     height: 488px;
