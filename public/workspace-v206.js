@@ -1366,6 +1366,54 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     }
     return `<article class="v206-niannian-decision ${video?.url ? "is-complete" : ""}" aria-label="念念主动消息" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>刚刚</time></div><p>${esc(text)}</p>${action}</div></article>`;
   }
+  function guidedAgentMarkup() {
+    const step = currentWorkflowStep();
+    const video = activeVideoAsset();
+    const missing = readiness().missing || [];
+    const missingTarget = missing[0] || "";
+    const label = (target) => slots[target]?.title || target;
+    let text = "我会按人物、商品、视频、背景、首帧、成片的顺序带你完成。";
+    let choices = [];
+    if (video?.url) {
+      text = "成片已经完成。你想先确认效果，还是继续优化？";
+      choices = [
+        { label: "打开成片", action: "open-result", primary: true },
+        { label: "继续改图", action: "assistant-thread" },
+        { label: "查看历史", action: "video-history" },
+      ];
+    } else if (missingTarget) {
+      text = `下一步先准备${label(missingTarget)}。添加后我会自动检查并带你进入下一步。`;
+      choices = [
+        { label: `添加${label(missingTarget)}`, action: "prepare-required-material", target: missingTarget, primary: true },
+        { label: "让我帮你改图", action: "assistant-thread" },
+        { label: "先看当前步骤", action: "workflow-step", step: step.id },
+      ];
+    } else if (step.id === "frame") {
+      text = "人物、商品、参考视频和背景已准备好。要不要现在生成商品首帧？";
+      choices = [
+        { label: "直接生成首帧", action: "make-frame", primary: true },
+        { label: "先改图", action: "assistant-thread" },
+        { label: "继续核对素材", action: "workflow-step", step: "person" },
+      ];
+    } else if (step.id === "final") {
+      text = "首帧已经准备好。下一步可以制作成片，也可以先让念念再检查一次。";
+      choices = [
+        { label: "制作成片", action: "make-video", primary: true },
+        { label: "先改首帧", action: "assistant-thread" },
+        { label: "查看素材状态", action: "workflow-step", step: "frame" },
+      ];
+    } else {
+      const next = workflowSteps[workflowSteps.indexOf(step) + 1];
+      text = `${step.title}已就绪。接下来要继续${next ? next.title : "制作"}吗？`;
+      choices = [
+        { label: next ? `继续${next.title}` : "继续制作", action: next ? "workflow-step" : "workflow-next", step: next?.id, primary: true },
+        { label: "先改图", action: "assistant-thread" },
+        { label: "查看当前素材", action: "workflow-step", step: step.id },
+      ];
+    }
+    const buttons = choices.map((choice) => `<button type="button" class="${choice.primary ? "v206-niannian-primary" : "v206-niannian-link"}" data-v206-action="${choice.action}"${choice.target ? ` data-target="${choice.target}"` : ""}${choice.step ? ` data-step="${choice.step}"` : ""}>${esc(choice.label)}</button>`).join("");
+    return `<article class="v206-niannian-decision" aria-label="念念流程引导" data-v206-proactive-message><span class="v206-assistant-avatar" aria-hidden="true"><img src="/assets/niannian-ai-logo-128.webp" alt=""></span><div class="v206-niannian-bubble"><div class="v206-message-meta"><b>念念</b><time>下一步</time></div><p>${esc(text)}</p><div class="v206-niannian-actions">${buttons}</div></div></article>`;
+  }
   function assistantDockMarkup() {
     return `<section class="v206-assistant-dock" aria-label="念念改图对话">${assistantComposerMarkup()}</section>`;
   }
@@ -1536,7 +1584,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       ${workflowQuickToolsMarkup(workflowSourceActionMarkup(step))}
       ${workflowStepBodyMarkup(step)}
       ${completedFinal ? "" : `<div class="v206-workflow-actions">${previous ? `<button type="button" class="v206-workflow-back" data-v206-action="workflow-previous">上一步</button>` : '<span></span>'}${skip}${primary ? `<button type="button" class="v206-primary" data-v206-action="${primary.name}"${primaryAttributes} ${state.busy ? "disabled" : ""}>${esc(primary.label)}</button>` : ""}</div>`}
-      ${completedFinal ? assistantDecisionMarkup() : ""}
+      ${guidedAgentMarkup()}
       ${assistantDockMarkup()}
     </aside>`;
   }
