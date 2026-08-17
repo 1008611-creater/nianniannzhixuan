@@ -23,6 +23,7 @@ assert.match(workspace, /source\.signature !== generationInputSignature\(source\
 assert.match(workspace, /state\.view === "sources" \|\| document\.visibilityState === "hidden"/);
 assert.match(workspace, /function workflowSnapshot\(\)/);
 assert.match(workspace, /function currentFinalJobId\(project = canonicalProject\(\)\)/);
+assert.match(workspace, /const final = workflowSnapshot\(\)\.final;/, "the progress sheet must use the same final-task snapshot as the step rail");
 assert.match(workspace, /function finalOutputMediaId\(job\)/);
 assert.match(workspace, /function latestCurrentFinalTask\(project = canonicalProject\(\)\)/);
 assert.match(workspace, /currentInputJob\?\.id \|\| storedSource\?\.\[0\]/, "the latest task for current inputs must beat a stale persisted task marker");

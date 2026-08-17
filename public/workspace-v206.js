@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-27";
+  const VERSION = "20260817-agent-rail-28";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -746,8 +746,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function activeProject() {
     const durable = canonicalProject();
     if (durable) {
-      const sourceJobId = currentFinalJobId(durable);
-      const actionJob = state.jobs.find((job) => job.id === sourceJobId) || newestProjectTask(state.jobs, durable.id, "ACTION_TRANSFER");
+      // The progress sheet and step rail must present the exact same final
+      // task. Do not fall back to arbitrary historical ACTION_TRANSFER jobs.
+      const final = workflowSnapshot().final;
+      const actionJob = final.task || null;
       return {
         ...durable,
         title: durable.name,
@@ -758,7 +760,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
           timing: { queueSeconds: actionJob.queueSeconds, providerSeconds: actionJob.providerSeconds, ingestionSeconds: actionJob.ingestionSeconds },
           sampleInputRoles: actionJob.sampleInputRoles || [],
           inputs: { referenceTemplateId: durable.templateId },
-        } : null,
+        } : final.status === "待制作" ? null : {
+          status: final.phase || "pending",
+          statusText: final.failure || final.status,
+          outputUrls: [],
+          timing: {},
+          sampleInputRoles: [],
+          inputs: { referenceTemplateId: durable.templateId },
+        },
       };
     }
     return null;
