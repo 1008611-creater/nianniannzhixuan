@@ -108,14 +108,14 @@ function assistantEventSnapshot(projectId, projectPayload, jobsPayload) {
       mediaId: node.media?.id || node.mediaId || null,
       status: node.status || (node.media ? "bound" : "empty"),
       updatedAt: node.updatedAt || node.updated_at || null,
-    })).filter((node) => node.role),
+    })).filter((node) => node.role).sort((left, right) => String(left.role).localeCompare(String(right.role))),
     jobs: jobs.filter((job) => job.projectId === projectId || job.project?.id === projectId).map((job) => ({
       id: job.id || null,
       kind: job.kind || null,
       status: job.status || null,
       updatedAt: job.updatedAt || job.updated_at || null,
       failureCategory: job.failureCategory || job.failure_code || null,
-    })).filter((job) => job.id),
+    })).filter((job) => job.id).sort((left, right) => String(left.id).localeCompare(String(right.id))),
   };
 }
 
