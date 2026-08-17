@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-20";
+  const VERSION = "20260817-agent-rail-21";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -213,6 +213,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   let assistantEventProjectId = "";
   let assistantEventSnapshot = null;
   const assistantEventIds = new Set();
+  const assistantEventSemanticIds = new Set();
 
   function read(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key) || "") || fallback; } catch { return fallback; }
@@ -1159,6 +1160,21 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       assistantEventSnapshot = cleanSnapshot;
     } else assistantEventSnapshot = snapshot || null;
     if (!assistantEventSnapshot) return;
+    // Reconnects and upstream snapshots can carry different event hashes for
+    // the same meaningful transition. Dedupe on the transition itself so a
+    // user never sees the same queue/complete/failure notice twice.
+    const semanticJobs = (assistantEventSnapshot.jobs || [])
+      .filter((job) => {
+        const kind = String(job.kind || "").toUpperCase();
+        return eventType === "VIDEO_QUEUED" ? kind === "ACTION_TRANSFER" && taskIsActive(job.status) : kind === "FIRST_FRAME" || kind === "ACTION_TRANSFER";
+      })
+      .map((job) => `${job.id}:${String(job.status || "").toLowerCase()}`)
+      .sort()
+      .join("|");
+    const semanticId = `${assistantEventProjectId}:${eventType}:${semanticJobs}`;
+    if (assistantEventSemanticIds.has(semanticId)) return;
+    assistantEventSemanticIds.add(semanticId);
+    if (assistantEventSemanticIds.size > 80) assistantEventSemanticIds.delete(assistantEventSemanticIds.values().next().value);
     const previousJobs = new Map((previous?.jobs || []).map((job) => [job.id, job]));
     const changedJobs = (assistantEventSnapshot.jobs || []).filter((job) => {
       const before = previousJobs.get(job.id);
@@ -2640,8 +2656,22 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   async function makeVideo(formOrMode) {
     if (!requireLogin() || !state.pendingVideo) return;
+    if (state.videoSubmitInFlight) return;
     const pending = state.pendingVideo;
+    const duplicateActiveJob = state.jobs.find((job) => jobBelongsToProject(job, { id: pending.projectId })
+      && String(job.kind || "").toUpperCase() === "ACTION_TRANSFER"
+      && taskIsActive(job.status)
+      && String(job.input?.firstFrameMediaId || job.input?.first_frame_media_id || "") === String(pending.firstFrameMediaId)
+      && String(job.input?.motionMediaId || job.input?.motion_media_id || "") === String(pending.motionMediaId));
+    if (duplicateActiveJob) {
+      state.pendingVideo = null;
+      clearGenerationIdempotencyKey("action_transfer");
+      writeState();
+      flash("成片任务已经在制作中，我会在完成后通知你。", "info");
+      return;
+    }
     const stable = typeof formOrMode === "string" ? formOrMode === "stable" : new FormData(formOrMode).get("mode") === "stable";
+    state.videoSubmitInFlight = true;
     state.busy = "video";
     render();
     try {
@@ -2662,7 +2692,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       setWorkflowStep("final");
       flash(`${stable ? "稳定" : "标准"}模式已进入持久队列，成片入库后会在主画布显示。`);
     } catch (error) { flash(error.message || "视频任务提交失败。", "warning"); }
-    finally { state.busy = ""; render(); }
+    finally { state.videoSubmitInFlight = false; state.busy = ""; render(); }
   }
   async function syncVideo() {
     if (!requireLogin()) return;
