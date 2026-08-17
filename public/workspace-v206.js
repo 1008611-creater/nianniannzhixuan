@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-25";
+  const VERSION = "20260817-agent-rail-26";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);

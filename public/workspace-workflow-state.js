@@ -34,6 +34,20 @@ function taskMatchesInputs(task, outputKind, generationSources, signature, curre
   return Boolean((source && source.kind === outputKind && source.signature === signature) || task.id === currentJobId);
 }
 
+function taskMatchesCurrentSignature(task, outputKind, signature) {
+  const input = task?.input || task?.inputs || {};
+  const parts = String(signature || "").split(":");
+  if (outputKind === "final") {
+    const frameId = input.firstFrameMediaId || input.first_frame_media_id || "";
+    const motionId = input.motionMediaId || input.motion_media_id || "";
+    return Boolean(frameId && motionId && frameId === parts.at(-1) && motionId === parts.at(-2));
+  }
+  const personId = input.personMediaId || input.person_media_id || "";
+  const clothesId = input.clothesMediaId || input.clothes_media_id || "";
+  const motionId = input.motionMediaId || input.motion_media_id || "";
+  return Boolean(personId && clothesId && motionId && personId === parts[0] && clothesId === parts[1] && motionId === parts.at(-1));
+}
+
 function assetState(asset, unavailableMedia) {
   const bound = Boolean(asset && (asset.mediaId || asset.url));
   return {
@@ -60,7 +74,8 @@ function outputState({ asset, unavailableMedia, invalidated, task, outputKind, s
   // Running and failed project tasks remain useful after a refresh, but a
   // completed task may only claim "ingesting" when this project recorded that
   // exact job. Otherwise an older historical job could mask a missing output.
-  const currentTask = trackedTask || (!invalidated && !taskSource && (ACTIVE_TASK.test(taskStatus) || FAILED_TASK.test(taskStatus))) ? task : null;
+  const recoveredFailure = !invalidated && !taskSource && FAILED_TASK.test(taskStatus) && taskMatchesCurrentSignature(task, outputKind, signature);
+  const currentTask = trackedTask || (!invalidated && !taskSource && ACTIVE_TASK.test(taskStatus)) || recoveredFailure ? task : null;
   const status = String(currentTask?.status || "");
   if (ACTIVE_TASK.test(status)) return { ...base, task: currentTask, phase: QUEUED_TASK.test(status) ? "queued" : "processing", status: QUEUED_TASK.test(status) && outputKind === "final" ? "排队中" : "制作中" };
   // A completed job is not a usable output until its media is bound to the
