@@ -1,6 +1,7 @@
 const ACTIVE_TASK = /^(queued|validating|submitted|pending|submitting|running|processing|ingesting)$/i;
 const COMPLETED_TASK = /^(completed|finished|succeeded|success|ready)$/i;
 const FAILED_TASK = /^(failed|retryable_failed|blocked|review_required|needs_review|requires_review)$/i;
+const QUEUED_TASK = /^(queued|pending|submitted|submitting|validating)$/i;
 
 function taskTime(task) {
   for (const value of [task?.updatedAt, task?.completedAt, task?.createdAt, task?.submittedAt]) {
@@ -47,19 +48,24 @@ function inputState(asset, unavailableMedia, readyLabel) {
 function outputState({ asset, unavailableMedia, invalidated, task, outputKind, signature, generationSources, currentJobId, readyLabel, failedLabel, pendingLabel }) {
   const base = assetState(invalidated ? null : asset, unavailableMedia);
   const taskStatus = String(task?.status || "");
+  const taskSource = task ? generationSources?.[task.id] : null;
   const trackedTask = taskMatchesInputs(task, outputKind, generationSources, signature, currentJobId);
   // A failed task never creates an output. When current materials have not
   // changed, keep the newest project failure visible even after a reload that
   // has lost the client-only input signature. An invalidated output still
   // suppresses failures from replaced materials.
-  const currentTask = trackedTask || (!invalidated && FAILED_TASK.test(taskStatus)) ? task : null;
+  // Running and failed project tasks remain useful after a refresh, but a
+  // completed task may only claim "ingesting" when this project recorded that
+  // exact job. Otherwise an older historical job could mask a missing output.
+  const currentTask = trackedTask || (!invalidated && !taskSource && (ACTIVE_TASK.test(taskStatus) || FAILED_TASK.test(taskStatus))) ? task : null;
   const status = String(currentTask?.status || "");
-  if (ACTIVE_TASK.test(status)) return { ...base, task: currentTask, status: "制作中" };
+  if (ACTIVE_TASK.test(status)) return { ...base, task: currentTask, phase: QUEUED_TASK.test(status) ? "queued" : "processing", status: QUEUED_TASK.test(status) && outputKind === "final" ? "排队中" : "制作中" };
   // A completed job is not a usable output until its media is bound to the
   // current project node. This prevents "completed" from outrunning ingestion.
-  if (base.bound) return { ...base, task: currentTask, status: readyLabel };
-  if (FAILED_TASK.test(status)) return { ...base, task: currentTask, status: failedLabel };
-  return { ...base, task: currentTask, status: pendingLabel };
+  if (base.bound) return { ...base, task: currentTask, phase: "bound", status: readyLabel };
+  if (COMPLETED_TASK.test(status)) return { ...base, task: currentTask, phase: "ingesting", status: "入库中" };
+  if (FAILED_TASK.test(status)) return { ...base, task: currentTask, phase: "failed", status: failedLabel };
+  return { ...base, task: currentTask, phase: "pending", status: pendingLabel };
 }
 
 export function buildWorkflowSnapshot({ projectId = "", assets = {}, unavailableMedia = new Set(), jobs = [], production = null, invalidated = {}, generationSources = {}, signatures = {}, currentJobIds = {} } = {}) {
@@ -67,7 +73,7 @@ export function buildWorkflowSnapshot({ projectId = "", assets = {}, unavailable
   const actionTask = newestProjectTask(jobs, projectId, "ACTION_TRANSFER", currentJobIds.final);
   const frame = outputState({ asset: assets.frame, unavailableMedia, invalidated: invalidated.frame, task: firstFrameTask, outputKind: "frame", signature: signatures.frame, generationSources, currentJobId: currentJobIds.frame, readyLabel: "已就绪", failedLabel: "生成失败", pendingLabel: "待生成" });
   let final = outputState({ asset: assets.final, unavailableMedia, invalidated: invalidated.final, task: actionTask, outputKind: "final", signature: signatures.final, generationSources, currentJobId: currentJobIds.final, readyLabel: "已完成", failedLabel: "制作失败", pendingLabel: "待制作" });
-  if (!final.task && !final.bound && ACTIVE_TASK.test(String(production?.status || ""))) final = { ...final, task: production, status: "制作中" };
+  if (!final.task && !final.bound && ACTIVE_TASK.test(String(production?.status || ""))) final = { ...final, task: production, phase: QUEUED_TASK.test(String(production.status || "")) ? "queued" : "processing", status: QUEUED_TASK.test(String(production.status || "")) ? "排队中" : "制作中" };
   if (!final.task && !final.bound && FAILED_TASK.test(String(production?.status || ""))) final = { ...final, task: production, status: "制作失败" };
   return {
     person: inputState(assets.person, unavailableMedia, "已就绪"),

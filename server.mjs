@@ -120,7 +120,14 @@ function assistantEventSnapshot(projectId, projectPayload, jobsPayload) {
 }
 
 function assistantEventId(snapshot) {
-  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex").slice(0, 24);
+  // Timestamps change while an upstream worker is alive. They are useful for
+  // diagnostics, but must never turn into new user-facing workflow events.
+  const semantic = {
+    projectId: snapshot?.projectId || "",
+    nodes: (snapshot?.nodes || []).map((node) => ({ role: node.role, mediaId: node.mediaId || null, status: node.status || null })),
+    jobs: (snapshot?.jobs || []).map((job) => ({ id: job.id, kind: job.kind, status: job.status, failureCategory: job.failureCategory || null })),
+  };
+  return createHash("sha256").update(JSON.stringify(semantic)).digest("hex").slice(0, 24);
 }
 
 function recordAssistantEventAudit(projectId, eventId, eventType) {
@@ -137,6 +144,10 @@ function recordAssistantEventAudit(projectId, eventId, eventType) {
 function assistantEventType(previous, snapshot, initial = false) {
   if (initial || !previous) return "PROJECT_RESTORED";
   const previousJobs = new Map((previous.jobs || []).map((job) => [job.id, job]));
+  const previousNodes = new Map((previous.nodes || []).map((node) => [node.role, node]));
+  const finalNode = (snapshot.nodes || []).find((node) => node.role === "FINAL_VIDEO");
+  const previousFinalNode = previousNodes.get("FINAL_VIDEO");
+  if (finalNode?.mediaId && finalNode.mediaId !== previousFinalNode?.mediaId) return "VIDEO_BOUND";
   for (const job of snapshot.jobs || []) {
     const before = previousJobs.get(job.id);
     // A newly-created job is itself a transition. Skipping it meant the
@@ -148,17 +159,21 @@ function assistantEventType(previous, snapshot, initial = false) {
     const failed = /failed|error|blocked|review_required|needs_review/.test(status);
     const completed = /completed|finished|succeeded|success|ready/.test(status);
     if (kind === "FIRST_FRAME") return failed ? "FIRST_FRAME_FAILED" : completed ? "FIRST_FRAME_READY" : "FIRST_FRAME_ANALYZING";
-    if (kind === "ACTION_TRANSFER") return failed ? "VIDEO_FAILED" : completed ? "VIDEO_COMPLETED" : "VIDEO_QUEUED";
+    if (kind === "ACTION_TRANSFER") {
+      if (failed) return "VIDEO_FAILED";
+      if (completed) return finalNode?.mediaId ? "VIDEO_BOUND" : "VIDEO_INGESTING";
+      if (!before) return "VIDEO_QUEUED";
+      return "VIDEO_PROCESSING";
+    }
     if (kind === "IMAGE_ASSET" && failed) return "ASSET_SAVE_FAILED";
   }
-  const previousNodes = new Map((previous.nodes || []).map((node) => [node.role, node]));
   for (const node of snapshot.nodes || []) {
     const before = previousNodes.get(node.role);
     if (!before || before.mediaId !== node.mediaId || before.status !== node.status) {
       return before?.mediaId ? "ASSET_REPLACED" : "ASSET_BOUND";
     }
   }
-  return "PROJECT_RESTORED";
+  return null;
 }
 
 async function fetchAssistantState(pathname, headers, signal) {
@@ -208,12 +223,12 @@ async function streamAssistantEvents(request, response, projectId) {
       ]);
       const snapshot = assistantEventSnapshot(projectId, projectPayload, jobsPayload);
       const eventId = assistantEventId(snapshot);
-      if (initial || eventId !== lastEventId) {
-        const eventType = assistantEventType(previousSnapshot, snapshot, initial);
+      const eventType = assistantEventType(previousSnapshot, snapshot, initial);
+      if ((initial && eventId !== lastEventId) || (!initial && eventType && eventId !== lastEventId)) {
         recordAssistantEventAudit(projectId, eventId, eventType);
         emit(initial ? "snapshot" : "workflow.changed", eventId, { ...snapshot, eventType });
-        lastEventId = eventId;
       }
+      lastEventId = eventId;
       previousSnapshot = snapshot;
     } catch (error) {
       if (!closed && error?.name !== "AbortError") emit("error", `error-${Date.now()}`, { category: "state_unavailable" });

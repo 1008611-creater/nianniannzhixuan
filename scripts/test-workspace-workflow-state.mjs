@@ -64,6 +64,28 @@ const trackedCompletedWithoutMedia = buildWorkflowSnapshot({
   jobs: [{ id: "tracked", projectId, kind: "FIRST_FRAME", status: "completed", createdAt: "2026-08-14T00:00:00Z" }],
   generationSources: { tracked: { kind: "frame", signature: base.signatures.frame } },
 });
-assert.equal(trackedCompletedWithoutMedia.frame.status, "待生成", "a tracked completed task without a bound output must remain pending");
+assert.equal(trackedCompletedWithoutMedia.frame.status, "入库中", "a tracked completed task without a bound output must stay visibly ingesting");
+
+const queuedFinal = buildWorkflowSnapshot({
+  ...base,
+  jobs: [{ id: "queued-final", projectId, kind: "ACTION_TRANSFER", status: "queued", createdAt: "2026-08-14T00:00:00Z" }],
+  currentJobIds: { final: "queued-final" },
+});
+assert.equal(queuedFinal.final.status, "排队中", "a persisted final task must show an explicit queued state");
+
+const completedFinalWithoutMedia = buildWorkflowSnapshot({
+  ...base,
+  jobs: [{ id: "completed-final", projectId, kind: "ACTION_TRANSFER", status: "completed", createdAt: "2026-08-14T00:00:00Z" }],
+  currentJobIds: { final: "completed-final" },
+});
+assert.equal(completedFinalWithoutMedia.final.status, "入库中", "a completed video must not claim playback before FINAL_VIDEO is bound");
+
+const boundFinal = buildWorkflowSnapshot({
+  ...base,
+  assets: { ...base.assets, final: { ...asset("final", "/api/v1/media/final/playback"), kind: "video" } },
+  jobs: [{ id: "bound-final", projectId, kind: "ACTION_TRANSFER", status: "completed", createdAt: "2026-08-14T00:00:00Z" }],
+  currentJobIds: { final: "bound-final" },
+});
+assert.equal(boundFinal.final.status, "已完成", "only a FINAL_VIDEO binding makes a completed task playable");
 
 console.log("OK workspace workflow snapshot is project-scoped, preview-independent, and newest-task-wins");

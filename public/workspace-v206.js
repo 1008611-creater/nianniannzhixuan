@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-21";
+  const VERSION = "20260817-agent-rail-22";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -118,6 +118,21 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   const previewMode = ["127.0.0.1", "localhost"].includes(window.location.hostname) ? requested.get("workspacePreview") || "" : "";
   let requestedProjectId = UUID_PATTERN.test(requested.get("projectId") || "") ? requested.get("projectId") : "";
   const initialTemplate = normalizeTemplate(requested.get("templateId") || localStorage.getItem("selectedTemplateId") || stored.templateId || FALLBACK_TEMPLATE);
+  function compactAssistantEventMessages(messages) {
+    const seenTransient = new Set();
+    return (Array.isArray(messages) ? messages : []).filter((message) => {
+      if (!message?.id || !message?.projectId || !message?.content) return false;
+      const eventType = String(message.eventType || "").toUpperCase();
+      // Recovery snapshots are transport details, not useful conversation
+      // history. Earlier versions wrote one on every active-task refresh.
+      if (eventType === "PROJECT_RESTORED") return false;
+      if (!["VIDEO_QUEUED", "VIDEO_PROCESSING"].includes(eventType)) return true;
+      const key = `${message.projectId}:${eventType}`;
+      if (seenTransient.has(key)) return false;
+      seenTransient.add(key);
+      return true;
+    }).slice(-40);
+  }
   const state = {
     templateId: initialTemplate,
     selected: stored.templateId === initialTemplate && stored.selected ? normalizeStoredSelection(stored.selected) : starterSelection(initialTemplate),
@@ -156,10 +171,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     videoReviewEnabled: false,
     notifications: [],
     unreadNotifications: 0,
-    assistantEventMessages: Array.isArray(stored.assistantEventMessages) ? stored.assistantEventMessages.filter((item) => item?.id && item?.projectId && item?.content).slice(-40) : [],
+    assistantEventMessages: compactAssistantEventMessages(stored.assistantEventMessages),
     showFinalVideo: true,
     mediaObserver: null,
     frameJobId: stored.frameJobId || "",
+    finalJobId: stored.finalJobId || "",
     projectId: stored.projectId || "",
     taskRefreshAt: 0,
     taskRefreshAttempts: 0,
@@ -264,6 +280,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       selected: Object.fromEntries(Object.entries(state.selected).map(([key, asset]) => [key, persistentAsset(asset)])),
       materials: state.materials.map(persistentAsset).filter(Boolean).slice(0, 60),
       frameJobId: state.frameJobId,
+      finalJobId: state.finalJobId,
       projectId: state.projectId,
       canonicalProjectId: state.canonicalProjectId,
       generationKeys: state.generationKeys,
@@ -402,6 +419,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     state.firstFrameDraftAnalyzing = false;
     state.pendingVideo = null;
     state.frameJobId = "";
+    state.finalJobId = "";
     state.showFinalVideo = false;
     firstFrameDraftRecoveryRun += 1;
     writeState();
@@ -424,6 +442,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     for (const job of state.jobs) {
       const source = state.generationSources[job.id];
       if (!source || !completedJob(job) || source.signature !== generationInputSignature(source.kind)) continue;
+      // A provider completion is not a user-visible result. Keep the durable
+      // task in the explicit ingesting state until its private project node is
+      // actually bound by the upstream authority.
+      if (!workflowBoundAssets()[source.kind]?.mediaId) continue;
       markDerivedOutputCurrent(source.kind);
       delete state.generationSources[job.id];
       changed = true;
@@ -490,6 +512,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const frameNode = project?.nodes?.find((node) => node.role === "FIRST_FRAME");
     return state.frameJobId || frameNode?.metadata?.sourceJobId || frameNode?.metadata?.jobId || "";
   }
+  function currentFinalJobId(project = canonicalProject()) {
+    const finalNode = project?.nodes?.find((node) => node.role === "FINAL_VIDEO");
+    const storedSource = Object.entries(state.generationSources || {}).find(([, source]) => source?.kind === "final" && source.signature === generationInputSignature("final"));
+    return state.finalJobId || finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || storedSource?.[0] || "";
+  }
   function displayAssetFor(id) {
     const project = canonicalProject();
     const boundAssets = workflowBoundAssets(project);
@@ -514,7 +541,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       signatures: { frame: sourceSignature(), final: `${sourceSignature()}:${assets.frame?.mediaId || ""}` },
       currentJobIds: {
         frame: currentFrameJobId(project),
-        final: project?.nodes?.find((node) => node.role === "FINAL_VIDEO")?.metadata?.sourceJobId || "",
+        final: currentFinalJobId(project),
       },
     });
     if (project?.id) {
@@ -635,8 +662,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function activeProject() {
     const durable = canonicalProject();
     if (durable) {
-      const finalNode = durable.nodes?.find((node) => node.role === "FINAL_VIDEO");
-      const sourceJobId = finalNode?.metadata?.sourceJobId || "";
+      const sourceJobId = currentFinalJobId(durable);
       const actionJob = state.jobs.find((job) => job.id === sourceJobId) || newestProjectTask(state.jobs, durable.id, "ACTION_TRANSFER");
       return {
         ...durable,
@@ -661,9 +687,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const project = canonicalProject();
     const finalNode = project?.nodes?.find((node) => node.role === "FINAL_VIDEO" && node.media?.url);
     if (finalNode?.media) return assetFromMedia(finalNode.media);
-    const urls = activeProject()?.production?.outputUrls || [];
-    const url = urls.find((item) => hasVideo(item)) || "";
-    return url ? toAsset(url, "video", "已完成成片") : null;
+    return null;
   }
   function readiness() {
     const snapshot = workflowSnapshot();
@@ -706,6 +730,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         const slot = slots[missing];
         return { mode: "empty", target: missing, title: `${slot.title}待添加`, note: `请先上传或选择${slot.title}素材。`, label: "待添加" };
       }
+      const final = workflowSnapshot().final;
+      if (final.status === "入库中") return { mode: "empty", target: "final", title: "成片正在私有入库", note: "视频已制作完成，正在绑定到当前项目；绑定成功后才会开放播放。", label: "入库中" };
+      if (["排队中", "制作中"].includes(final.status)) return { mode: "empty", target: "final", title: final.status === "排队中" ? "成片正在排队" : "成片正在制作", note: "任务正在处理，完成后会继续私有入库并绑定到当前项目。", label: final.status };
       return { mode: "empty", target: "final", title: "成片待制作", note: "人物、商品和参考视频已绑定当前项目，可以继续生成商品首帧。", label: "待制作" };
     }
     if (selected?.url) {
@@ -1190,21 +1217,25 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       FIRST_FRAME_READY: "首帧已经生成并入库，我正在同步当前项目结果。",
       FIRST_FRAME_FAILED: "首帧没有生成可用结果，本次不会扣费。可以重试或先改图。",
       VIDEO_QUEUED: "成片已进入制作队列，完成后我会通知你，不需要手动刷新。",
-      VIDEO_COMPLETED: "成片已经完成并入库，可以打开播放或继续调整素材。",
+      VIDEO_PROCESSING: null,
+      VIDEO_INGESTING: "成片已完成制作，正在私有入库并绑定到当前项目。",
+      VIDEO_BOUND: "成片已私有入库并绑定当前项目，可以打开播放或继续调整素材。",
       VIDEO_FAILED: "成片没有完成，本次不会扣费。可以重试、改图或查看失败任务。",
-      PROJECT_RESTORED: "我已恢复当前项目状态，接下来会按未完成步骤继续带你操作。",
+      PROJECT_RESTORED: null,
     };
-    const content = messages[eventType]
-      || (terminal && /failed|error|retryable_failed/i.test(String(terminal.status || ""))
+    const hasEventMessage = Object.prototype.hasOwnProperty.call(messages, eventType);
+    const fallbackContent = terminal && /failed|error|retryable_failed/i.test(String(terminal.status || ""))
         ? "任务没有完成，本次不会扣费。可以重试，或先调整素材。"
         : terminal
           ? "任务已经完成，我正在同步当前项目结果。接下来可以查看结果，或继续调整素材。"
           : nodeChanged
             ? "素材已保存到当前项目，我已重新核对下一步。"
-            : "制作状态已更新，我正在同步当前项目。");
+            : "制作状态已更新，我正在同步当前项目。";
+    const content = hasEventMessage ? messages[eventType] : fallbackContent;
+    if (!content) return;
     const localMessage = { id: `local-assistant-event:${event.id}`, projectId: assistantEventProjectId, role: "assistant", content, eventType, createdAt: new Date().toISOString() };
     if (!state.chat.some((message) => message.id === localMessage.id)) state.chat.push(localMessage);
-    state.assistantEventMessages = [...state.assistantEventMessages.filter((message) => message.id !== localMessage.id), localMessage].slice(-40);
+    state.assistantEventMessages = compactAssistantEventMessages([...state.assistantEventMessages.filter((message) => message.id !== localMessage.id), localMessage]);
     writeState();
     renderUnlessSourcesOpen();
   }
@@ -1363,7 +1394,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (!project?.id || state.workflowProjectId === project.id) return;
     state.workflowProjectId = project.id;
     const snapshot = workflowSnapshot();
-    if (snapshot.final.bound || snapshot.final.status === "制作中") {
+    if (snapshot.final.bound || ["排队中", "制作中", "入库中"].includes(snapshot.final.status)) {
       setWorkflowStep("final");
       return;
     }
@@ -1766,7 +1797,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function currentTaskPresentation() {
     if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) return null;
     const snapshot = workflowSnapshot();
-    if (snapshot.final.status === "制作中") return { task: snapshot.final.task, kind: "成片", active: true };
+    if (["排队中", "制作中", "入库中"].includes(snapshot.final.status)) return { task: snapshot.final.task, kind: "成片", active: true, phase: snapshot.final.phase || "processing" };
     if (snapshot.frame.status === "制作中") return { task: snapshot.frame.task, kind: "首帧", active: true };
     if (snapshot.final.status === "制作失败") return { task: snapshot.final.task, kind: "成片", failed: true };
     if (snapshot.frame.status === "生成失败") return { task: snapshot.frame.task, kind: "首帧", failed: true };
@@ -1778,8 +1809,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (!presentation) return "";
     if (presentation.active) {
       const status = String(presentation.task?.status || "已提交").toLowerCase();
-      const stage = /queued|validating|submitted|pending|submitting/.test(status) ? "已提交，正在进入生成队列" : "正在生成并检查私有入库";
-      return `<section class="v206-live-task active" aria-live="polite"><span>${esc(presentation.kind)}正在制作</span><b>${esc(stage)}</b><small>通常需要几分钟。可以离开页面；完成后首帧会自动显示，并可继续制作成片。失败不会扣费。</small></section>`;
+      const stage = presentation.phase === "ingesting" ? "视频已制作完成，正在私有入库并绑定当前项目" : (/queued|validating|submitted|pending|submitting/.test(status) ? "已提交，正在进入生成队列" : "正在生成并检查私有入库");
+      return `<section class="v206-live-task active" aria-live="polite"><span>${esc(presentation.kind)}${presentation.phase === "ingesting" ? "正在入库" : "正在制作"}</span><b>${esc(stage)}</b><small>可以离开页面；只有私有入库并绑定当前项目后才会开放播放。失败不会扣费。</small></section>`;
     }
     return `<section class="v206-live-task failed"><span>${esc(presentation.kind)}没有完成</span><b>这次任务未生成可用结果。</b><small>没有扣费。检查当前素材后可以重新提交。</small></section>`;
   }
@@ -1896,10 +1927,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function taskBarMarkup() {
     const presentation = currentTaskPresentation();
     if (!presentation) return "";
-    const label = presentation.failed ? `${presentation.kind}需要处理` : `${presentation.kind}制作中`;
+    const label = presentation.failed ? `${presentation.kind}需要处理` : `${presentation.kind}${presentation.phase === "ingesting" ? "正在入库" : "制作中"}`;
     const status = presentation.failed
       ? "没有生成可用结果 · 未扣费 · 检查当前素材后可重新提交"
-      : "正在制作，可离开页面；完成后自动显示下一步";
+      : (presentation.phase === "ingesting" ? "视频已完成制作，正在私有入库并绑定当前项目" : "正在制作，可离开页面；完成后自动显示下一步");
     return `<button type="button" class="v206-task-bar ${presentation.active ? "active" : ""}" data-v206-action="tasks"><span><i></i><b>${esc(label)}</b></span><em>${esc(status)}</em><strong>查看全部任务</strong></button>`;
   }
   function headerMarkup() {
@@ -2682,6 +2713,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       });
       if (result.job) state.jobs = [result.job, ...state.jobs.filter((item) => item.id !== result.job.id)];
       if (result.job?.id) {
+        state.finalJobId = result.job.id;
         state.generationSources[result.job.id] = { kind: "final", signature: generationInputSignature("final") };
         state.currentJobSnapshots.final = result.job;
       }
