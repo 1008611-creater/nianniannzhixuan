@@ -22,6 +22,7 @@ assert.match(workspace, /mutation !== state\.sourceMutation/);
 assert.match(workspace, /source\.signature !== generationInputSignature\(source\.kind\)/);
 assert.match(workspace, /state\.view === "sources" \|\| document\.visibilityState === "hidden"/);
 assert.match(workspace, /function workflowSnapshot\(\)/);
+assert.match(workspace, /production: project\?\.production \|\| null/, "workflow derivation must not recurse through the presentation project");
 assert.match(workspace, /A non-essential secondary request must never leave the signed-in/, "workspace boot must exit the loading skeleton after a secondary request error");
 assert.match(workspace, /function currentFinalJobId\(project = canonicalProject\(\)\)/);
 assert.match(workspace, /const final = workflowSnapshot\(\)\.final;/, "the progress sheet must use the same final-task snapshot as the step rail");

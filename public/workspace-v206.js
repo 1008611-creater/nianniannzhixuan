@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-29";
+  const VERSION = "20260817-agent-rail-30";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -615,7 +615,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       assets,
       unavailableMedia: state.unavailableMedia,
       jobs: state.jobs,
-      production: activeProject()?.production || null,
+      // Snapshot derivation must only consume canonical source data. Calling
+      // activeProject() here creates a cycle because that presentation layer
+      // itself reads this snapshot for the progress sheet.
+      production: project?.production || null,
       invalidated: derivedInvalidation() || {},
       generationSources: state.generationSources,
       signatures: { frame: sourceSignature(), final: `${sourceSignature()}:${assets.frame?.mediaId || ""}` },
