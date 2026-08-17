@@ -34,6 +34,7 @@ assert.match(frontend, /VIDEO_BOUND/);
 assert.match(frontend, /assistantEventMessages/);
 assert.match(frontend, /function compactAssistantEventMessages\(messages\)/);
 assert.match(frontend, /eventType === "PROJECT_RESTORED"/);
+assert.match(frontend, /source\.addEventListener\("snapshot",[\s\S]{0,500}void refreshTaskState\(\)/, "a reconnect snapshot must refresh canonical project, media, and task state");
 assert.match(frontend, /localEvents = state\.assistantEventMessages\.filter/);
 assert.match(frontend, /projectId: assistantEventProjectId/);
 assert.match(frontend, /previous\?\.jobs/);

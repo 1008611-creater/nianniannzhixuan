@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-30";
+  const VERSION = "20260817-agent-rail-31";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -1354,6 +1354,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       try {
         const snapshot = JSON.parse(event.data);
         appendAssistantEventMessage({ id: event.lastEventId || `snapshot-${Date.now()}`, snapshot, eventType: snapshot?.eventType || "PROJECT_RESTORED" });
+        // A reconnect can carry a newer authoritative snapshot while no
+        // workflow.changed event is replayed. Refresh once so the step rail,
+        // canvas, task sheet and agent recover the same project state.
+        void refreshTaskState();
       } catch {}
     });
     source.addEventListener("workflow.changed", (event) => {
