@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-24";
+  const VERSION = "20260817-agent-rail-25";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -517,6 +517,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function currentFinalJobId(project = canonicalProject()) {
     const finalNode = project?.nodes?.find((node) => node.role === "FINAL_VIDEO");
     const storedSource = Object.entries(state.generationSources || {}).find(([, source]) => source?.kind === "final" && source.signature === generationInputSignature("final"));
+    const currentInputJob = latestCurrentFinalTask(project);
     const recoveredJob = latestRecoverableFinalJob(project);
     const storedJob = state.jobs.find((job) => job.id === state.finalJobId);
     const storedSourceMatches = storedJob && state.generationSources?.[storedJob.id]?.kind === "final" && state.generationSources[storedJob.id]?.signature === generationInputSignature("final");
@@ -525,7 +526,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     // upstream project/task data alone. It is the only safe fallback when an
     // older browser version lost its local job marker before binding finished.
     const recovered = recoveredJob?.id || "";
-    return finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || storedSource?.[0] || (storedSourceMatches || storedInputMatches ? state.finalJobId : "") || recovered;
+    return finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || storedSource?.[0] || currentInputJob?.id || (storedSourceMatches || storedInputMatches ? state.finalJobId : "") || recovered;
   }
   function finalOutputMediaId(job) {
     const candidate = job?.outputMedia?.id || job?.outputMedia?.mediaId || job?.outputMediaId || job?.resultMediaId || job?.result?.mediaId || "";
@@ -542,6 +543,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (!project?.id || derivedOutputIsInvalidated("final")) return null;
     return state.jobs
       .filter((job) => jobBelongsToProject(job, project) && String(job.kind || "").toUpperCase() === "ACTION_TRANSFER" && completedJob(job) && finalOutputMediaId(job) && actionTaskMatchesCurrentInputs(job))
+      .sort((left, right) => jobTimestamp(right) - jobTimestamp(left))[0] || null;
+  }
+  function latestCurrentFinalTask(project = canonicalProject()) {
+    if (!project?.id || derivedOutputIsInvalidated("final")) return null;
+    return state.jobs
+      .filter((job) => jobBelongsToProject(job, project) && String(job.kind || "").toUpperCase() === "ACTION_TRANSFER")
+      .filter((job) => actionTaskMatchesCurrentInputs(job) || (state.generationSources?.[job.id]?.kind === "final" && state.generationSources[job.id]?.signature === generationInputSignature("final")))
       .sort((left, right) => jobTimestamp(right) - jobTimestamp(left))[0] || null;
   }
   function completedFinalBindingCandidate(project = canonicalProject()) {

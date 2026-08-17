@@ -24,6 +24,8 @@ assert.match(workspace, /state\.view === "sources" \|\| document\.visibilityStat
 assert.match(workspace, /function workflowSnapshot\(\)/);
 assert.match(workspace, /function currentFinalJobId\(project = canonicalProject\(\)\)/);
 assert.match(workspace, /function finalOutputMediaId\(job\)/);
+assert.match(workspace, /function latestCurrentFinalTask\(project = canonicalProject\(\)\)/);
+assert.match(workspace, /currentInputJob\?\.id/, "the latest task for current inputs must beat a stale persisted task marker");
 assert.match(workspace, /function recoverCompletedFinalBinding\(\{ force = false \} = \{\}\)/);
 assert.match(workspace, /nodes\/FINAL_VIDEO/, "completed video recovery must bind only the FINAL_VIDEO node");
 assert.match(workspace, /completedJob\(job\) && finalOutputMediaId\(job\) && actionTaskMatchesCurrentInputs\(job\)/, "recovery must require a completed task with a concrete private output and current inputs");
