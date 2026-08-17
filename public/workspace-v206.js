@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-23";
+  const VERSION = "20260817-agent-rail-24";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -517,21 +517,37 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function currentFinalJobId(project = canonicalProject()) {
     const finalNode = project?.nodes?.find((node) => node.role === "FINAL_VIDEO");
     const storedSource = Object.entries(state.generationSources || {}).find(([, source]) => source?.kind === "final" && source.signature === generationInputSignature("final"));
-    const newest = newestProjectTask(state.jobs, project?.id || "", "ACTION_TRANSFER");
+    const recoveredJob = latestRecoverableFinalJob(project);
+    const storedJob = state.jobs.find((job) => job.id === state.finalJobId);
+    const storedSourceMatches = storedJob && state.generationSources?.[storedJob.id]?.kind === "final" && state.generationSources[storedJob.id]?.signature === generationInputSignature("final");
+    const storedInputMatches = storedJob && actionTaskMatchesCurrentInputs(storedJob);
     // A completed task with an explicit private output is recoverable from the
     // upstream project/task data alone. It is the only safe fallback when an
     // older browser version lost its local job marker before binding finished.
-    const recovered = completedJob(newest) && finalOutputMediaId(newest) && !derivedOutputIsInvalidated("final") ? newest.id : "";
-    return state.finalJobId || finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || storedSource?.[0] || recovered;
+    const recovered = recoveredJob?.id || "";
+    return finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || storedSource?.[0] || (storedSourceMatches || storedInputMatches ? state.finalJobId : "") || recovered;
   }
   function finalOutputMediaId(job) {
     const candidate = job?.outputMedia?.id || job?.outputMedia?.mediaId || job?.outputMediaId || job?.resultMediaId || job?.result?.mediaId || "";
     return UUID_PATTERN.test(String(candidate)) ? String(candidate) : "";
   }
+  function actionTaskMatchesCurrentInputs(job) {
+    const inputs = job?.input || {};
+    const frameId = inputs.firstFrameMediaId || inputs.first_frame_media_id || "";
+    const motionId = inputs.motionMediaId || inputs.motion_media_id || "";
+    const assets = workflowBoundAssets();
+    return Boolean(frameId && motionId && frameId === assets.frame?.mediaId && motionId === assets.motion?.mediaId);
+  }
+  function latestRecoverableFinalJob(project = canonicalProject()) {
+    if (!project?.id || derivedOutputIsInvalidated("final")) return null;
+    return state.jobs
+      .filter((job) => jobBelongsToProject(job, project) && String(job.kind || "").toUpperCase() === "ACTION_TRANSFER" && completedJob(job) && finalOutputMediaId(job) && actionTaskMatchesCurrentInputs(job))
+      .sort((left, right) => jobTimestamp(right) - jobTimestamp(left))[0] || null;
+  }
   function completedFinalBindingCandidate(project = canonicalProject()) {
     if (!project?.id || workflowBoundAssets(project).final?.mediaId || derivedOutputIsInvalidated("final")) return null;
     const jobId = currentFinalJobId(project);
-    const job = state.jobs.find((item) => item.id === jobId) || newestProjectTask(state.jobs, project.id, "ACTION_TRANSFER", jobId);
+    const job = state.jobs.find((item) => item.id === jobId) || latestRecoverableFinalJob(project);
     const mediaId = finalOutputMediaId(job);
     return completedJob(job) && mediaId && jobBelongsToProject(job, project) ? { job, mediaId } : null;
   }

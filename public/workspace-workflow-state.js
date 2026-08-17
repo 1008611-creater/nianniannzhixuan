@@ -12,7 +12,10 @@ function taskTime(task) {
 }
 
 export function newestProjectTask(jobs, projectId, kind, currentJobId = "") {
-  return (Array.isArray(jobs) ? jobs : [])
+  const candidates = Array.isArray(jobs) ? jobs : [];
+  const exact = candidates.find((task) => task?.id === currentJobId && String(task?.kind || "").toUpperCase() === kind);
+  if (exact) return exact;
+  return candidates
     .map((task, index) => ({ task, index }))
     .filter(({ task }) => {
       const taskProjectId = task?.project?.id || task?.projectId || "";
