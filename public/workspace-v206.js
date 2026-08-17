@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-22";
+  const VERSION = "20260817-agent-rail-23";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -176,6 +176,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     mediaObserver: null,
     frameJobId: stored.frameJobId || "",
     finalJobId: stored.finalJobId || "",
+    finalBindingFailures: stored.finalBindingFailures && typeof stored.finalBindingFailures === "object" ? stored.finalBindingFailures : {},
     projectId: stored.projectId || "",
     taskRefreshAt: 0,
     taskRefreshAttempts: 0,
@@ -281,6 +282,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       materials: state.materials.map(persistentAsset).filter(Boolean).slice(0, 60),
       frameJobId: state.frameJobId,
       finalJobId: state.finalJobId,
+      finalBindingFailures: state.finalBindingFailures,
       projectId: state.projectId,
       canonicalProjectId: state.canonicalProjectId,
       generationKeys: state.generationKeys,
@@ -515,7 +517,58 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function currentFinalJobId(project = canonicalProject()) {
     const finalNode = project?.nodes?.find((node) => node.role === "FINAL_VIDEO");
     const storedSource = Object.entries(state.generationSources || {}).find(([, source]) => source?.kind === "final" && source.signature === generationInputSignature("final"));
-    return state.finalJobId || finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || storedSource?.[0] || "";
+    const newest = newestProjectTask(state.jobs, project?.id || "", "ACTION_TRANSFER");
+    // A completed task with an explicit private output is recoverable from the
+    // upstream project/task data alone. It is the only safe fallback when an
+    // older browser version lost its local job marker before binding finished.
+    const recovered = completedJob(newest) && finalOutputMediaId(newest) && !derivedOutputIsInvalidated("final") ? newest.id : "";
+    return state.finalJobId || finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || storedSource?.[0] || recovered;
+  }
+  function finalOutputMediaId(job) {
+    const candidate = job?.outputMedia?.id || job?.outputMedia?.mediaId || job?.outputMediaId || job?.resultMediaId || job?.result?.mediaId || "";
+    return UUID_PATTERN.test(String(candidate)) ? String(candidate) : "";
+  }
+  function completedFinalBindingCandidate(project = canonicalProject()) {
+    if (!project?.id || workflowBoundAssets(project).final?.mediaId || derivedOutputIsInvalidated("final")) return null;
+    const jobId = currentFinalJobId(project);
+    const job = state.jobs.find((item) => item.id === jobId) || newestProjectTask(state.jobs, project.id, "ACTION_TRANSFER", jobId);
+    const mediaId = finalOutputMediaId(job);
+    return completedJob(job) && mediaId && jobBelongsToProject(job, project) ? { job, mediaId } : null;
+  }
+  function finalBindingFailureMessage(error) {
+    const code = String(error?.message || "");
+    if (/403|401|FORBIDDEN|UNAUTHORIZED/i.test(code)) return "私有成片暂时无权绑定，请重新登录后恢复入库。";
+    if (/404|NOT_FOUND/i.test(code)) return "成片输出暂时不可读取，请稍后恢复入库。";
+    if (/5\d\d|TIMEOUT|AbortError|NETWORK/i.test(code)) return "私有成片入库暂时不可用，请稍后恢复入库。";
+    return "私有成片尚未绑定到当前项目，可以恢复入库或查看任务原因。";
+  }
+  let finalBindingRecoveryInFlight = "";
+  async function recoverCompletedFinalBinding({ force = false } = {}) {
+    const project = canonicalProject();
+    const candidate = completedFinalBindingCandidate(project);
+    if (!project?.id || !candidate) return false;
+    const key = `${project.id}:${candidate.job.id}:${candidate.mediaId}`;
+    const previousFailure = state.finalBindingFailures?.[project.id];
+    if (finalBindingRecoveryInFlight === key || (!force && previousFailure?.key === key)) return false;
+    finalBindingRecoveryInFlight = key;
+    try {
+      await mediaRequest(`/api/v1/projects/${project.id}/nodes/FINAL_VIDEO`, { method: "PUT", body: JSON.stringify({ mediaId: candidate.mediaId }) });
+      const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
+      const merged = mergeCanonicalProject(refreshed);
+      state.canonicalProjects = [merged, ...state.canonicalProjects.filter((item) => item.id !== merged.id)];
+      state.finalJobId = candidate.job.id;
+      delete state.finalBindingFailures[project.id];
+      hydrateCanonicalProject(merged);
+      reconcileDerivedOutputs();
+      writeState();
+      return true;
+    } catch (error) {
+      state.finalBindingFailures[project.id] = { key, jobId: candidate.job.id, mediaId: candidate.mediaId, message: finalBindingFailureMessage(error), createdAt: new Date().toISOString() };
+      writeState();
+      return false;
+    } finally {
+      if (finalBindingRecoveryInFlight === key) finalBindingRecoveryInFlight = "";
+    }
   }
   function displayAssetFor(id) {
     const project = canonicalProject();
@@ -554,6 +607,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     // confirmation state visible until the user accepts it or starts over.
     if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) {
       snapshot.frame = { ...snapshot.frame, task: null, status: state.firstFrameDraftAnalyzing ? "分析中" : "待确认" };
+    }
+    const bindingFailure = project?.id ? state.finalBindingFailures?.[project.id] : null;
+    if (!snapshot.final.bound && bindingFailure?.jobId === currentFinalJobId(project)) {
+      snapshot.final = { ...snapshot.final, task: state.jobs.find((job) => job.id === bindingFailure.jobId) || snapshot.final.task, phase: "binding_failed", status: "入库失败", failure: bindingFailure.message };
     }
     return snapshot;
   }
@@ -731,6 +788,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         return { mode: "empty", target: missing, title: `${slot.title}待添加`, note: `请先上传或选择${slot.title}素材。`, label: "待添加" };
       }
       const final = workflowSnapshot().final;
+      if (final.status === "入库失败") return { mode: "empty", target: "final", title: "成片需要恢复入库", note: final.failure || "视频制作已完成，但私有输出尚未绑定到当前项目。", label: "入库失败" };
       if (final.status === "入库中") return { mode: "empty", target: "final", title: "成片正在私有入库", note: "视频已制作完成，正在绑定到当前项目；绑定成功后才会开放播放。", label: "入库中" };
       if (["排队中", "制作中"].includes(final.status)) return { mode: "empty", target: "final", title: final.status === "排队中" ? "成片正在排队" : "成片正在制作", note: "任务正在处理，完成后会继续私有入库并绑定到当前项目。", label: final.status };
       return { mode: "empty", target: "final", title: "成片待制作", note: "人物、商品和参考视频已绑定当前项目，可以继续生成商品首帧。", label: "待制作" };
@@ -970,6 +1028,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (run !== secondaryWorkspaceRun || (projectId && projectId !== canonicalProject()?.id)) return;
     hydrateCanonicalMedia(canonicalMedia.media || []);
     mergeCanonicalJobs(canonicalJobs.jobs || []);
+    void recoverCompletedFinalBinding();
     state.assistantThreads = assistantThreads.threads || [];
     state.notifications = notificationData.notifications || [];
     state.unreadNotifications = Number(notificationData.unreadCount || 0);
@@ -1302,6 +1361,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       mergeCanonicalJobs(jobs.jobs || []);
       hydrateCanonicalProject(canonicalProject());
       reconcileDerivedOutputs();
+      await recoverCompletedFinalBinding();
       state.taskRefreshAt = Date.now();
       if (before !== taskStateFingerprint()) {
         state.taskRefreshAttempts = 0;
@@ -1654,6 +1714,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       return finalize();
     }
     if (presentation?.failed) {
+      if (presentation.phase === "binding_failed") {
+        result.recommendation = `${presentation.failure || "成片已制作完成，但还没有绑定到当前项目。"} 恢复入库不会重新生成或再次扣费。`;
+        result.blocking = "私有入库需要恢复";
+        result.choices = [choice("恢复入库", "recover-video-binding", { primary: true }), choice("查看任务原因", "tasks"), choice("继续改图", "assistant-thread")];
+        return finalize();
+      }
       result.recommendation = `${presentation.kind}没有生成可用结果，本次没有扣费。可以重新提交或先调整素材。`;
       result.blocking = "任务失败，可恢复";
       const retry = presentation.kind === "首帧" ? choice("重新生成首帧", "make-frame", { primary: true }) : choice("重新制作成片", "make-video", { primary: true });
@@ -1798,6 +1864,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (state.pendingFirstFrame?.draft || state.firstFrameDraftAnalyzing) return null;
     const snapshot = workflowSnapshot();
     if (["排队中", "制作中", "入库中"].includes(snapshot.final.status)) return { task: snapshot.final.task, kind: "成片", active: true, phase: snapshot.final.phase || "processing" };
+    if (snapshot.final.status === "入库失败") return { task: snapshot.final.task, kind: "成片", failed: true, phase: "binding_failed", failure: snapshot.final.failure || "私有成片尚未绑定到当前项目。" };
     if (snapshot.frame.status === "制作中") return { task: snapshot.frame.task, kind: "首帧", active: true };
     if (snapshot.final.status === "制作失败") return { task: snapshot.final.task, kind: "成片", failed: true };
     if (snapshot.frame.status === "生成失败") return { task: snapshot.frame.task, kind: "首帧", failed: true };
@@ -1812,6 +1879,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const stage = presentation.phase === "ingesting" ? "视频已制作完成，正在私有入库并绑定当前项目" : (/queued|validating|submitted|pending|submitting/.test(status) ? "已提交，正在进入生成队列" : "正在生成并检查私有入库");
       return `<section class="v206-live-task active" aria-live="polite"><span>${esc(presentation.kind)}${presentation.phase === "ingesting" ? "正在入库" : "正在制作"}</span><b>${esc(stage)}</b><small>可以离开页面；只有私有入库并绑定当前项目后才会开放播放。失败不会扣费。</small></section>`;
     }
+    if (presentation.phase === "binding_failed") return `<section class="v206-live-task failed"><span>成片入库需要恢复</span><b>${esc(presentation.failure || "私有成片尚未绑定到当前项目。")}</b><small>不需要重新生成或再次扣费；恢复绑定成功后即可播放。</small></section>`;
     return `<section class="v206-live-task failed"><span>${esc(presentation.kind)}没有完成</span><b>这次任务未生成可用结果。</b><small>没有扣费。检查当前素材后可以重新提交。</small></section>`;
   }
   function firstFrameQualityMarkup() {
@@ -1929,7 +1997,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (!presentation) return "";
     const label = presentation.failed ? `${presentation.kind}需要处理` : `${presentation.kind}${presentation.phase === "ingesting" ? "正在入库" : "制作中"}`;
     const status = presentation.failed
-      ? "没有生成可用结果 · 未扣费 · 检查当前素材后可重新提交"
+      ? (presentation.phase === "binding_failed" ? "视频已完成制作 · 私有入库暂未绑定 · 可恢复，不会重新扣费" : "没有生成可用结果 · 未扣费 · 检查当前素材后可重新提交")
       : (presentation.phase === "ingesting" ? "视频已完成制作，正在私有入库并绑定当前项目" : "正在制作，可离开页面；完成后自动显示下一步");
     return `<button type="button" class="v206-task-bar ${presentation.active ? "active" : ""}" data-v206-action="tasks"><span><i></i><b>${esc(label)}</b></span><em>${esc(status)}</em><strong>查看全部任务</strong></button>`;
   }
@@ -3147,6 +3215,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (action === "confirm-video-inline") { makeVideo(state.videoMode); return; }
     if (action === "sync-image") { syncImage(button.dataset.task); return; }
     if (action === "sync-video") { syncVideo(); return; }
+    if (action === "recover-video-binding") {
+      state.busy = "recover-video-binding";
+      render();
+      recoverCompletedFinalBinding({ force: true }).then((recovered) => {
+        flash(recovered ? "成片已恢复私有入库并绑定当前项目。" : (workflowSnapshot().final.failure || "暂时无法恢复入库，请查看任务原因后再试。"), recovered ? "success" : "warning");
+      }).finally(() => { state.busy = ""; render(); });
+      return;
+    }
     if (action === "open-result") { openResult(); return; }
     if (action === "notifications") { openNotifications(); return; }
     if (action === "video-history") { openVideoHistory(); return; }
