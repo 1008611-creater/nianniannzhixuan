@@ -75,12 +75,42 @@ const queuedFinal = buildWorkflowSnapshot({
 });
 assert.equal(queuedFinal.final.status, "排队中", "a persisted final task must show an explicit queued state");
 
+const runningFinal = buildWorkflowSnapshot({
+  ...base,
+  jobs: [{ id: "running-final", projectId, kind: "ACTION_TRANSFER", status: "running", createdAt: "2026-08-14T00:00:00Z" }],
+  currentJobIds: { final: "running-final" },
+});
+assert.equal(runningFinal.final.status, "制作中", "a current final task must expose its running state");
+
 const completedFinalWithoutMedia = buildWorkflowSnapshot({
   ...base,
   jobs: [{ id: "completed-final", projectId, kind: "ACTION_TRANSFER", status: "completed", createdAt: "2026-08-14T00:00:00Z" }],
   currentJobIds: { final: "completed-final" },
 });
 assert.equal(completedFinalWithoutMedia.final.status, "入库中", "a completed video must not claim playback before FINAL_VIDEO is bound");
+
+const failedFinal = buildWorkflowSnapshot({
+  ...base,
+  jobs: [{ id: "failed-final", projectId, kind: "ACTION_TRANSFER", status: "failed", createdAt: "2026-08-14T00:00:00Z", input: { firstFrameMediaId: "frame", motionMediaId: "motion" } }],
+  currentJobIds: { final: "failed-final" },
+});
+assert.equal(failedFinal.final.status, "制作失败", "a failed current video task must remain visible and retryable");
+
+const latestCompletedFinal = buildWorkflowSnapshot({
+  ...base,
+  jobs: [
+    { id: "old-failed-final", projectId, kind: "ACTION_TRANSFER", status: "failed", createdAt: "2026-08-13T00:00:00Z", input: { firstFrameMediaId: "frame", motionMediaId: "motion" } },
+    { id: "latest-completed-final", projectId, kind: "ACTION_TRANSFER", status: "completed", createdAt: "2026-08-14T00:00:00Z", input: { firstFrameMediaId: "frame", motionMediaId: "motion" } },
+  ],
+  currentJobIds: { final: "latest-completed-final" },
+});
+assert.equal(latestCompletedFinal.final.status, "入库中", "a newer completed task must not be hidden by an older failed attempt with the same inputs");
+
+const replacedFinalFailure = buildWorkflowSnapshot({
+  ...base,
+  jobs: [{ id: "replaced-final-failure", projectId, kind: "ACTION_TRANSFER", status: "failed", createdAt: "2026-08-14T00:00:00Z", input: { firstFrameMediaId: "old-frame", motionMediaId: "motion" } }],
+});
+assert.equal(replacedFinalFailure.final.status, "待制作", "a failure for a replaced first frame must not block a new final workflow");
 
 const boundFinal = buildWorkflowSnapshot({
   ...base,
