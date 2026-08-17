@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-28";
+  const VERSION = "20260817-agent-rail-29";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -3352,10 +3352,19 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     booted = true;
     render();
     if (previewMode) return;
-    await load();
-    render();
-    void reconcilePendingFirstFrameDraft();
-    scheduleTaskRefresh();
+    try {
+      await load();
+    } catch {
+      // A non-essential secondary request must never leave the signed-in
+      // workspace trapped behind its initial loading skeleton.
+      state.projectLoading = false;
+      flash(canonicalProject() ? "部分工作台信息暂时未同步，已保留当前项目。" : "工作台加载暂时失败，请刷新重试。", "warning");
+    } finally {
+      state.projectLoading = false;
+      render();
+      void reconcilePendingFirstFrameDraft();
+      scheduleTaskRefresh();
+    }
   }
   window.NianNianWorkspaceV206 = {
     mount(nextRoot) {
