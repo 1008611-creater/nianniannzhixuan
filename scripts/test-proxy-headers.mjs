@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { proxyHeaders, proxyResponseHeaders } from "../proxy-headers.mjs";
 
 const rewritten = proxyHeaders(new Headers({
@@ -55,5 +56,9 @@ assert.equal(rangeResponse.has("transfer-encoding"), false);
 const compressedResponse = proxyResponseHeaders(new Headers({ "content-encoding": "gzip", "content-length": "2048" }));
 assert.equal(compressedResponse.has("content-encoding"), false);
 assert.equal(compressedResponse.has("content-length"), false);
+
+const proxySource = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
+assert.match(proxySource, /url\.pathname === "\/api\/v1\/account\/summary"\) url\.pathname = "\/api\/v1\/billing\/summary"/);
+assert.match(proxySource, /url\.pathname === "\/api\/v1\/account\/quote"\) url\.pathname = "\/api\/v1\/billing\/quote"/);
 
 console.log("OK local proxy preserves media ranges and rewrites trusted CSRF origins only");
