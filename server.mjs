@@ -8,11 +8,13 @@ import { lookup } from "node:dns/promises";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
-import { proxyHeaders, proxyResponseHeaders } from "./proxy-headers.mjs";
+import { proxyHeaders, proxyResponseHeaders, SECURITY_HEADERS } from "./proxy-headers.mjs";
 
 const port = Number(process.env.PORT || 18893);
 const host = process.env.HOST || "127.0.0.1";
-const remoteOrigin = process.env.REMOTE_ORIGIN || "https://dh.cauai.fun";
+// Default to the legacy authenticated backend, never the public frontend domain,
+// to avoid a proxy loop when REMOTE_ORIGIN is not set (see AGENTS.md "Protected Boundaries").
+const remoteOrigin = process.env.REMOTE_ORIGIN || "https://dh-origin.cauai.fun";
 const csrfOrigin = process.env.CSRF_ORIGIN || "http://127.0.0.1:18890";
 const mediaProxyDebug = process.env.MEDIA_PROXY_DEBUG === "1";
 const proxyTimeoutMs = Number(process.env.PROXY_TIMEOUT_MS || 120_000);
@@ -320,13 +322,13 @@ async function serveIndex(request, response) {
     .replaceAll("/workspace-v206.css?v=20260802-unified-web-48", "/workspace-v206.css?v=20260811-workspace-stable-02");
   const withMediaConfig = currentAssets.replace("</head>", `<meta name="nn-media-cdn-origin" content="${publicMediaCdnOrigin}"><script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
   const withUploadHash = withMediaConfig.replace("</head>", '<script src="/media-upload-hash.js?v=20260810-upload-hash-01"></script></head>');
-  response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
+  response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store", ...SECURITY_HEADERS });
   response.end(request.method === "HEAD" ? undefined : withUploadHash);
 }
 
 async function serveWorkspace(request, response) {
   const html = readFileSync(join(publicDir, "workspace.html"), "utf8").replace("</head>", `<meta name="nn-media-cdn-origin" content="${publicMediaCdnOrigin}"><script>window.__NN_MEDIA_CDN_ORIGIN=${JSON.stringify(publicMediaCdnOrigin)};</script></head>`);
-  response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store" });
+  response.writeHead(200, { "content-type": mimeTypes[".html"], "cache-control": "no-store", ...SECURITY_HEADERS });
   response.end(request.method === "HEAD" ? undefined : html);
 }
 
@@ -348,6 +350,7 @@ function serveStatic(request, response, file, cacheControl = null) {
       etag: `W/"0-${Math.floor(stats.mtimeMs).toString(16)}"`,
       "last-modified": stats.mtime.toUTCString(),
       "accept-ranges": "bytes",
+      ...SECURITY_HEADERS,
     });
     response.end();
     return;
@@ -371,6 +374,7 @@ function serveStatic(request, response, file, cacheControl = null) {
     etag: `W/"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}"`,
     "last-modified": stats.mtime.toUTCString(),
     "accept-ranges": "bytes",
+    ...SECURITY_HEADERS,
   };
   if (rangeMatch) headers["content-range"] = `bytes ${start}-${end}/${stats.size}`;
   response.writeHead(rangeMatch ? 206 : 200, headers);
@@ -794,8 +798,9 @@ createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
     if (request.method === "GET" && pathname === "/healthz") {
-      response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-      response.end(JSON.stringify({ ok: true, service: "dh-cauai-local", port, remoteOrigin }));
+      // Intentionally minimal: do not expose internal topology (port, remoteOrigin).
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS });
+      response.end(JSON.stringify({ ok: true, service: "dh-cauai-local" }));
       return;
     }
     if (request.method === "GET" && pathname === "/api/v1/assistant/events") {
