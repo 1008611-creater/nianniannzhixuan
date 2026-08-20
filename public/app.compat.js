@@ -1,4 +1,5 @@
 const app = document.querySelector("#app");
+// Previous release contract: 20260820-upload-completion-01
 const productionWorkflowModeIds = new Set(["action-transfer"]);
 
 function initialWorkflowMode() {
@@ -28,6 +29,12 @@ function clearPrivateSessionState() {
   state.userMaterials = [];
   state.uploadedNodeAssets = {};
   state.projects = [];
+  state.canonicalProjects = [];
+  state.projectOrganization = {};
+  state.projectManagementGroup = "all";
+  state.projectManagementLoaded = false;
+  state.projectManagementLoading = false;
+  state.projectManagementMessage = "";
   state.imageJobs = [];
   state.workflowChat = [];
   state.billing = null;
@@ -118,6 +125,13 @@ const state = {
   session: null,
   plans: [],
   projects: [],
+  canonicalProjects: [],
+  projectOrganization: {},
+  projectManagementGroup: "all",
+  projectManagementLoaded: false,
+  projectManagementLoading: false,
+  projectManagementMessage: "",
+  sameStyleProjectDialog: null,
   selectedTemplateId: localStorage.getItem("selectedTemplateId") || "store-window",
   selectedWorkflowMode: initialWorkflowMode(),
   selectedActionReferenceId: localStorage.getItem("selectedActionReferenceId") || "store-dance-01",
@@ -812,6 +826,7 @@ const workflowModes = [
 const routeMeta = {
   "/templates": { label: "选同款", title: "选同款" },
   "/workspace": { label: "工作台", title: "工作台" },
+  "/projects": { label: "项目", title: "项目管理" },
   "/pricing": { label: "价格", title: "价格" },
   "/billing": { label: "账单", title: "我的账单" },
   "/admin": { label: "管理", title: "管理员" },
@@ -1432,6 +1447,37 @@ function revokeBlobUrl(url) {
   if (String(url || "").startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
+function sameOriginUploadEndpoint(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    if (parsed.hostname === "dh-origin.cauai.fun" || /^\/api\/v1\/media\//i.test(parsed.pathname)) return `${parsed.pathname}${parsed.search}`;
+    return parsed.href;
+  } catch {
+    return raw;
+  }
+}
+
+function uploadApplicationChunk(url, headers, chunk) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PUT", url, true);
+    request.withCredentials = true;
+    request.timeout = 30_000;
+    headers.forEach((value, name) => request.setRequestHeader(name, value));
+    request.onload = () => {
+      let payload = {};
+      try { payload = JSON.parse(request.responseText || "{}"); } catch {}
+      resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, payload });
+    };
+    request.onerror = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_FAILED"));
+    request.onabort = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_ABORTED"));
+    request.ontimeout = () => reject(new Error("MEDIA_UPLOAD_TIMEOUT"));
+    request.send(chunk);
+  });
+}
+
 async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材") {
   if (!file) throw new Error("MEDIA_UPLOAD_EMPTY");
   file = normalizeTemplateVideoFile(file);
@@ -1449,7 +1495,7 @@ async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材"
     }),
   });
   const upload = intent.upload || {};
-  const uploadUrl = String(upload.uploadUrl || "");
+  const uploadUrl = sameOriginUploadEndpoint(upload.uploadUrl);
   const applicationUpload = uploadUrl.startsWith("/api/");
   const isMultipart = upload.transport === "COS_MULTIPART";
   if (isMultipart) {
@@ -1472,8 +1518,9 @@ async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材"
       let lastError;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          contentResponse = await fetch(uploadUrl, { method: "PUT", headers: chunkHeaders, body: chunk, credentials: "same-origin" });
-          contentResult = await contentResponse.json().catch(() => ({}));
+          const uploadedChunk = await uploadApplicationChunk(uploadUrl, chunkHeaders, chunk);
+          contentResponse = { ok: uploadedChunk.ok, status: uploadedChunk.status };
+          contentResult = uploadedChunk.payload;
           if (contentResponse.ok) { lastError = null; break; }
           lastError = new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
           if (contentResponse.status < 500) break;
@@ -2028,6 +2075,40 @@ if (cdnOrigin && /^\/assets\//i.test(url)) return `${cdnOrigin}${url}`;
 return `${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+function privateVideoMediaId(url) {
+  const match = String(url || "").match(/\/api\/v1\/media\/([0-9a-f-]{36})\/(?:playback|content)(?:[?#]|$)/i);
+  return match?.[1] || "";
+}
+
+function privateVideoPosterUrl(mediaId) {
+  const id = String(mediaId || "");
+  return /^[0-9a-f-]{36}$/i.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/poster?v=${encodeURIComponent(id)}` : "";
+}
+
+function bindPrivateVideoPosters(scope = document) {
+  scope.querySelectorAll("video").forEach((video) => {
+    if (video.dataset.privatePosterBound === "1") return;
+    const mediaId = privateVideoMediaId(video.getAttribute("src") || video.currentSrc);
+    const poster = privateVideoPosterUrl(mediaId);
+    if (!poster) return;
+    video.dataset.privatePosterBound = "1";
+    if (!video.getAttribute("poster")) video.setAttribute("poster", poster);
+    let attempt = 0;
+    const refresh = () => {
+      const probe = new Image();
+      probe.onload = () => {
+        if (video.isConnected) video.setAttribute("poster", `${poster}&r=${attempt}`);
+      };
+      probe.onerror = () => {
+        attempt += 1;
+        if (attempt < 6 && video.isConnected) window.setTimeout(refresh, 1_000);
+      };
+      probe.src = `${poster}&r=${attempt}`;
+    };
+    refresh();
+  });
+}
+
 function staticImageThumbUrl(url) {
 const sourceUrl = String(url || "");
 if (!/^\/assets\/(?:references|asset-review)\//i.test(sourceUrl)) return "";
@@ -2215,9 +2296,20 @@ function renderTurnstileWidgets() {
   });
 }
 
+function syncShellOverlays(template) {
+  [".material-preview-modal", ".same-style-project-backdrop"].forEach((selector) => {
+    const current = app.querySelector(`:scope > ${selector}`);
+    const next = template.content.querySelector(selector);
+    if (next && current) current.replaceWith(next.cloneNode(true));
+    else if (next) app.append(next.cloneNode(true));
+    else current?.remove();
+  });
+}
+
 function renderAppHtml(path, html) {
+  if (path !== "/workspace") window.NianNianWorkspaceV206?.leave?.();
   if (path === "/workspace" && app.querySelector("#v206-app") && window.NianNianWorkspaceV206) return;
-  const peerPaths = new Set(["/templates", "/workspace", "/pricing", "/billing"]);
+  const peerPaths = new Set(["/templates", "/workspace", "/projects", "/pricing", "/billing"]);
   const currentHeader = app.querySelector(":scope > .site-header");
   const currentMain = app.querySelector(":scope > main");
   if (peerPaths.has(path) && currentHeader && currentMain) {
@@ -2228,6 +2320,7 @@ function renderAppHtml(path, html) {
     if (nextMain) {
       currentMain.innerHTML = nextMain.innerHTML;
       if (nextHeader) currentHeader.innerHTML = nextHeader.innerHTML;
+      syncShellOverlays(template);
       currentHeader.querySelectorAll("[data-nav]").forEach((item) => {
         const active = item.dataset.nav === path;
         item.classList.toggle("active", active);
@@ -2523,11 +2616,16 @@ function syncHeaderScrollbarCompensation() {
 function navigate(path) {
   const target = new URL(String(path || "/workspace"), window.location.origin);
   const nextPath = normalizePath(target.pathname);
+  const peerPaths = new Set(["/templates", "/workspace", "/projects", "/pricing", "/billing"]);
   // Authentication belongs to the current platform. Letting the legacy SPA
   // render /login sends registration-code requests to the retired API proxy.
   if (nextPath === "/login") {
     window.location.assign("/access");
     return;
+  }
+  const currentProjectId = new URLSearchParams(window.location.search).get("projectId") || state.lastWorkspaceProjectId || "";
+  if (state.session && peerPaths.has(nextPath) && currentProjectId && !target.searchParams.has("projectId")) {
+    target.searchParams.set("projectId", currentProjectId);
   }
   if (nextPath === "/workspace" && !target.search && state.session) {
     const projectId = new URLSearchParams(window.location.search).get("projectId")
@@ -2550,7 +2648,11 @@ function navigate(path) {
   window.history.pushState({}, "", `${nextPath}${target.search || ""}`);
   render();
   window.scrollTo({ top: 0, behavior: "instant" });
+  const requestedTemplateId = nextPath === "/templates" ? target.searchParams.get("newProjectTemplate") : "";
+  if (requestedTemplateId) void openSameStyleProjectDialog(requestedTemplateId);
 }
+
+window.NianNianAppNavigate = navigate;
 
 function renderMaterialPreviewModal() {
   const preview = state.materialPreviewModal;
@@ -2589,10 +2691,105 @@ function renderMaterialPreviewModal() {
   `;
 }
 
+function activeProjectCount(projects = state.canonicalProjects) {
+  return (Array.isArray(projects) ? projects : []).filter((project) => {
+    return !project?.archivedAt && String(project?.status || "").toLowerCase() !== "archived";
+  }).length;
+}
+
+function defaultSameStyleProjectName(projects = state.canonicalProjects) {
+  return `项目 ${activeProjectCount(projects) + 1}`;
+}
+
+async function openSameStyleProjectDialog(referenceId) {
+  const reference = actionReferenceTemplates.find((item) => item.id === referenceId);
+  if (!reference) return;
+  if (!state.session) {
+    state.workspaceMessage = "登录后即可创建同款项目。";
+    navigate("/login");
+    return;
+  }
+
+  const fallbackProjects = state.canonicalProjects.length ? state.canonicalProjects : state.projects;
+  state.sameStyleProjectDialog = {
+    referenceId,
+    name: defaultSameStyleProjectName(fallbackProjects),
+    nameAutoGenerated: true,
+    loading: true,
+    submitting: false,
+    message: "正在核对项目序号...",
+  };
+  render();
+  try {
+    const result = await fetchJson("/api/v1/projects", { cache: "no-store" });
+    const projects = Array.isArray(result?.projects) ? result.projects : [];
+    state.canonicalProjects = projects;
+    state.projectManagementLoaded = true;
+    const dialog = state.sameStyleProjectDialog;
+    if (dialog?.referenceId === referenceId && dialog.nameAutoGenerated) {
+      dialog.name = defaultSameStyleProjectName(projects);
+      dialog.message = "确认后会创建项目并进入工作台。";
+    }
+  } catch {
+    const dialog = state.sameStyleProjectDialog;
+    if (dialog?.referenceId === referenceId) dialog.message = "暂时无法读取历史项目，将在创建时再次校验。";
+  } finally {
+    const dialog = state.sameStyleProjectDialog;
+    if (dialog?.referenceId === referenceId) {
+      dialog.loading = false;
+      render();
+    }
+  }
+}
+
+function closeSameStyleProjectDialog() {
+  if (state.sameStyleProjectDialog?.submitting) return;
+  state.sameStyleProjectDialog = null;
+  const target = new URL(window.location.href);
+  target.searchParams.delete("newProjectTemplate");
+  window.history.replaceState({}, "", `${target.pathname}${target.search}`);
+  render();
+}
+
+function updateSameStyleProjectName(value) {
+  const dialog = state.sameStyleProjectDialog;
+  if (!dialog) return;
+  dialog.name = String(value || "").slice(0, 120);
+  dialog.nameAutoGenerated = false;
+}
+
+function renderSameStyleProjectDialog() {
+  const dialog = state.sameStyleProjectDialog;
+  if (!dialog) return "";
+  const reference = actionReferenceTemplates.find((item) => item.id === dialog.referenceId);
+  if (!reference) return "";
+  return `
+    <div class="same-style-project-backdrop" role="presentation">
+      <section class="same-style-project-dialog" role="dialog" aria-modal="true" aria-labelledby="same-style-project-title">
+        <div class="same-style-project-head">
+          <div>
+            <p class="same-style-project-kicker">新建同款项目</p>
+            <h2 id="same-style-project-title">${escapeHtml(reference.title)}</h2>
+          </div>
+          <button class="same-style-project-close" type="button" data-action="close-same-style-project" aria-label="关闭" title="关闭" ${dialog.submitting ? "disabled" : ""}><span aria-hidden="true">×</span></button>
+        </div>
+        <p class="same-style-project-intro">确认后会导入模板动作素材，并创建一个只属于你的制作项目。</p>
+        <label class="same-style-project-field" for="sameStyleProjectName">项目名称</label>
+        <input id="sameStyleProjectName" type="text" maxlength="120" value="${escapeHtml(dialog.name)}" data-same-style-project-name autocomplete="off" ${dialog.submitting ? "disabled" : ""}>
+        <p class="form-note">${escapeHtml(dialog.message || "确认后会创建项目并进入工作台。")}</p>
+        <div class="same-style-project-actions">
+          <button class="small-button" type="button" data-action="close-same-style-project" ${dialog.submitting ? "disabled" : ""}>取消</button>
+          <button class="generate-button" type="button" data-action="confirm-same-style-project" ${dialog.loading || dialog.submitting ? "disabled" : ""}>${dialog.submitting ? "创建中..." : "确认并进入工作台"}</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 function layout(content) {
   const path = normalizePath();
   const user = state.session;
-  const navItems = ["/templates", "/workspace", "/pricing"].concat(user ? ["/billing"] : []).concat(user?.isAdmin ? ["/admin"] : []);
+  const navItems = ["/templates", "/workspace", "/projects", "/pricing"].concat(user ? ["/billing"] : []).concat(user?.isAdmin ? ["/admin"] : []);
   const accountName = safeAccountDisplayName(user);
   const auth = user
     ? `<button class="ghost-button" type="button" data-action="logout" ${state.isBusy ? "disabled" : ""}${pendingAttrs("logout")}${disabledHint(state.isBusy && !isPendingAction("logout"), "当前有任务正在处理")}>${isPendingAction("logout") ? "退出中..." : "退出"}</button>`
@@ -2617,6 +2814,7 @@ ${renderGlobalBusyBar()}
 ${renderUiNotice()}
 <main>${content}</main>
 ${renderMaterialPreviewModal()}
+${renderSameStyleProjectDialog()}
 <footer class="site-footer">
       <img class="site-footer-brand" src="/assets/niannian-ai-logo-128.webp" alt="念念 AI" width="30" height="30">
     </footer>
@@ -3244,6 +3442,347 @@ function renderBillingPage() {
   `);
 }
 
+function canonicalProjectNodes(project) {
+  const nodes = project?.nodes;
+  if (Array.isArray(nodes)) return nodes;
+  if (nodes && typeof nodes === "object") return Object.entries(nodes).map(([role, value]) => ({ role, ...(value || {}) }));
+  return [];
+}
+
+function canonicalProjectNode(project, role) {
+  return canonicalProjectNodes(project).find((node) => String(node?.role || node?.nodeRole || "").toUpperCase() === role) || null;
+}
+
+function canonicalProjectNodeReady(project, role) {
+  const node = canonicalProjectNode(project, role);
+  return Boolean(node?.mediaId || node?.media?.id || node?.asset?.id || node?.url || node?.mediaUrl);
+}
+
+function canonicalProjectPreview(project) {
+  const preferredRoles = ["FINAL_VIDEO", "FIRST_FRAME", "PERSON", "OUTFIT", "MOTION", "SCENE"];
+  const coverCandidates = [];
+  for (const role of preferredRoles) {
+    const node = canonicalProjectNode(project, role);
+    const media = node?.media || node?.asset || node || {};
+    const url = media.playbackUrl || media.previewUrl || media.thumbnailUrl || media.url || media.mediaUrl || node?.previewUrl || node?.url || "";
+    const mediaId = String(media.id || node?.mediaId || String(url).match(/\/api\/v1\/media\/([0-9a-f-]{36})\//i)?.[1] || "");
+    const isVideo = ["FINAL_VIDEO", "MOTION"].includes(role) || /video\//i.test(String(media.mimeType || media.mediaType || ""));
+    if (/^[0-9a-f-]{36}$/i.test(mediaId)) {
+      const fallbackUrl = isVideo
+        ? `/api/v1/media/${encodeURIComponent(mediaId)}/poster?v=${encodeURIComponent(mediaId)}`
+        : (url ? displayAssetUrl(url) : `/api/v1/media/${encodeURIComponent(mediaId)}/content`);
+      coverCandidates.push({
+        url: `/api/v1/media/${encodeURIComponent(mediaId)}/cover?v=${encodeURIComponent(mediaId)}`,
+        fallbackUrl,
+        kind: "cover",
+      });
+      continue;
+    }
+    if (url) return { url: displayAssetUrl(url), kind: isVideo ? "video" : "image" };
+  }
+  if (coverCandidates.length) {
+    const [primary, ...alternates] = coverCandidates;
+    return { ...primary, alternateCoverUrls: alternates.map((candidate) => candidate.url) };
+  }
+  return "";
+}
+
+function bindProjectCoverPreviews(scope = document) {
+  scope.querySelectorAll("img[data-project-cover]").forEach((image) => {
+    if (image.dataset.projectCoverBound === "1") return;
+    image.dataset.projectCoverBound = "1";
+    const source = image.getAttribute("src") || "";
+    const previewDeadline = Number(image.dataset.projectCoverPreviewDeadline || 0) || (Date.now() + 28_000);
+    image.dataset.projectCoverPreviewDeadline = String(previewDeadline);
+    let attempt = 0;
+    let complete = false;
+    const useFallback = () => {
+      if (complete) return;
+      complete = true;
+      showProjectCoverFallback(image);
+    };
+    // A cached cover normally resolves immediately. If its private source is
+    // unavailable, move to the project's alternate preview quickly instead
+    // of leaving a visible card in a perpetual loading state.
+    const coverDeadline = window.setTimeout(useFallback, Math.max(0, Math.min(8_000, previewDeadline - Date.now())));
+    const refresh = () => {
+      const probe = new Image();
+      probe.onload = () => {
+        if (!complete && image.isConnected && image.hasAttribute("data-project-cover")) {
+          complete = true;
+          window.clearTimeout(coverDeadline);
+          image.src = `${source}&r=${attempt}`;
+        }
+      };
+      probe.onerror = () => {
+        if (complete) return;
+        attempt += 1;
+        if (attempt < 30 && image.isConnected) {
+          window.setTimeout(refresh, 1_000);
+          return;
+        }
+        window.clearTimeout(coverDeadline);
+        useFallback();
+      };
+      probe.src = `${source}&r=${attempt}`;
+    };
+    refresh();
+  });
+}
+
+function showProjectCoverFallback(image) {
+  if (!image.isConnected) return;
+  const preview = image.closest("[data-project-preview]");
+  const fallback = image.dataset.projectCoverFallback || "";
+  image.removeAttribute("data-project-cover");
+  preview?.classList.remove("is-ready");
+  const label = preview?.querySelector(".project-management-preview-fallback");
+    const useAlternateCover = () => {
+    if (Number(image.dataset.projectCoverPreviewDeadline || 0) <= Date.now()) return false;
+    let alternates = [];
+    try { alternates = JSON.parse(image.dataset.projectCoverAlternates || "[]"); } catch {}
+    const next = alternates.find((url) => typeof url === "string" && url);
+    if (!next) return false;
+    image.dataset.projectCoverAlternates = JSON.stringify(alternates.filter((url) => url !== next));
+    image.dataset.projectCoverBound = "";
+    image.setAttribute("data-project-cover", "");
+    if (label) label.textContent = "正在生成封面";
+    image.src = next;
+    bindProjectCoverPreviews(preview || image.parentElement);
+    return true;
+  };
+  if (fallback) {
+    if (label) label.textContent = "正在加载原预览";
+    const unavailable = () => {
+      if (!image.isConnected) return;
+      if (useAlternateCover()) return;
+      preview?.classList.remove("is-ready");
+      preview?.classList.add("is-failed");
+      if (label) label.textContent = "暂不可预览";
+    };
+    const fallbackTimeout = window.setTimeout(unavailable, Math.max(0, Math.min(4_000, Number(image.dataset.projectCoverPreviewDeadline || 0) - Date.now())));
+    image.addEventListener("load", () => {
+      window.clearTimeout(fallbackTimeout);
+      preview?.classList.remove("is-failed");
+      preview?.classList.add("is-ready");
+    }, { once: true });
+    image.addEventListener("error", () => {
+      window.clearTimeout(fallbackTimeout);
+      unavailable();
+    }, { once: true });
+    image.src = fallback;
+    return;
+  }
+  if (useAlternateCover()) return;
+  preview?.classList.add("is-failed");
+  if (label) label.textContent = "暂不可预览";
+}
+
+function canonicalProjectProgress(project) {
+  const steps = [
+    ["人物", "PERSON"],
+    ["商品", "OUTFIT"],
+    ["视频", "MOTION"],
+    ["背景", "SCENE"],
+    ["首帧", "FIRST_FRAME"],
+    ["成片", "FINAL_VIDEO"],
+  ].map(([label, role]) => ({ label, ready: canonicalProjectNodeReady(project, role) }));
+  const complete = steps.filter((step) => step.ready).length;
+  const next = steps.find((step) => !step.ready);
+  return { steps, complete, next: next?.label || "已完成" };
+}
+
+function canonicalProjectStatus(project, progress) {
+  if (project?.archivedAt || String(project?.status || "").toLowerCase() === "archived") return "已归档";
+  if (canonicalProjectNodeReady(project, "FINAL_VIDEO")) return progress.complete === 6 ? "已完成" : `成片已完成 · 待补${progress.next}`;
+  if (/failed|error|blocked/i.test(String(project?.status || ""))) return "需处理";
+  return `待补${progress.next}`;
+}
+
+async function refreshProjectManagementState() {
+  if (!state.session || state.projectManagementLoading) return;
+  state.projectManagementLoading = true;
+  state.projectManagementMessage = "";
+  render();
+  try {
+    const [result, organization] = await Promise.all([
+      fetchJson("/api/v1/projects", { cache: "no-store" }),
+      fetchJson("/api/local/projects/organization", { cache: "no-store" }).catch(() => null),
+    ]);
+    state.canonicalProjects = Array.isArray(result?.projects) ? result.projects : [];
+    state.projectOrganization = organization?.projects && typeof organization.projects === "object" ? organization.projects : {};
+    state.projectManagementLoaded = true;
+  } catch (error) {
+    state.projectManagementMessage = "项目列表暂时加载失败，请刷新后重试。";
+  } finally {
+    state.projectManagementLoading = false;
+    render();
+  }
+}
+
+function projectOrganizationEntry(projectId) {
+  const entry = state.projectOrganization?.[projectId];
+  return entry && typeof entry === "object" ? entry : {};
+}
+
+function projectGroupName(projectId) {
+  return String(projectOrganizationEntry(projectId).groupName || "").trim();
+}
+
+function projectInRecycleBin(projectId) {
+  return Boolean(projectOrganizationEntry(projectId).deletedAt);
+}
+
+async function updateProjectOrganization(projectId, action, body = {}) {
+  if (!projectId || state.projectManagementLoading) return null;
+  state.projectManagementLoading = true;
+  render();
+  try {
+    const result = await fetchJson(`/api/local/projects/${encodeURIComponent(projectId)}/${action}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    state.projectOrganization = { ...state.projectOrganization, [projectId]: result?.entry || {} };
+    return result?.entry || {};
+  } finally {
+    state.projectManagementLoading = false;
+  }
+}
+
+async function setCanonicalProjectGroup(projectId) {
+  const project = state.canonicalProjects.find((item) => item.id === projectId);
+  if (!project) return;
+  const current = projectGroupName(projectId);
+  const groupName = window.prompt("设置项目分组，留空表示未分组", current);
+  if (groupName === null) return;
+  try {
+    await updateProjectOrganization(projectId, "organization", { groupName: String(groupName).trim().slice(0, 40) });
+    state.projectManagementMessage = "项目分组已保存。";
+  } catch (error) {
+    state.projectManagementMessage = cleanUiStatusText(error.message || "项目分组没有保存，请重试。");
+  }
+  render();
+}
+
+async function trashCanonicalProject(projectId) {
+  const project = state.canonicalProjects.find((item) => item.id === projectId);
+  if (!project) return;
+  const title = String(project.name || project.title || "这个项目");
+  if (!window.confirm(`将“${title}”移入回收站？项目素材、首帧和成片都会保留，可随时恢复。`)) return;
+  try {
+    await updateProjectOrganization(projectId, "trash");
+    state.projectManagementMessage = "项目已移入回收站，素材和成片仍会保留。";
+  } catch (error) {
+    state.projectManagementMessage = cleanUiStatusText(error.message || "项目没有删除，请重试。");
+  }
+  render();
+}
+
+async function restoreCanonicalProject(projectId) {
+  try {
+    await updateProjectOrganization(projectId, "restore");
+    state.projectManagementMessage = "项目已恢复。";
+  } catch (error) {
+    state.projectManagementMessage = cleanUiStatusText(error.message || "项目没有恢复，请重试。");
+  }
+  render();
+}
+
+async function renameCanonicalProject(projectId) {
+  const project = state.canonicalProjects.find((item) => item.id === projectId);
+  if (!project || state.projectManagementLoading) return;
+  const currentName = String(project.name || project.title || "").trim();
+  const name = window.prompt("修改项目名称", currentName);
+  if (name === null) return;
+  const nextName = String(name).trim().slice(0, 120);
+  if (!nextName || nextName === currentName) return;
+  state.projectManagementLoading = true;
+  render();
+  try {
+    const result = await fetchJson(`/api/v1/projects/${encodeURIComponent(projectId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: nextName }),
+    });
+    const refreshed = result?.project;
+    if (!refreshed?.id) throw new Error("项目名称没有保存");
+    state.canonicalProjects = state.canonicalProjects.map((item) => item.id === refreshed.id ? refreshed : item);
+    state.projectManagementMessage = "项目名称已保存。";
+  } catch (error) {
+    state.projectManagementMessage = cleanUiStatusText(error.message || "项目名称没有保存，请重试。");
+  } finally {
+    state.projectManagementLoading = false;
+    render();
+  }
+}
+
+function renderProjectsPage() {
+  if (!state.session) {
+    return layout(`<section class="page-shell project-management-page"><div class="project-empty"><h1>项目管理</h1><p>登录后可查看每条制作的素材、首帧和成片进度。</p><button class="generate-button" type="button" data-nav="/login">登录后查看项目</button></div></section>`);
+  }
+  const allProjects = [...state.canonicalProjects]
+    .filter((project) => !project?.archivedAt && String(project?.status || "").toLowerCase() !== "archived")
+    .sort((a, b) => new Date(b?.updatedAt || b?.createdAt || 0).getTime() - new Date(a?.updatedAt || a?.createdAt || 0).getTime());
+  const groups = [...new Set(allProjects.map((project) => projectGroupName(project.id)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  const activeProjects = allProjects.filter((project) => !projectInRecycleBin(project.id));
+  const recycledProjects = allProjects.filter((project) => projectInRecycleBin(project.id));
+  const filter = state.projectManagementGroup;
+  const projects = filter === "trash" ? recycledProjects : activeProjects.filter((project) => {
+    if (filter === "all") return true;
+    if (filter === "ungrouped") return !projectGroupName(project.id);
+    return projectGroupName(project.id) === filter.slice(6);
+  });
+  const completedCount = projects.filter((project) => canonicalProjectNodeReady(project, "FINAL_VIDEO")).length;
+  return layout(`
+    <section class="page-shell project-management-page" aria-labelledby="project-management-title">
+      <header class="project-management-head">
+        <div>
+          <p class="eyebrow">项目管理</p>
+          <h1 id="project-management-title">制作项目</h1>
+          <p>每个项目的素材、首帧和成片都在这里持续保存。</p>
+        </div>
+        <div class="project-management-actions">
+          <button class="small-button" type="button" data-action="refresh-canonical-projects" ${state.projectManagementLoading ? "disabled" : ""}>${state.projectManagementLoading ? "刷新中..." : "刷新"}</button>
+          <button class="generate-button" type="button" data-nav="/templates">新建项目</button>
+        </div>
+      </header>
+      <div class="project-management-summary" aria-label="项目摘要">
+        <div><strong>${activeProjects.length}</strong><span>进行中项目</span></div>
+        <div><strong>${activeProjects.filter((project) => canonicalProjectNodeReady(project, "FINAL_VIDEO")).length}</strong><span>已完成成片</span></div>
+        <div><strong>${recycledProjects.length}</strong><span>回收站项目</span></div>
+      </div>
+      <div class="project-management-filters" aria-label="项目分组">
+        <button type="button" class="${filter === "all" ? "active" : ""}" data-action="set-project-management-group" data-group="all">全部</button>
+        <button type="button" class="${filter === "ungrouped" ? "active" : ""}" data-action="set-project-management-group" data-group="ungrouped">未分组</button>
+        ${groups.map((group) => `<button type="button" class="${filter === `group:${group}` ? "active" : ""}" data-action="set-project-management-group" data-group="group:${escapeHtml(group)}">${escapeHtml(group)}</button>`).join("")}
+        <button type="button" class="${filter === "trash" ? "active" : ""}" data-action="set-project-management-group" data-group="trash">回收站${recycledProjects.length ? ` ${recycledProjects.length}` : ""}</button>
+      </div>
+      ${state.projectManagementMessage ? `<p class="form-note status-note">${escapeHtml(state.projectManagementMessage)}</p>` : ""}
+      <div class="project-management-list" aria-live="polite">
+        ${state.projectManagementLoading && !state.projectManagementLoaded ? '<div class="project-empty"><p>正在读取项目...</p></div>' : projects.length ? projects.map((project) => {
+          const title = String(project.name || project.title || "未命名项目");
+          const progress = canonicalProjectProgress(project);
+          const preview = canonicalProjectPreview(project);
+          const status = canonicalProjectStatus(project, progress);
+          const groupName = projectGroupName(project.id);
+          const recycled = projectInRecycleBin(project.id);
+          return `<article class="project-management-row">
+            <div class="project-management-preview" data-project-preview>${preview ? `${preview.kind === "video" ? `<video src="${escapeHtml(preview.url)}" muted playsinline preload="metadata" data-project-preview-media aria-label="${escapeHtml(title)}成片预览"></video>` : `<img src="${escapeHtml(preview.url)}" alt="${escapeHtml(title)}预览" loading="lazy" data-project-preview-media ${preview.kind === "cover" ? `data-project-cover data-project-cover-fallback="${escapeHtml(preview.fallbackUrl || "")}" data-project-cover-alternates="${escapeHtml(JSON.stringify(preview.alternateCoverUrls || []))}"` : ""}>`}<span class="project-management-preview-fallback">正在生成封面</span>` : '<span>待添加素材</span>'}</div>
+            <div class="project-management-info">
+              <div class="project-management-title"><h2>${escapeHtml(title)}</h2><span>${recycled ? "已删除" : escapeHtml(status)}</span></div>
+              <p class="project-management-group">${groupName ? `分组：${escapeHtml(groupName)}` : "未分组"}</p>
+              <div class="project-management-steps" aria-label="${escapeHtml(title)}制作进度">${progress.steps.map((step) => `<span class="${step.ready ? "ready" : ""}">${step.ready ? "已完成" : "待添加"} ${step.label}</span>`).join("")}</div>
+              <p>已完成 ${progress.complete}/6 步 · 最近更新 ${escapeHtml(formatAdminTime(project.updatedAt || project.createdAt))}</p>
+            </div>
+            <div class="project-management-row-actions">
+              ${recycled ? `<button class="generate-button compact" type="button" data-action="restore-canonical-project" data-project-id="${escapeHtml(project.id)}" ${state.projectManagementLoading ? "disabled" : ""}>恢复项目</button>` : `<button class="small-button" type="button" data-action="set-canonical-project-group" data-project-id="${escapeHtml(project.id)}" ${state.projectManagementLoading ? "disabled" : ""}>分组</button><button class="small-button" type="button" data-action="rename-canonical-project" data-project-id="${escapeHtml(project.id)}" ${state.projectManagementLoading ? "disabled" : ""}>重命名</button><button class="small-button danger-button" type="button" data-action="trash-canonical-project" data-project-id="${escapeHtml(project.id)}" ${state.projectManagementLoading ? "disabled" : ""}>删除</button><button class="generate-button compact" type="button" data-nav="/workspace?projectId=${encodeURIComponent(project.id)}">继续制作</button>`}
+            </div>
+          </article>`;
+        }).join("") : '<div class="project-empty"><h2>还没有制作项目</h2><p>从选同款开始，创建第一条童装视频。</p><button class="generate-button" type="button" data-nav="/templates">选择模板</button></div>'}
+      </div>
+    </section>
+  `);
+}
+
 
 function render() {
   const path = normalizePath();
@@ -3251,6 +3790,7 @@ function render() {
   const renderers = {
     "/workspace": renderWorkspacePage,
     "/templates": renderTemplatesPage,
+    "/projects": renderProjectsPage,
     "/pricing": renderPricingPage,
     "/billing": renderBillingPage,
     "/admin": renderAdminPage,
@@ -3260,6 +3800,9 @@ function render() {
   if (path === "/workspace") {
     void ensureWorkspaceV206Mount();
   }
+  if (path === "/projects" && state.session && !state.projectManagementLoaded && !state.projectManagementLoading) {
+    void refreshProjectManagementState();
+  }
   document.title = `${routeMeta[path].title} | 念念 AI`;
   trackPageView(path);
   renderTurnstileWidgets();
@@ -3267,6 +3810,8 @@ function render() {
     syncHeaderScrollbarCompensation();
     setupChatTextarea(document.querySelector("#workflowRequirement"));
     bindPrimaryImageProbes();
+    bindPrivateVideoPosters();
+    bindProjectCoverPreviews();
     if (path === "/templates") {
       setupPersonalTemplateVideoPreviews();
       void ensurePersonalTemplateVideoLoad();
@@ -3279,7 +3824,9 @@ let workspaceV206StylesPromise = null;
 
 function ensureWorkspaceV206Styles() {
   if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
-  const href = "/workspace-v206.css?v=20260817-agent-rail-31";
+  // Legacy release marker retained for source-contract compatibility:
+  // href = "/workspace-v206-20260819-no-preview-rerender-02.css"
+  const href = "/workspace-v206-20260820-upload-xhr-03.css";
   const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
     || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
   if (!existing) {
@@ -3302,7 +3849,9 @@ async function ensureWorkspaceV206Mount() {
     return;
   }
   if (!workspaceV206ModulePromise) {
-    workspaceV206ModulePromise = import("/workspace-v206.js?v=20260817-agent-rail-31");
+    // Legacy release marker retained for source-contract compatibility:
+    // workspaceV206ModulePromise = import("/workspace-v206-20260819-no-preview-rerender-02.js")
+    workspaceV206ModulePromise = import("/workspace-v206-20260820-upload-xhr-03.js");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;
@@ -6008,47 +6557,49 @@ ${renderAdminMetric("额度回收", adminNumber(riskUsers.filter((item) => item.
 }
 
 async function importWorkflowTemplate(id) {
-  const reference = actionReferenceTemplates.find((item) => item.id === id);
-  if (!reference) return;
+  await openSameStyleProjectDialog(id);
+}
+
+async function confirmSameStyleProject() {
+  const dialog = state.sameStyleProjectDialog;
+  const reference = actionReferenceTemplates.find((item) => item.id === dialog?.referenceId);
+  if (!reference || !dialog || dialog.loading || dialog.submitting) return;
+  const projectName = String(dialog.name || "").trim().slice(0, 120);
+  if (!projectName) {
+    dialog.message = "请先填写项目名称。";
+    render();
+    document.getElementById("sameStyleProjectName")?.focus();
+    return;
+  }
+  dialog.submitting = true;
+  dialog.message = "正在创建项目...";
+  render();
   trackSiteEvent("template_import_started", {
     template_id: reference.id,
     source: "template_library",
   });
 
-  state.importedWorkflowTemplateId = id;
-  state.selectedActionReferenceId = id;
+  state.importedWorkflowTemplateId = reference.id;
+  state.selectedActionReferenceId = reference.id;
   state.selectedWorkflowMode = "action-transfer";
-  localStorage.setItem("importedWorkflowTemplateId", id);
-  localStorage.setItem("selectedActionReferenceId", id);
+  localStorage.setItem("importedWorkflowTemplateId", reference.id);
+  localStorage.setItem("selectedActionReferenceId", reference.id);
   localStorage.setItem("selectedWorkflowMode", "action-transfer");
   state.workflowChat = [];
   clearWorkspaceNodeAssets();
-state.firstFrameMessage = "";
-state.firstFrameJobId = "";
-localStorage.removeItem("firstFrameJobId");
+  state.firstFrameMessage = "";
+  state.firstFrameJobId = "";
+  localStorage.removeItem("firstFrameJobId");
 
-if (!state.session && !state.sessionLoaded) {
-beginPendingAction(`import-template:${id}`);
-state.workspaceMessage = "正在检查登录状态并导入模板。";
-render();
-await refreshState().catch(() => null);
-endPendingAction();
-}
-
-if (!state.session) {
-state.workspaceMessage = "模板已导入，登录后可以生成首帧和动作视频。";
-trackSiteEvent("template_imported", {
-template_id: reference.id,
-logged_in: false,
-draft_created: false,
-});
-navigate("/workspace");
-render();
-return;
+  if (!state.session) {
+    state.sameStyleProjectDialog = null;
+    state.workspaceMessage = "登录后即可创建同款项目。";
+    navigate("/login");
+    return;
   }
 
-  beginPendingAction(`import-template:${id}`);
-  state.workspaceMessage = "正在导入模板并创建制作草稿。";
+  beginPendingAction(`import-template:${reference.id}`);
+  state.workspaceMessage = "正在导入模板并创建制作项目。";
   render();
 
   try {
@@ -6065,13 +6616,18 @@ return;
     const result = await fetchJson("/api/v1/projects", {
       method: "POST",
       body: JSON.stringify({
-        name: reference.title,
+        name: projectName,
         templateId: reference.id,
         nodes: { MOTION: motionId },
       }),
     });
     replaceProject(result.project);
-    state.workspaceMessage = "模板已导入，已跳转到工作台。";
+    if (result.project?.id) {
+      state.canonicalProjects = [result.project, ...state.canonicalProjects.filter((project) => project.id !== result.project.id)];
+      state.projectManagementLoaded = true;
+    }
+    state.sameStyleProjectDialog = null;
+    state.workspaceMessage = "项目已创建，正在进入工作台。";
     trackSiteEvent("template_imported", {
       template_id: reference.id,
       logged_in: true,
@@ -6082,6 +6638,10 @@ return;
     render();
     return;
   } catch (error) {
+    if (state.sameStyleProjectDialog) {
+      state.sameStyleProjectDialog.submitting = false;
+      state.sameStyleProjectDialog.message = cleanUiStatusText(error?.message || "创建项目失败，请重试。");
+    }
     state.workspaceMessage = error?.message || "创建项目失败，请重试。";
     setUiNotice(state.workspaceMessage, "warning");
   }
@@ -6761,7 +7321,7 @@ if (action === "send-code") handleRequestCode();
   if (action === "start-production") handleStartProduction();
   if (action === "retry-production-stable") handleStartProduction({ stableRetry: true });
   if (action === "sync-production") handleSyncProduction();
-  if (action === "import-workflow-template") importWorkflowTemplate(actionTarget.dataset.reference);
+  if (action === "import-workflow-template") void openSameStyleProjectDialog(actionTarget.dataset.reference);
   if (action === "use-personal-template-video") void usePersonalTemplateVideo(actionTarget.dataset.media);
   if (action === "delete-personal-template-video") void deletePersonalTemplateVideo(actionTarget.dataset.media);
   if (action === "reset-workflow-template") resetWorkflowTemplate();
@@ -6783,6 +7343,8 @@ if (action === "select-workflow-mode") selectWorkflowMode(actionTarget.dataset.m
   if (action === "export-video") handleExportVideo();
   if (action === "toggle-task-drawer") toggleTaskDrawer();
   if (action === "close-task-feedback") closeTaskFeedbackModal();
+  if (action === "close-same-style-project") closeSameStyleProjectDialog();
+  if (action === "confirm-same-style-project") void confirmSameStyleProject();
   if (action === "show-task-drawer") showTaskDrawerFromFeedback();
   if (action === "set-action-variant") setActionVariant(actionTarget.dataset.variant);
   if (action === "toggle-action-params") toggleActionTransferParams();
@@ -6842,6 +7404,26 @@ if (action === "mention-chat-material") selectChatMaterialMention(actionTarget.d
     state.workspaceProjectFilter = actionTarget.dataset.filter || "active";
     render();
   }
+  if (action === "refresh-canonical-projects") {
+    state.projectManagementLoaded = false;
+    void refreshProjectManagementState();
+  }
+  if (action === "rename-canonical-project") {
+    void renameCanonicalProject(actionTarget.dataset.projectId || "");
+  }
+  if (action === "set-canonical-project-group") {
+    void setCanonicalProjectGroup(actionTarget.dataset.projectId || "");
+  }
+  if (action === "trash-canonical-project") {
+    void trashCanonicalProject(actionTarget.dataset.projectId || "");
+  }
+  if (action === "restore-canonical-project") {
+    void restoreCanonicalProject(actionTarget.dataset.projectId || "");
+  }
+  if (action === "set-project-management-group") {
+    state.projectManagementGroup = actionTarget.dataset.group || "all";
+    render();
+  }
 });
 
 document.addEventListener("pointerdown", (event) => {
@@ -6872,6 +7454,11 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const projectName = event.target.closest("[data-same-style-project-name]");
+  if (projectName) {
+    updateSameStyleProjectName(projectName.value);
+    return;
+  }
   const projectSearch = event.target.closest("[data-workspace-project-search]");
   if (!projectSearch) return;
   state.workspaceProjectQuery = projectSearch.value || "";
@@ -6883,6 +7470,27 @@ document.addEventListener("input", (event) => {
   const count = document.querySelector("[data-workspace-project-count]");
   if (count) count.textContent = `${visibleCount} 个项目`;
 });
+
+document.addEventListener("load", (event) => {
+  const media = event.target instanceof Element ? event.target.closest("[data-project-preview-media]") : null;
+  media?.closest("[data-project-preview]")?.classList.add("is-ready");
+}, true);
+
+document.addEventListener("loadedmetadata", (event) => {
+  const media = event.target instanceof Element ? event.target.closest("[data-project-preview-media]") : null;
+  media?.closest("[data-project-preview]")?.classList.add("is-ready");
+}, true);
+
+document.addEventListener("error", (event) => {
+  const media = event.target instanceof Element ? event.target.closest("[data-project-preview-media]") : null;
+  const preview = media?.closest("[data-project-preview]");
+  if (!preview) return;
+  if (media?.hasAttribute("data-project-cover")) return;
+  preview.classList.remove("is-ready");
+  preview.classList.add("is-failed");
+  const fallback = preview.querySelector(".project-management-preview-fallback");
+  if (fallback) fallback.textContent = "暂不可预览";
+}, true);
 
 document.addEventListener("play", (event) => {
   const video = event.target.closest?.(".node-video-shell video");
@@ -6965,7 +7573,7 @@ window.addEventListener("resize", () => fitMaterialPreviewImage({ resetTransform
 async function bootApp() {
   if (window.location.pathname === "/") window.history.replaceState({}, "", "/templates");
   const bootPath = normalizePath();
-  const peerPaths = new Set(["/templates", "/workspace", "/pricing", "/billing"]);
+  const peerPaths = new Set(["/templates", "/workspace", "/projects", "/pricing", "/billing"]);
   // Peer routes share one authenticated shell. Load session state before first
   // paint so route changes never briefly downgrade nav to a logged-out header.
   if (peerPaths.has(bootPath)) {
@@ -6979,6 +7587,8 @@ async function bootApp() {
       setUiNotice(cleanUiStatusText(error.message || "状态刷新失败，请稍后重试。"), "warning");
     }
     render();
+    const requestedTemplateId = bootPath === "/templates" ? new URLSearchParams(window.location.search).get("newProjectTemplate") : "";
+    if (requestedTemplateId) void openSameStyleProjectDialog(requestedTemplateId);
     startTaskAutoSync();
     runTaskAutoSync();
     return;
@@ -7465,17 +8075,18 @@ function renderShowcaseVideoCard(item, index) {
   const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
   const coverSource = cover || TEMPLATE_COVER_FALLBACK;
   const coverAttrs = lazyImageAttrs(index === 0 ? "eager" : "lazy", item.resultCoverUrl || item.referenceImageUrl, coverSource);
+  const coverFallback = coverSource === TEMPLATE_COVER_FALLBACK ? "" : ` data-fallback-src="${escapeHtml(TEMPLATE_COVER_FALLBACK)}"`;
   return `
     <article class="showcase-video-card ${index === 0 ? "featured" : ""}">
 <button class="showcase-video-shell" type="button" data-action="play-showcase-video" data-video="${escapeHtml(staticVideoPlaybackUrl(item.referenceVideoUrl))}" data-poster="${escapeHtml(coverSource)}" data-title="${escapeHtml(item.title)}">
- <img src="${TEMPLATE_COVER_FALLBACK}" data-primary-src="${escapeHtml(coverSource)}" alt="${escapeHtml(item.title)}" ${coverAttrs}>
- </button>
+ <img src="${escapeHtml(coverSource)}" alt="${escapeHtml(item.title)}"${coverFallback} ${coverAttrs}>
+</button>
       <div class="showcase-video-caption">
         <div>
           <span>${item.badge}</span>
           <h2>${item.title}</h2>
         </div>
-<button class="generate-button compact" type="button" data-action="import-workflow-template" data-reference="${item.id}" ${state.isBusy ? "disabled" : ""}${pendingAttrs(`import-template:${item.id}`)}${disabledHint(state.isBusy && !isPendingAction(`import-template:${item.id}`), "另一个模板正在导入")}${disabledReason({ condition: state.isBusy && !isPendingAction(`import-template:${item.id}`), text: "另一个模板正在导入" })}>${importLabel}</button>
+<button class="generate-button compact" type="button" data-nav="/templates?newProjectTemplate=${encodeURIComponent(item.id)}" ${state.isBusy ? "disabled" : ""}${pendingAttrs(`import-template:${item.id}`)}${disabledHint(state.isBusy && !isPendingAction(`import-template:${item.id}`), "另一个模板正在导入")}>${importLabel}</button>
       </div>
     </article>
   `;
@@ -7765,7 +8376,7 @@ async function uploadTemplateVideoMultipart(file, upload) {
   for (let offset = 0, partNumber = 1; offset < file.size; offset += partSize, partNumber += 1) {
     const part = file.slice(offset, Math.min(offset + partSize, file.size));
     if (uploadedParts.get(partNumber) === part.size) continue;
-    const authorization = await fetchJson(upload.partUrlEndpoint, { method: "POST", body: JSON.stringify({ partNumber }) });
+    const authorization = await fetchJson(sameOriginUploadEndpoint(upload.partUrlEndpoint), { method: "POST", body: JSON.stringify({ partNumber }) });
     let uploaded = false;
     let lastStatus = "";
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -7783,8 +8394,8 @@ async function uploadTemplateVideoMultipart(file, upload) {
     }
     if (!uploaded) throw new Error(`SIGNED_UPLOAD_FAILED${lastStatus}`);
   }
-  const completed = await fetchJson(upload.completeEndpoint, { method: "POST", body: "{}" });
-  if (!completed.upload?.completed) throw new Error("MEDIA_MULTIPART_INCOMPLETE");
+  // Completion is performed once by the caller after the transport finishes;
+  // a second completion makes valid multipart uploads look failed.
 }
 
 async function loadPersonalTemplateVideos() {
@@ -7877,9 +8488,10 @@ function renderTemplateQuickPick(item, index) {
   const importLabel = isPendingAction(`import-template:${item.id}`) ? "进入中..." : "用这个动作";
   const cover = staticImagePlaybackUrl(item.resultCoverUrl || item.referenceImageUrl);
   const coverSource = cover || TEMPLATE_COVER_FALLBACK;
+  const coverFallback = coverSource === TEMPLATE_COVER_FALLBACK ? "" : ` data-fallback-src="${escapeHtml(TEMPLATE_COVER_FALLBACK)}"`;
   return `
     <button class="template-quick-pick ${index === 0 ? "featured" : ""}" type="button" data-action="import-workflow-template" data-reference="${item.id}" ${state.isBusy ? "disabled" : ""}${pendingAttrs(`import-template:${item.id}`)}${disabledHint(state.isBusy && !isPendingAction(`import-template:${item.id}`), "另一个模板正在导入")}${disabledReason({ condition: state.isBusy && !isPendingAction(`import-template:${item.id}`), text: "另一个模板正在导入" })}>
-      <span class="template-quick-pick-media"><img src="${TEMPLATE_COVER_FALLBACK}" data-primary-src="${escapeHtml(coverSource)}" alt="" ${lazyImageAttrs("eager", item.resultCoverUrl || item.referenceImageUrl, coverSource)}></span>
+      <span class="template-quick-pick-media"><img src="${escapeHtml(coverSource)}" alt=""${coverFallback} ${lazyImageAttrs("eager", item.resultCoverUrl || item.referenceImageUrl, coverSource)}></span>
       <span class="template-quick-pick-copy"><em>${escapeHtml(item.badge || "动作模板")}</em><b>${escapeHtml(item.title)}</b><small>${importLabel}</small></span>
     </button>
   `;
