@@ -1,4 +1,4 @@
-import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-state.js?v=20260814-retryable-failure-reload-23";
+import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature } from "./workspace-workflow-state.js?v=20260818-project-input-gate-26";
 
 (() => {
   "use strict";
@@ -6,7 +6,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   if (window.__niannianWorkspaceV206Loaded) return;
   window.__niannianWorkspaceV206Loaded = true;
 
-  const VERSION = "20260817-agent-rail-31";
+  const VERSION = "20260818-private-video-poster-01";
   const STORE_KEY = "kidswear.v206.production-desk";
   const FALLBACK_TEMPLATE = "store-dance-01";
   const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4"]);
@@ -117,6 +117,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   const requested = new URLSearchParams(window.location.search);
   const previewMode = ["127.0.0.1", "localhost"].includes(window.location.hostname) ? requested.get("workspacePreview") || "" : "";
   let requestedProjectId = UUID_PATTERN.test(requested.get("projectId") || "") ? requested.get("projectId") : "";
+  const workflowDiagnostics = requested.get("qa") === "project-audit";
+  function traceWorkflow(stage, detail = "") {
+    if (!workflowDiagnostics) return;
+    window.__NN_WORKSPACE_DIAGNOSTICS = { stage, detail: String(detail || ""), at: Date.now(), version: VERSION };
+  }
   const initialTemplate = normalizeTemplate(requested.get("templateId") || localStorage.getItem("selectedTemplateId") || stored.templateId || FALLBACK_TEMPLATE);
   function compactAssistantEventMessages(messages) {
     const seenTransient = new Set();
@@ -160,6 +165,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     workflowStep: "person",
     workflowProjectId: "",
     pendingVideo: normalizePendingVideo(stored.pendingVideo),
+    videoQuoteError: String(stored.videoQuoteError || ""),
     videoMode: "standard",
     pendingFirstFrame: null,
     firstFrameDraftAnalyzing: false,
@@ -229,6 +235,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   let assistantEventSource = null;
   let assistantEventProjectId = "";
   let assistantEventSnapshot = null;
+  let mountedRouteKey = "";
+  let hasMountedOnce = false;
+  let bootGeneration = 0;
+  let loadRun = 0;
   const assistantEventIds = new Set();
   const assistantEventSemanticIds = new Set();
 
@@ -294,6 +304,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       pendingAgentImageEdit: state.pendingAgentImageEdit,
       pendingFirstFrame: persistentPendingFirstFrame(),
       pendingVideo: normalizePendingVideo(state.pendingVideo),
+      videoQuoteError: state.videoQuoteError,
       assistantEventMessages: state.assistantEventMessages.slice(-40),
       firstFrameQuote: state.firstFrameQuote,
     }));
@@ -398,9 +409,20 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     }
     return String(media?.url || "") || (UUID_PATTERN.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/content` : "");
   }
+  function privateMediaPosterUrl(mediaOrId) {
+    const id = String(typeof mediaOrId === "string" ? mediaOrId : mediaOrId?.id || mediaOrId?.mediaId || "");
+    return UUID_PATTERN.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/poster?v=${encodeURIComponent(id)}` : "";
+  }
+  function privateMediaPreviewUrl(mediaOrId) {
+    const id = String(typeof mediaOrId === "string" ? mediaOrId : mediaOrId?.id || mediaOrId?.mediaId || "");
+    return UUID_PATTERN.test(id) ? `/api/v1/media/${encodeURIComponent(id)}/cover?v=${encodeURIComponent(id)}` : "";
+  }
   function sourceSignature() {
     const assets = workflowBoundAssets();
-    return ["person", "outfit", "scene", "motion"].map((slot) => assets[slot]?.mediaId || "").join(":");
+    // Background is displayed in the workspace but is not sent to the
+    // first-frame or action-transfer APIs. Treating it as a generation input
+    // incorrectly hid a completed frame/video after a background replacement.
+    return ["person", "outfit", "motion"].map((slot) => assets[slot]?.mediaId || "").join(":");
   }
   function generationInputSignature(kind) {
     return kind === "final" ? `${sourceSignature()}:${workflowBoundAssets().frame?.mediaId || ""}` : sourceSignature();
@@ -419,7 +441,16 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     state.invalidatedDerivedByProject[projectId] = { sourceSignature: sourceSignature(), frame: true, final: true };
     state.pendingFirstFrame = null;
     state.firstFrameDraftAnalyzing = false;
-    state.pendingVideo = null;
+    // A delayed project read may acknowledge an earlier material write after
+    // the user has already received a quote for the current inputs. Preserve
+    // that quote when it is still tied to this project's live frame and motion
+    // media; clear it only when the inputs genuinely diverge.
+    const pending = state.pendingVideo;
+    const inputs = workflowBoundAssets();
+    const pendingMatchesCurrentInputs = pending?.projectId === projectId
+      && pending.firstFrameMediaId === inputs.frame?.mediaId
+      && pending.motionMediaId === inputs.motion?.mediaId;
+    if (!pendingMatchesCurrentInputs) state.pendingVideo = null;
     state.frameJobId = "";
     state.finalJobId = "";
     state.showFinalVideo = false;
@@ -512,7 +543,8 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function currentFrameJobId(project = canonicalProject()) {
     const frameNode = project?.nodes?.find((node) => node.role === "FIRST_FRAME");
-    return state.frameJobId || frameNode?.metadata?.sourceJobId || frameNode?.metadata?.jobId || "";
+    const storedJob = state.jobs.find((job) => job.id === state.frameJobId && jobBelongsToProject(job, project));
+    return frameNode?.metadata?.sourceJobId || frameNode?.metadata?.jobId || storedJob?.id || "";
   }
   function currentFinalJobId(project = canonicalProject()) {
     const finalNode = project?.nodes?.find((node) => node.role === "FINAL_VIDEO");
@@ -532,8 +564,33 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return finalNode?.metadata?.sourceJobId || finalNode?.metadata?.jobId || currentInputJob?.id || storedSource?.[0] || (storedSourceMatches || storedInputMatches ? state.finalJobId : "") || recovered;
   }
   function finalOutputMediaId(job) {
-    const candidate = job?.outputMedia?.id || job?.outputMedia?.mediaId || job?.outputMediaId || job?.resultMediaId || job?.result?.mediaId || "";
+    const candidate = job?.outputMedia?.id
+      || job?.outputMedia?.mediaId
+      || job?.output?.media?.id
+      || job?.output?.mediaId
+      || job?.output?.id
+      || job?.resultMedia?.id
+      || job?.result?.media?.id
+      || job?.result?.mediaId
+      || job?.outputMediaId
+      || job?.output_media_id
+      || job?.resultMediaId
+      || job?.result_media_id
+      || job?.mediaId
+      || "";
     return UUID_PATTERN.test(String(candidate)) ? String(candidate) : "";
+  }
+  function frameOutputMediaId(job) {
+    const direct = finalOutputMediaId(job);
+    if (direct) return direct;
+    const jobId = String(job?.id || "");
+    if (!jobId) return "";
+    const linked = state.canonicalMedia.find((media) => {
+      const metadata = media?.metadata || media?.meta || {};
+      const sourceJobId = metadata.sourceJobId || metadata.source_job_id || metadata.jobId || metadata.job_id || media?.sourceJobId || media?.jobId || media?.taskId || "";
+      return String(sourceJobId) === jobId;
+    });
+    return UUID_PATTERN.test(String(linked?.id || "")) ? String(linked.id) : "";
   }
   function actionTaskMatchesCurrentInputs(job) {
     const inputs = job?.input || {};
@@ -547,6 +604,55 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return state.jobs
       .filter((job) => jobBelongsToProject(job, project) && String(job.kind || "").toUpperCase() === "ACTION_TRANSFER" && completedJob(job) && finalOutputMediaId(job) && actionTaskMatchesCurrentInputs(job))
       .sort((left, right) => jobTimestamp(right) - jobTimestamp(left))[0] || null;
+  }
+  function latestRecoverableFrameJob(project = canonicalProject()) {
+    if (!project?.id || derivedOutputIsInvalidated("frame")) return null;
+    return state.jobs
+      .filter((job) => jobBelongsToProject(job, project) && String(job.kind || "").toUpperCase() === "FIRST_FRAME" && completedJob(job) && frameOutputMediaId(job))
+      .filter((job) => taskMatchesCurrentSignature(job, "frame", sourceSignature()))
+      .sort((left, right) => jobTimestamp(right) - jobTimestamp(left))[0] || null;
+  }
+  function completedFrameBindingCandidate(project = canonicalProject()) {
+    if (!project?.id || workflowBoundAssets(project).frame?.mediaId || derivedOutputIsInvalidated("frame")) return null;
+    const job = state.jobs.find((item) => item.id === currentFrameJobId(project)) || latestRecoverableFrameJob(project);
+    const mediaId = frameOutputMediaId(job);
+    return completedJob(job) && mediaId && jobBelongsToProject(job, project) && taskMatchesCurrentSignature(job, "frame", sourceSignature()) ? { job, mediaId } : null;
+  }
+  let frameBindingRecoveryInFlight = "";
+  async function recoverCompletedFrameBinding() {
+    const project = canonicalProject();
+    let candidate = completedFrameBindingCandidate(project);
+    // The job collection is intentionally lightweight and can omit the
+    // private output id. Resolve the current task once before treating a
+    // completed first frame as an unrecoverable ingestion gap.
+    const currentJobId = currentFrameJobId(project);
+    if (!candidate && project?.id && currentJobId) {
+      try {
+        const detail = await mediaRequest(`/api/v1/jobs/${encodeURIComponent(currentJobId)}`);
+        const detailedJob = detail?.job || detail?.task || null;
+        if (detailedJob?.id) mergeCanonicalJobs([detailedJob, ...state.jobs.filter((item) => item.id !== detailedJob.id)]);
+        candidate = completedFrameBindingCandidate(project);
+      } catch {}
+    }
+    if (!project?.id || !candidate) return false;
+    const key = `${project.id}:${candidate.job.id}:${candidate.mediaId}`;
+    if (frameBindingRecoveryInFlight === key) return false;
+    frameBindingRecoveryInFlight = key;
+    try {
+      await mediaRequest(`/api/v1/projects/${project.id}/nodes/FIRST_FRAME`, { method: "PUT", body: JSON.stringify({ mediaId: candidate.mediaId }) });
+      const refreshed = (await mediaRequest(`/api/v1/projects/${project.id}`)).project;
+      const merged = mergeCanonicalProject(refreshed);
+      state.canonicalProjects = [merged, ...state.canonicalProjects.filter((item) => item.id !== merged.id)];
+      state.frameJobId = candidate.job.id;
+      hydrateCanonicalProject(merged);
+      reconcileDerivedOutputs();
+      writeState();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      if (frameBindingRecoveryInFlight === key) frameBindingRecoveryInFlight = "";
+    }
   }
   function latestCurrentFinalTask(project = canonicalProject()) {
     if (!project?.id || derivedOutputIsInvalidated("final")) return null;
@@ -652,6 +758,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (!mediaIsActive(media)) return null;
     const kind = media.kind === "VIDEO" ? "video" : "image";
     const asset = toAsset(privateMediaUrl(media), kind, media.label || "私有素材", "", media.id);
+    if (kind === "image") asset.preview = privateMediaPreviewUrl(media.id);
     if (kind === "video") asset.preview = "";
     return { ...asset, width: media.width || null, height: media.height || null, durationSeconds: media.durationSeconds || null, source: media.source || "", isTemplateSample: String(media.source || "").startsWith("workspace_template:") };
   }
@@ -665,6 +772,14 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (!project) return;
     const sameProject = state.canonicalProjectId === project.id;
     const previousSelection = sameProject ? { ...state.selected } : {};
+    if (!sameProject) {
+      // Job ids are only meaningful inside their owning project. Keeping an
+      // old id here made a finished first-frame task appear as "入库中" on a
+      // newly created same-style project before the customer added materials.
+      state.frameJobId = "";
+      state.finalJobId = "";
+      state.currentJobSnapshots = {};
+    }
     state.canonicalProjectId = project.id;
     state.templateId = normalizeTemplate(project.templateId || state.templateId);
     const nextUrl = new URL(window.location.href);
@@ -690,6 +805,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
           if (slot === "motion") state.motionReferenceTime = null;
           setWorkflowStep(slot);
         }
+      } else if (pending?.asset) {
+        // A project read can briefly lag the assignment PUT and return the
+        // previous node (or no media at all). Keep the user's confirmed
+        // choice visible until the authority echoes the same media id.
+        state.selected[slot] = pending.asset;
       }
     });
     reconcileWorkflowForProject(project);
@@ -810,11 +930,15 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       // its canonical read is catching up. Keep the final player visually
       // grounded with the template cover until the private frame is available.
       const frameAsset = displayAssetFor("frame") || toAsset(currentTemplate().cover, "image", "首帧封面");
+      const finalPoster = finished.mediaId ? privateMediaPosterUrl(finished.mediaId) : "";
       return {
         mode: "video",
         url: finished.url,
         mediaId: finished.mediaId,
-        poster: frameAsset ? publicPreview(frameAsset) : "",
+        // The player cover must come from the same FINAL_VIDEO media as the
+        // playback URL. The generated first frame is only a fallback because
+        // it can differ from the model's actual opening frame.
+        poster: finalPoster || (frameAsset ? publicPreview(frameAsset) : ""),
         title: "成片已返回",
         note: activeProject()?.production?.sampleInputRoles?.length ? "本成片包含模板示例素材，正式商用前建议替换为自有素材。" : "可直接查看或导出成片。",
         label: "成片",
@@ -990,15 +1114,26 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const media = await mediaRequest("/api/v1/media");
       hydrateCanonicalMedia(media.media || []);
       state.unavailableMedia?.delete(mediaId);
-      renderUnlessSourcesOpen();
+      // A failed image or poster is a local transport concern. Rebuilding the
+      // workspace here restarted every stage image and created a visible
+      // refresh loop when a private preview was briefly unavailable.
     } catch {
       flash("私有素材地址刷新失败，请重新登录后再试。", "warning");
     }
   }
   async function load() {
-    // Resolve authentication before project data so an expired session can never
-    // leave the workspace in its indefinite project-loading state.
+    const run = ++loadRun;
+    // Authentication and the requested project are independent reads. Start
+    // both together so a slow auth check cannot serialize the first project
+    // paint behind another slow round trip.
+    const requestedProjectPromise = requestedProjectId
+      ? mediaRequest(`/api/v1/projects/${requestedProjectId}`).catch(() => ({ project: null }))
+      : Promise.resolve({ project: null });
+    const canonicalProjectsPromise = mediaRequest("/api/v1/projects").catch((error) => ({ projects: [], error }));
+    // Resolve authentication before committing project data so an expired
+    // session can never leave the workspace in its indefinite loading state.
     const session = await request("/api/v1/auth/me").catch((error) => ({ user: null, error }));
+    if (run !== loadRun) return;
     const sessionAuthFailed = session.error?.status === 401;
     state.session = session.user || (sessionAuthFailed ? null : state.session);
     state.sessionLoaded = true;
@@ -1013,19 +1148,21 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       flash(sessionAuthFailed ? "登录已失效，请重新登录。" : "登录状态暂时无法确认，请刷新重试。", "warning");
       return;
     }
-    const requestedProjectPromise = requestedProjectId
-      ? mediaRequest(`/api/v1/projects/${requestedProjectId}`).catch(() => ({ project: null }))
-      : Promise.resolve({ project: null });
-    const canonicalProjectsPromise = mediaRequest("/api/v1/projects").catch((error) => ({ projects: [], error }));
     const requestedProjectResult = await requestedProjectPromise;
+    if (run !== loadRun) return;
     let durable = null;
     if (requestedProjectResult.project && requestedProjectId) {
       durable = requestedProjectResult.project;
       state.canonicalProjects = [durable];
+      // The requested project is enough to paint the workspace. Do not make
+      // the first view wait for the full project list or secondary panels.
+      // Keep it in loading state until the atomic first render below.
+      hydrateCanonicalProject(durable);
       // Keep the initial workspace paint atomic. The project response is
       // usable immediately, but replacing the page again when the full list
       // arrives made a fresh entry look like repeated browser refreshes.
       const result = await canonicalProjectsPromise;
+      if (run !== loadRun) return;
       if (!result.error && Array.isArray(result.projects)) {
         const current = durable;
         state.canonicalProjects = result.projects;
@@ -1033,6 +1170,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       }
     } else {
       const canonicalProjects = await canonicalProjectsPromise;
+      if (run !== loadRun) return;
       state.canonicalProjects = canonicalProjects.projects || [];
       if (canonicalProjects.error) {
         state.projectLoading = false;
@@ -1043,7 +1181,6 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     }
     if (durable) {
       hydrateCanonicalProject(durable);
-      state.projectLoading = false;
     }
     else if (state.session && requestedProjectId) { window.location.replace("/workspace?notice=project-unavailable"); return; }
     else if (state.session && Object.values(state.selected).some((asset) => asset?.mediaId)) await ensureCanonicalProject();
@@ -1051,12 +1188,17 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const project = activeProject();
     if (project && !state.projectId) state.projectId = project.id;
     if (state.session && project?.id) mediaRequest("/api/v1/workspace/opened", { method: "POST", body: JSON.stringify({ projectId: project.id }) }).catch(() => {});
-    if (state.session) await loadSecondaryWorkspaceState(project?.id || "");
+    if (state.session) {
+      // Prepare the complete first snapshot before boot() commits the page.
+      // Painting project, media, and chat in separate phases looked like three
+      // browser refreshes and briefly showed the wrong project media.
+      await loadSecondaryWorkspaceState(project?.id || "", { initial: true }).catch(() => {});
+    }
     if (state.session && project?.id) connectAssistantEventStream(project.id);
     restorePersistedPendingFirstFrame();
   }
 
-  async function loadSecondaryWorkspaceState(projectId) {
+  async function loadSecondaryWorkspaceState(projectId, { initial = false } = {}) {
     const run = ++secondaryWorkspaceRun;
     const [canonicalMedia, canonicalJobs, assistantThreads, notificationData] = await Promise.all([
       mediaRequest("/api/v1/media").catch(() => ({ media: [] })),
@@ -1067,7 +1209,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (run !== secondaryWorkspaceRun || (projectId && projectId !== canonicalProject()?.id)) return;
     hydrateCanonicalMedia(canonicalMedia.media || []);
     mergeCanonicalJobs(canonicalJobs.jobs || []);
-    void recoverCompletedFinalBinding();
+    void recoverCompletedFrameBinding().then(() => recoverCompletedFinalBinding());
     state.assistantThreads = assistantThreads.threads || [];
     state.notifications = notificationData.notifications || [];
     state.unreadNotifications = Number(notificationData.unreadCount || 0);
@@ -1090,8 +1232,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       recoverCompletedAgentImageEdit();
       restorePendingAgentImageEdit();
     } else state.chat = [];
-    // The caller owns the first full render. Keeping it here would produce a
-    // second visible remount immediately after the workspace becomes ready.
+    // Secondary data arrives after the first paint in the normal refresh path.
+    // During boot(), the caller commits this complete snapshot once. Later
+    // refreshes update the existing DOM without replaying the loading screen.
+    if (!initial) renderUnlessSourcesOpen();
   }
 
   function currentFirstFrameDraftPayload() {
@@ -1251,7 +1395,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (state.firstFrameQuoteLoading || !state.session) return;
     state.firstFrameQuoteLoading = true;
     try {
-      const summary = await mediaRequest("/api/v1/billing/summary");
+      const summary = await mediaRequest("/api/v1/account/summary");
       const price = Number(
         summary.pricing?.imageTzPrice
         ?? summary.pricing?.image_tz_price
@@ -1404,6 +1548,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       mergeCanonicalJobs(jobs.jobs || []);
       hydrateCanonicalProject(canonicalProject());
       reconcileDerivedOutputs();
+      await recoverCompletedFrameBinding();
       await recoverCompletedFinalBinding();
       state.taskRefreshAt = Date.now();
       if (before !== taskStateFingerprint()) {
@@ -1471,15 +1616,24 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     }[code] || "";
   }
   function imageMarkup(asset, alt) {
-    const src = publicPreview(asset);
+    const privateFallback = asset?.mediaId
+      ? (asset.kind === "video" ? privateMediaUrl(asset) : privateMediaPreviewUrl(asset.mediaId))
+      : "";
+    const src = publicPreview(asset) || privateFallback;
     if (!src) return "<span>+</span>";
     const mediaId = asset?.mediaId ? ` data-v206-media-id="${esc(asset.mediaId)}"` : "";
     if (asset?.kind === "video" || hasVideo(src)) {
-      if (asset.preview) return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('video'),{src:'${esc(mediaCdnAssetUrl(asset.url))}',muted:true,playsInline:true,preload:'metadata'}))">`;
-      return `<i class="v206-video-card-fallback" aria-hidden="true">视频</i><video src="${esc(src)}"${mediaId} aria-label="${esc(alt)}" muted playsinline preload="metadata"></video>`;
+      if (asset.preview) return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('video'),{src:'${esc(mediaCdnAssetUrl(asset.url))}',muted:true,playsInline:true,preload:'metadata'}))">`;
+      const poster = privateMediaPosterUrl(asset);
+      return `<i class="v206-video-card-fallback" aria-hidden="true">视频</i>${poster ? `<img src="${esc(poster)}"${mediaId} data-v206-video-poster="${esc(asset.mediaId || "")}" alt="${esc(alt)}">` : `<video src="${esc(src)}"${mediaId} aria-label="${esc(alt)}" muted playsinline preload="metadata"></video>`}`;
     }
-    const fallback = asset?.url && asset.url !== src ? ` onerror="this.onerror=null;this.src='${esc(mediaCdnAssetUrl(asset.url))}'"` : "";
-    return `<img src="${esc(src)}"${mediaId} alt="${esc(alt)}"${fallback}>`;
+    const privatePreview = asset?.mediaId && /\/api\/v1\/media\/[^/]+\/cover(?:[?#]|$)/i.test(src);
+    const originalSrc = mediaCdnAssetUrl(asset.url) || (asset?.mediaId ? privateMediaUrl(asset) : "");
+    const previewAttrs = privatePreview
+      ? ` data-v206-image-preview="${esc(src)}" data-v206-image-original="${esc(originalSrc)}"`
+      : "";
+    const fallback = privatePreview ? "" : (asset?.url && asset.url !== src ? ` onerror="this.onerror=null;this.src='${esc(mediaCdnAssetUrl(asset.url))}'"` : "");
+    return `<img src="${esc(src)}"${mediaId}${previewAttrs} alt="${esc(alt)}" loading="lazy" decoding="async"${fallback}>`;
   }
   function currentWorkflowStep() {
     return workflowSteps.find((step) => step.id === state.workflowStep) || workflowSteps[0];
@@ -1517,9 +1671,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function stageMarkup() {
     const stage = mainStage();
-    const stageFallback = "/assets/references/premium-storefront-cover-thumb.jpg";
+    const stageIdentity = stage.mode === "empty" ? "" : `${stage.mode}:${stage.mediaId || stage.displayUrl || stage.url || ""}`;
+    // Never show a template/person sample while the requested project's
+    // private media is still loading. A transparent pixel keeps the media
+    // element measurable without flashing an unrelated image.
+    const stageFallback = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
     const stagePrimary = stage.displayUrl || stage.url || "";
-    const stagePoster = stage.poster || (stage.mode === "video" && stage.mediaId && activeVideoAsset()?.mediaId === stage.mediaId ? currentTemplate().cover : "");
+    const stagePoster = stage.poster || (stage.mode === "video" ? privateMediaPosterUrl(stage.mediaId) : "") || (stage.mode === "video" && stage.mediaId && activeVideoAsset()?.mediaId === stage.mediaId ? currentTemplate().cover : "");
     const emptyTarget = ["person", "outfit", "motion", "scene"].includes(stage.target || state.target) ? (stage.target || state.target) : "";
     const media = stage.mode === "empty"
       ? stage.guide
@@ -1527,20 +1685,25 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         : `<div class="v206-stage-placeholder"><strong>${esc(stage.title || "待添加素材")}</strong><span>${esc(stage.note || "请先上传或选择素材。")}</span>${emptyTarget ? `<button type="button" class="v206-stage-add" data-v206-action="sources" data-target="${esc(emptyTarget)}">添加${esc(slots[emptyTarget].title)}</button>` : ""}</div>`
       : stage.mode === "image"
         ? `<div class="v206-stage-media-frame"><span class="v206-media-loading" role="status">正在加载${esc(stage.label)}素材…</span><img class="v206-canvas-media" data-v206-media data-v206-media-fallback="${esc(stageFallback)}" data-v206-media-primary="${esc(stagePrimary)}"${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(stageFallback)}" alt="${esc(stage.label)}预览"></div>`
-        : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}"` : ""} src="${esc(mediaCdnAssetUrl(stage.url))}" ${stagePoster ? `poster="${esc(stagePoster)}"` : ""} controls playsinline preload="metadata"></video>`;
+        : `<video class="v206-canvas-media" data-v206-media${stage.mediaId ? ` data-v206-media-id="${esc(stage.mediaId)}" data-v206-video-poster="${esc(stage.mediaId)}"` : ""} src="${esc(mediaCdnAssetUrl(stage.url))}" ${stagePoster ? `poster="${esc(stagePoster)}"` : ""} controls playsinline preload="metadata"></video>`;
     const project = activeProject();
     const projectTitle = project?.title || "当前项目";
     const stageProjectTitle = projectTitle.length > 18 ? `${projectTitle.slice(0, 18)}…` : projectTitle;
     const actionReference = currentTemplate().title;
     const step = currentWorkflowStep();
-    const stageAction = slots[step.id]
+    const finishedVideo = activeVideoAsset();
+    const isFinishedVideo = stage.mode === "video" && stage.label === "成片" && finishedVideo?.mediaId;
+    const stageStatus = isFinishedVideo ? "" : `<span class="v206-stage-status">${esc(project?.production?.status === "running" ? "正在制作" : stage.label)}</span>`;
+    const stageAction = isFinishedVideo
+      ? `<button type="button" class="v206-stage-download" data-v206-action="download-video" data-media="${esc(finishedVideo.mediaId)}">下载视频</button>`
+      : slots[step.id]
       ? `<button type="button" class="v206-stage-replace" data-v206-action="sources" data-target="${esc(step.id)}">${displayAssetFor(step.id)?.url ? `更换${esc(slots[step.id].title)}` : `添加${esc(slots[step.id].title)}`}</button>`
       : activeVideoAsset()?.url
         ? '<button type="button" class="v206-stage-replace" data-v206-action="open-result">打开成片</button>'
         : '<button type="button" class="v206-stage-replace" data-v206-action="workflow-step" data-step="frame">查看首帧</button>';
     return `<section class="v206-stage" data-v206-stage>
-      <div class="v206-stage-top"><span>TAKE 01</span><span title="项目：${esc(projectTitle)} · 动作参考：${esc(actionReference)}">${esc(stageProjectTitle)}</span><span class="v206-stage-status">${esc(project?.production?.status === "running" ? "正在制作" : stage.label)}</span>${stageAction}</div>
-      <div class="v206-stage-media">${media}</div>
+      <div class="v206-stage-top"><span>TAKE 01</span><span title="项目：${esc(projectTitle)} · 动作参考：${esc(actionReference)}">${esc(stageProjectTitle)}</span>${stageStatus}${stageAction}</div>
+      <div class="v206-stage-media"${stageIdentity ? ` data-v206-stage-identity="${esc(stageIdentity)}"` : ""}>${media}</div>
     </section>`;
   }
   function chatMessagesMarkup() {
@@ -1554,7 +1717,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       ? `<article class="v206-inline-message user"><div class="v206-message-meta"><b>你的要求</b><time>${esc(formatMessageTime(message.createdAt))}</time></div><span>${esc(message.content || message.text || "")}</span></article>`
       : assistantMessage(message)).join("");
     const decision = assistantDecisionMarkup();
-    return `${messages || `<p class="v206-chat-empty">补充一句想保留或想调整的内容，我会先给方案，再由你确认是否生成。</p>`}${decision}`;
+    // Keep the rail conversational: an empty history must not render a
+    // standalone instructional sentence outside the message stream.
+    return `${messages}${decision}`;
   }
   function assistantActionStatus(action) {
     const status = String(action?.status || "").toLowerCase();
@@ -1756,6 +1921,18 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       result.choices = [choice("查看制作进度", "tasks", { primary: true }), choice("先看当前素材", "workflow-step", { step: step.id }), choice("继续改图", "assistant-thread")];
       return finalize();
     }
+    // A user has already obtained a current quote. A historical failed task
+    // must not hide its confirmation action, otherwise "retry" looks like a
+    // no-op even though the quote request succeeded.
+    if (step.id === "final" && state.pendingVideo) {
+      const maximumSeconds = Number(state.pendingVideo.maximumSeconds || 0);
+      const maxTzCost = Number(state.pendingVideo.quote?.maxTzCost || 0);
+      result.recommendation = `成片报价已核对：最高 ${maxTzCost.toFixed(2)} TZB，成功后按实际时长结算，失败不扣费。确认后才会提交制作任务。`;
+      result.blocking = "等待用户确认";
+      result.requiresConfirmation = true;
+      result.choices = [choice("确认并制作视频", "confirm-video-inline", { primary: true }), choice("先改首帧", "assistant-thread"), choice("查看制作依据", "workflow-step", { step: "final" })];
+      return finalize();
+    }
     if (presentation?.failed) {
       if (presentation.phase === "binding_failed") {
         result.recommendation = `${presentation.failure || "成片已制作完成，但还没有绑定到当前项目。"} 恢复入库不会重新生成或再次扣费。`;
@@ -1763,9 +1940,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         result.choices = [choice("恢复入库", "recover-video-binding", { primary: true }), choice("查看任务原因", "tasks"), choice("继续改图", "assistant-thread")];
         return finalize();
       }
-      result.recommendation = `${presentation.kind}没有生成可用结果，本次没有扣费。可以重新提交或先调整素材。`;
+      const quoteFailure = presentation.kind === "成片" ? String(state.videoQuoteError || "") : "";
+      result.recommendation = quoteFailure || `${presentation.kind}没有生成可用结果，本次没有扣费。可以重新提交或先调整素材。`;
       result.blocking = "任务失败，可恢复";
-      const retry = presentation.kind === "首帧" ? choice("重新生成首帧", "make-frame", { primary: true }) : choice("重新制作成片", "make-video", { primary: true });
+      const retry = presentation.kind === "首帧" ? choice("重新生成首帧", "make-frame", { primary: true }) : choice(quoteFailure ? "重新核对费用" : "重新制作成片", "make-video", { primary: true });
       result.choices = [retry, choice("先改图", "assistant-thread"), choice("查看失败任务", "tasks")];
       result.requiresConfirmation = true;
       return finalize();
@@ -1796,13 +1974,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       result.choices = [choice("查看当前素材", "workflow-step", { step: "person", primary: true }), choice("先改图", "assistant-thread"), choice("查看制作进度", "tasks")];
       return finalize();
     }
-    if (step.id === "final" && state.pendingVideo) {
-      const maximumSeconds = Number(state.pendingVideo.maximumSeconds || 0);
-      const maxTzCost = Number(state.pendingVideo.quote?.maxTzCost || 0);
-      result.recommendation = `成片报价已核对：最高 ${maxTzCost.toFixed(2)} TZB，成功后按实际时长结算，失败不扣费。确认后才会提交制作任务。`;
-      result.blocking = "等待用户确认";
-      result.requiresConfirmation = true;
-      result.choices = [choice("确认并制作视频", "confirm-video-inline", { primary: true }), choice("先改首帧", "assistant-thread"), choice("查看制作依据", "workflow-step", { step: "final" })];
+    if (step.id === "final" && state.videoQuoteError) {
+      result.recommendation = state.videoQuoteError;
+      result.blocking = "费用核对未完成";
+      result.choices = [choice("重新核对费用", "make-video", { primary: true }), choice("查看当前素材", "workflow-step", { step: "frame" }), choice("先改首帧", "assistant-thread")];
       return finalize();
     }
     if (pendingAction) {
@@ -2055,7 +2230,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const projectMenu = `<details class="v206-project-switcher"><summary class="v206-project-switcher-trigger" aria-label="切换最近项目"><span>${esc(currentProjectName)}</span><i aria-hidden="true">⌄</i></summary><div class="v206-project-menu" role="menu">${recent.map((item) => `<button type="button" role="menuitem" class="${item.id === project?.id ? "active" : ""}" data-v206-project-switch="${esc(item.id)}"><span>${esc(item.name)}</span>${item.id === project?.id ? '<b aria-hidden="true">✓</b>' : ""}</button>`).join("")}</div></details>`;
     const accountName = String(state.session?.name || "").trim();
     const accountLabel = accountName && !accountName.includes("童装影厂") ? accountName : "账户";
-    return `<header class="site-header"><a class="brand" href="/workspace" aria-label="念念 AI 工作台"><img class="brand-mark" src="/assets/niannian-ai-logo-128.webp" alt="念念 AI"></a><nav class="top-nav" aria-label="主导航"><a href="/templates">选同款</a><a class="active" href="/workspace" aria-current="page">工作台</a><a href="/pricing">价格</a><a href="/billing">账单</a></nav><div class="header-actions"><button class="ghost-button" type="button" data-v206-action="account">${state.session ? esc(accountLabel) : "去登录"}</button></div></header>`;
+    return `<header class="site-header"><button class="brand" type="button" data-v206-app-nav="/workspace" aria-label="念念 AI 工作台"><img class="brand-mark" src="/assets/niannian-ai-logo-128.webp" alt="念念 AI"></button><nav class="top-nav" aria-label="主导航"><button type="button" data-v206-app-nav="/templates">选同款</button><button class="active" type="button" data-v206-app-nav="/workspace" aria-current="page">工作台</button><button type="button" data-v206-app-nav="/projects">项目</button><button type="button" data-v206-app-nav="/pricing">价格</button><button type="button" data-v206-app-nav="/billing">账单</button></nav><div class="header-actions"><button class="ghost-button" type="button" data-v206-action="account">${state.session ? esc(accountLabel) : "去登录"}</button></div></header>`;
   }
   function syncProjectSwitcher() {
     const switcher = document.querySelector("[data-v206-project-switcher]");
@@ -2127,6 +2302,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function render() {
     if (!root) return;
+    const retainedStageMedia = retainStageMedia();
     root.dataset.v206EventStreamStatus = state.eventStreamStatus || "offline";
     syncProjectSwitcher();
     const accountLabel = document.querySelector("[data-v206-account-label]");
@@ -2134,19 +2310,73 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const accountName = String(state.session?.name || "").trim();
       if (state.sessionLoaded) accountLabel.textContent = state.session ? (accountName && !accountName.includes("童装影厂") ? accountName : "账户") : "去登录";
     }
-    state.mediaObserver?.disconnect();
-    state.mediaObserver = null;
+    if (!retainedStageMedia) {
+      state.mediaObserver?.disconnect();
+      state.mediaObserver = null;
+    }
     if (state.projectLoading) {
+      if (retainedStageMedia) {
+        state.mediaObserver?.disconnect();
+        state.mediaObserver = null;
+      }
       root.innerHTML = `<div class="v206-workspace v206-project-loading" data-v206-workspace data-v206-project-loading><main class="v206-project-loading-body" aria-busy="true" aria-label="正在载入项目"><div class="v206-loading-rail"></div><div class="v206-loading-canvas"><i></i><span>正在载入项目</span></div><div class="v206-loading-panel"></div></main></div>`;
       return;
     }
-    root.innerHTML = `<div class="v206-workspace" data-v206-workspace><main class="v206-desk"><section class="v206-canvas">${stageMarkup()}</section>${controlMarkup()}</main>${taskBarMarkup()}${state.view ? overlayMarkup() : ""}${state.toast ? `<div class="v206-toast ${state.toastKind}">${esc(state.toast)}</div>` : ""}</div>`;
+    const nextMarkup = `<div class="v206-workspace" data-v206-workspace><main class="v206-desk"><section class="v206-canvas">${stageMarkup()}</section>${controlMarkup()}</main>${taskBarMarkup()}${state.view ? overlayMarkup() : ""}${state.toast ? `<div class="v206-toast ${state.toastKind}">${esc(state.toast)}</div>` : ""}</div>`;
+    // Background event/task reads often produce the same visible UI. Avoid
+    // replacing the whole workspace DOM when only transport state changed;
+    // replacement is what caused the brief flash users saw while switching.
+    const currentComparable = root.cloneNode(true);
+    const nextComparable = document.createElement("div");
+    nextComparable.innerHTML = nextMarkup;
+    currentComparable.querySelector(".v206-stage-media")?.remove();
+    nextComparable.querySelector(".v206-stage-media")?.remove();
+    if (currentComparable.innerHTML === nextComparable.innerHTML) return;
+    root.innerHTML = nextMarkup;
+    const nextStageMedia = root.querySelector(".v206-stage-media");
+    const stageMediaRetained = retainedStageMedia && nextStageMedia
+      && retainedStageMedia.dataset.v206StageIdentity === nextStageMedia.dataset.v206StageIdentity;
+    if (stageMediaRetained) {
+      syncRetainedStageMedia(retainedStageMedia, nextStageMedia);
+      nextStageMedia.replaceWith(retainedStageMedia);
+    }
     root.querySelectorAll("[data-v206-chat-history]").forEach((chatHistory) => {
       if (state.chat.length) chatHistory.scrollTop = chatHistory.scrollHeight;
     });
-    bindStageMedia();
+    if (!stageMediaRetained) bindStageMedia();
+    bindPrivateImagePreviews();
+    bindPrivateVideoPosters();
     bindMaterialVideoPreviews();
     bindAssistantComposerInputs();
+  }
+  function retainStageMedia() {
+    const stageMedia = root?.querySelector(".v206-stage-media[data-v206-stage-identity]");
+    if (!stageMedia?.dataset.v206StageIdentity) return null;
+    const next = mainStage();
+    const nextIdentity = next.mode === "empty" ? "" : `${next.mode}:${next.mediaId || next.displayUrl || next.url || ""}`;
+    return stageMedia.dataset.v206StageIdentity === nextIdentity ? stageMedia : null;
+  }
+  function syncRetainedStageMedia(retained, replacement) {
+    const current = retained.querySelector("[data-v206-media]");
+    const next = replacement.querySelector("[data-v206-media]");
+    if (!current || !next || current.tagName !== next.tagName) return;
+    if (current.tagName === "IMG") {
+      const currentPrimary = current.getAttribute("data-v206-media-primary") || "";
+      const nextPrimary = next.getAttribute("data-v206-media-primary") || "";
+      current.setAttribute("data-v206-media-primary", nextPrimary);
+      if (nextPrimary && nextPrimary !== currentPrimary) {
+        current.setAttribute("src", nextPrimary);
+        retained.classList.remove("is-fallback", "is-media-error");
+      }
+      return;
+    }
+    const nextSrc = next.getAttribute("src") || "";
+    if (nextSrc && nextSrc !== current.getAttribute("src")) current.setAttribute("src", nextSrc);
+    const nextPoster = next.getAttribute("poster");
+    if (nextPoster !== current.getAttribute("poster")) {
+      if (nextPoster) current.setAttribute("poster", nextPoster);
+      else current.removeAttribute("poster");
+    }
   }
   function bindMaterialVideoPreviews() {
     root.querySelectorAll(".v206-material-media video").forEach((video) => {
@@ -2159,6 +2389,52 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         else ready();
       }, { once: true });
       video.addEventListener("error", () => holder?.classList.add("is-video-unavailable"), { once: true });
+    });
+  }
+  function bindPrivateImagePreviews() {
+    root.querySelectorAll("img[data-v206-image-preview]").forEach((image) => {
+      if (image.dataset.v206ImagePreviewBound === "1") return;
+      image.dataset.v206ImagePreviewBound = "1";
+      const preview = image.dataset.v206ImagePreview || image.currentSrc || image.src;
+      const original = image.dataset.v206ImageOriginal || "";
+      let attempt = 0;
+      const retry = () => {
+        if (!image.isConnected) return;
+        attempt += 1;
+        if (attempt <= 8) {
+          window.setTimeout(() => {
+            if (image.isConnected) image.src = `${preview}${preview.includes("?") ? "&" : "?"}r=${attempt}`;
+          }, Math.min(900, 250 + attempt * 80));
+          return;
+        }
+        if (original) image.src = original;
+      };
+      image.addEventListener("error", retry);
+    });
+  }
+  function bindPrivateVideoPosters() {
+    root.querySelectorAll("[data-v206-video-poster]").forEach((element) => {
+      if (element.dataset.v206PosterBound === "1") return;
+      const mediaId = String(element.dataset.v206VideoPoster || element.getAttribute("data-v206-media-id") || "");
+      const poster = privateMediaPosterUrl(mediaId);
+      if (!poster) return;
+      element.dataset.v206PosterBound = "1";
+      let attempt = 0;
+      const refresh = () => {
+        const probe = new Image();
+        probe.onload = () => {
+          if (!element.isConnected) return;
+          const readyPoster = `${poster}&r=${attempt}`;
+          if (element.tagName === "VIDEO") element.setAttribute("poster", readyPoster);
+          else element.setAttribute("src", readyPoster);
+        };
+        probe.onerror = () => {
+          attempt += 1;
+          if (attempt < 6 && element.isConnected) window.setTimeout(refresh, 1_000);
+        };
+        probe.src = `${poster}&r=${attempt}`;
+      };
+      refresh();
     });
   }
   function bindStageMedia() {
@@ -2322,7 +2598,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       const timing = [video.totalSeconds != null ? `总耗时 ${video.totalSeconds}s` : "", video.providerSeconds != null ? `生成 ${video.providerSeconds}s` : "", video.ingestionSeconds != null ? `入库 ${video.ingestionSeconds}s` : ""].filter(Boolean).join(" · ");
       const review = video.review?.result ? `<div class="v206-review-summary"><b>${esc(video.review.result.summary || "念念点评")}</b><span>人物 ${esc(video.review.result.identityStability?.status || "unknown")} · 服装 ${esc(video.review.result.garmentLock?.status || "unknown")} · 场景 ${esc(video.review.result.sceneContinuity?.status || "unknown")} · 动作 ${esc(video.review.result.motionNaturalness?.status || "unknown")}</span></div>` : "";
       const reviewAction = state.videoReviewEnabled ? `<button type="button" data-v206-action="review-video" data-media="${esc(video.mediaId)}">${esc(reviewLabel(video.review))}</button>` : "";
-      return `<article class="v206-video-version ${video.isCurrent ? "current" : ""}"><video src="${esc(video.media?.url || "")}" controls playsinline preload="metadata"></video><div><header><b>${video.isCurrent ? "当前成片" : "历史成片"}</b><span>${esc(formatMessageTime(video.completedAt))}</span></header><p>${esc(video.mode === "stable" ? "稳定模式" : "标准模式")} · ${Number(video.durationSeconds || 0).toFixed(1)}秒 · ${Number(video.tzCost || 0).toFixed(2)} TZB</p><small>${esc(timing)}</small>${sample}${review}<div class="v206-version-actions">${video.isCurrent ? "" : `<button type="button" data-v206-action="set-current-video" data-media="${esc(video.mediaId)}">设为当前成片</button>`}<a class="v206-version-download" href="/api/v1/media/${encodeURIComponent(video.mediaId)}/download" download>下载</a>${reviewAction}<button type="button" data-v206-action="delete-video" data-media="${esc(video.mediaId)}" data-current="${video.isCurrent ? "true" : "false"}">删除</button></div></div></article>`;
+      const poster = privateMediaPosterUrl(video.mediaId);
+      const source = privateMediaUrl(video.media?.id ? video.media : { id: video.mediaId, kind: "VIDEO", url: video.media?.url || "" });
+      return `<article class="v206-video-version ${video.isCurrent ? "current" : ""}"><video src="${esc(source)}" data-v206-video-poster="${esc(video.mediaId || "")}" poster="${esc(poster)}" controls playsinline preload="metadata"></video><div><header><b>${video.isCurrent ? "当前成片" : "历史成片"}</b><span>${esc(formatMessageTime(video.completedAt))}</span></header><p>${esc(video.mode === "stable" ? "稳定模式" : "标准模式")} · ${Number(video.durationSeconds || 0).toFixed(1)}秒 · ${Number(video.tzCost || 0).toFixed(2)} TZB</p><small>${esc(timing)}</small>${sample}${review}<div class="v206-version-actions">${video.isCurrent ? "" : `<button type="button" data-v206-action="set-current-video" data-media="${esc(video.mediaId)}">设为当前成片</button>`}<a class="v206-version-download" href="/api/v1/media/${encodeURIComponent(video.mediaId)}/download" download>下载</a>${reviewAction}<button type="button" data-v206-action="delete-video" data-media="${esc(video.mediaId)}" data-current="${video.isCurrent ? "true" : "false"}">删除</button></div></div></article>`;
     }).join("");
     return `<div class="v206-overlay" data-v206-action="close"></div><aside class="v206-sheet wide" aria-label="历史成片"><header class="v206-sheet-header"><div><h2>历史成片</h2><p>所有成功版本都会保留；切换当前版本不会再次生成或扣费。</p></div><button class="v206-sheet-close" type="button" data-v206-action="close" aria-label="关闭历史成片">×</button></header><div class="v206-sheet-body"><div class="v206-video-history">${rows || '<p class="v206-empty">当前项目还没有已完成成片。</p>'}</div></div></aside>`;
   }
@@ -2337,6 +2615,12 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   async function assign(asset) {
     const target = state.target;
     if (!asset || asset.kind !== slots[target]?.type) return;
+    if (state.busy === "assign") {
+      // The material card is disabled after the first click, but guard the
+      // event path too so rapid clicks cannot create overlapping PUTs.
+      flash(`正在保存当前${slots[target]?.title || "素材"}，请稍候。`, "info");
+      return false;
+    }
     const mutation = ++state.sourceMutation;
     state.busy = "assign";
     if (!syncSourceSheetBusy()) render();
@@ -2360,7 +2644,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         const project = await ensureCanonicalProject();
         state.selected[target] = durableAsset;
         recordPendingAssignment(project.id, target, durableAsset, mutation);
-        const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
+        const invalidatesDerived = ["person", "outfit", "motion"].includes(target);
         if (invalidatesDerived) { invalidateDerivedOutputs(); setWorkflowStep(target); }
         state.view = null; state.busy = ""; writeState(); flash(`${slots[target].title}已替换，正在后台保存。`); render();
         void pendingTemplateImport.then((imported) => {
@@ -2405,7 +2689,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       // the upstream project response labels template-derived media as a sample.
       state.selected[target] = durableAsset;
       recordPendingAssignment(project.id, target, durableAsset, mutation);
-      const invalidatesDerived = ["person", "outfit", "scene", "motion"].includes(target);
+      const invalidatesDerived = ["person", "outfit", "motion"].includes(target);
       if (invalidatesDerived) {
         invalidateDerivedOutputs();
         if (target === "motion") state.motionReferenceTime = null;
@@ -2417,7 +2701,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       state.view = null;
       writeState();
       state.busy = "";
-      flash(["person", "outfit", "scene", "motion"].includes(target)
+      flash(["person", "outfit", "motion"].includes(target)
         ? `${slots[target].title}已替换。旧首帧和成片已失效，请基于新素材重新生成。`
         : `${slots[target].title}已替换并保存。`);
       // The source sheet is intentionally open during background refreshes,
@@ -2480,6 +2764,39 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   function clearMultipartUpload(file, sha) {
     try { localStorage.removeItem(uploadResumeKey(file, sha)); } catch {}
   }
+  function sameOriginUploadEndpoint(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    try {
+      const parsed = new URL(raw, window.location.origin);
+      // The legacy API may return its public origin in an upload intent. Keep
+      // the browser on the authenticated frontend proxy instead of sending
+      // cookies-less uploads to the origin host.
+      if (parsed.hostname === "dh-origin.cauai.fun" || /^\/api\/v1\/media\//i.test(parsed.pathname)) return `${parsed.pathname}${parsed.search}`;
+      return parsed.href;
+    } catch {
+      return raw;
+    }
+  }
+
+  function uploadApplicationChunk(url, headers, chunk) {
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("PUT", url, true);
+      request.withCredentials = true;
+      request.timeout = 30_000;
+      headers.forEach((value, name) => request.setRequestHeader(name, value));
+      request.onload = () => {
+        let payload = {};
+        try { payload = JSON.parse(request.responseText || "{}"); } catch {}
+        resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, payload });
+      };
+      request.onerror = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_FAILED"));
+      request.onabort = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_ABORTED"));
+      request.ontimeout = () => reject(new Error("MEDIA_UPLOAD_TIMEOUT"));
+      request.send(chunk);
+    });
+  }
   async function uploadCosMultipart(file, upload) {
     const partSize = upload.partSize || (8 * 1024 * 1024);
     const uploaded = new Map((upload.uploadedParts || []).map((part) => [Number(part.partNumber), Number(part.bytes)]));
@@ -2487,7 +2804,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     for (let offset = 0, partNumber = 1; offset < file.size; offset += partSize, partNumber += 1) {
       const chunk = file.slice(offset, Math.min(offset + partSize, file.size));
       if (uploaded.get(partNumber) === chunk.size) continue;
-      const part = await mediaRequest(upload.partUrlEndpoint, { method: "POST", body: JSON.stringify({ partNumber }) });
+      const part = await mediaRequest(sameOriginUploadEndpoint(upload.partUrlEndpoint), { method: "POST", body: JSON.stringify({ partNumber }) });
       const putHeaders = new Headers(part.upload?.requiredHeaders || {});
       let response;
       let lastError;
@@ -2504,8 +2821,10 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
       if (lastError) throw lastError;
       uploaded.set(partNumber, chunk.size);
     }
-    status = (await mediaRequest(upload.completeEndpoint, { method: "POST", body: JSON.stringify({}) })).upload || status;
-    if (!status.completed) throw new Error("MEDIA_MULTIPART_INCOMPLETE");
+    // Completion is performed once by upload() after both transport modes
+    // converge. Calling this endpoint here and again below made a successful
+    // multipart upload appear to fail on the second completion request.
+    return status;
     return status;
   }
   async function upload(target, file, options = {}) {
@@ -2539,12 +2858,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         body: JSON.stringify({ kind, label: originalName.replace(/\.[^.]+$/, "") || "已上传素材", originalName, mimeType, bytes: file.size, sha256: fileSha }),
       });
       const uploadHeaders = new Headers(intent.upload?.requiredHeaders || {});
-      const uploadUrl = intent.upload?.uploadUrl || "";
+      const uploadUrl = sameOriginUploadEndpoint(intent.upload?.uploadUrl);
       const cosMultipart = intent.upload?.transport === "COS_MULTIPART";
       const applicationUpload = uploadUrl.startsWith("/api/");
+      let multipartStatus = null;
       if (cosMultipart) {
         storeMultipartUpload(file, fileSha, intent.upload);
-        await uploadCosMultipart(file, intent.upload);
+        multipartStatus = await uploadCosMultipart(file, intent.upload);
         clearMultipartUpload(file, fileSha);
       }
       if (applicationUpload) {
@@ -2564,8 +2884,9 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
-              contentResponse = await fetch(uploadUrl, { method: "PUT", headers: chunkHeaders, body: chunk, credentials: "same-origin" });
-              contentResult = await contentResponse.json().catch(() => ({}));
+              const uploadedChunk = await uploadApplicationChunk(uploadUrl, chunkHeaders, chunk);
+              contentResponse = { ok: uploadedChunk.ok, status: uploadedChunk.status };
+              contentResult = uploadedChunk.payload;
               if (contentResponse.ok) { lastError = null; break; }
               lastError = new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
               if (contentResponse.status < 500) break;
@@ -2582,14 +2903,16 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
         if (!contentResponse.ok) throw new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
       }
       if (!cosMultipart && (!contentResponse?.ok || contentResult.upload?.complete === false)) throw new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
-      const completed = await mediaRequest(`/api/v1/media/${intent.media.id}/complete`, { method: "POST", body: JSON.stringify({}) });
+      const completed = cosMultipart
+        ? { upload: multipartStatus }
+        : await mediaRequest(`/api/v1/media/${intent.media.id}/complete`, { method: "POST", body: JSON.stringify({}) });
       const library = await mediaRequest("/api/v1/media");
       const media = completed.media?.id
         ? completed.media
         : (library.media || []).find((item) => item.id === intent.media.id);
       const mediaUrl = privateMediaUrl(media);
       if (!media?.id || !mediaUrl) throw new Error("MEDIA_UPLOAD_COMPLETED_BUT_UNAVAILABLE");
-      const asset = { id: media.id, label: media.label || file.name.replace(/\.[^.]+$/, "") || "已上传素材", kind: media.kind === "VIDEO" ? "video" : "image", url: mediaUrl, preview: thumbnailFor(mediaUrl) };
+      const asset = { id: media.id, label: media.label || file.name.replace(/\.[^.]+$/, "") || "已上传素材", kind: media.kind === "VIDEO" ? "video" : "image", url: mediaUrl, preview: media.kind === "VIDEO" ? "" : privateMediaPreviewUrl(media.id) };
       asset.mediaId = media.id;
       addMaterial(asset);
       if (assistantReference) {
@@ -2630,7 +2953,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function clearGenerationIdempotencyKey(kind) { delete state.generationKeys[kind]; writeState(); }
   async function billing(kind, payload) {
-    const summary = await mediaRequest("/api/v1/billing/summary");
+    const summary = await mediaRequest("/api/v1/account/summary");
     let message;
     if (kind === "video") {
       const quote = await mediaRequest("/api/v1/billing/quote", { method: "POST", body: JSON.stringify({ quotedMaxDurationSeconds: payload.quotedMaxDurationSeconds }) });
@@ -2757,7 +3080,7 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     state.busy = "repair-first-frame";
     render();
     try {
-      const summary = await mediaRequest("/api/v1/billing/summary");
+      const summary = await mediaRequest("/api/v1/account/summary");
       const imageTzPrice = Number(summary.pricing?.imageTzPrice ?? summary.pricing?.image_tz_price ?? summary.imageTzPrice ?? 0);
       if (!Number.isFinite(imageTzPrice) || imageTzPrice <= 0 || Number(summary.wallet?.tzBalance || 0) < imageTzPrice) throw new Error("TZB余额不足。");
       if (!window.confirm(`一键修正会重新生成 1 张首帧，预计成功入库后扣 ${imageTzPrice.toFixed(2)} TZB，失败不扣费。是否继续？`)) return;
@@ -2774,26 +3097,35 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     finally { state.busy = ""; render(); }
   }
   async function prepareVideo() {
+    traceWorkflow("prepare-video");
     if (!requireLogin()) return;
     const gate = readiness();
-    if (!gate.canVideo) { openSources(gate.missing[0] || state.target, "mine"); flash(gate.message, "warning"); return; }
+    if (!gate.canVideo) { traceWorkflow("video-gate-blocked", gate.message); openSources(gate.missing[0] || state.target, "mine"); flash(gate.message, "warning"); return; }
+    state.videoQuoteError = "";
     state.busy = "video-quote";
     render();
     try {
       const project = await ensureProject();
+      traceWorkflow("video-project-ready", project?.id || "");
     const frame = displayAssetFor("frame"); const motion = displayAssetFor("motion");
       if (!frame?.mediaId || !motion?.mediaId) throw new Error("ACTION_TRANSFER_MEDIA_NOT_READY");
       const maximumSeconds = Math.min(Math.max(Number(motion.durationSeconds || 15), 0.1), 120);
-      const [summary, quote] = await Promise.all([
-        mediaRequest("/api/v1/billing/summary"),
-        mediaRequest("/api/v1/billing/quote", { method: "POST", body: JSON.stringify({ quotedMaxDurationSeconds: maximumSeconds }) }),
-      ]);
-      if (Number(summary.wallet?.tzBalance || 0) < Number(quote.maxTzCost || 0)) throw new Error("TZB余额不足。");
+      // A quote is sufficient for the user confirmation. The paid job endpoint
+      // remains the authority for the current balance and rejects insufficient
+      // funds atomically. Do not let a nonessential balance-summary read block
+      // a valid quote or leave the user with a button that appears unresponsive.
+      const quote = await mediaRequest("/api/v1/account/quote", { method: "POST", body: JSON.stringify({ quotedMaxDurationSeconds: maximumSeconds }) });
+      traceWorkflow("video-quote-ready", String(quote?.maxTzCost || 0));
       generationIdempotencyKey("action_transfer");
       state.pendingVideo = { projectId: project.id, firstFrameMediaId: frame.mediaId, motionMediaId: motion.mediaId, firstFrameLabel: frame.label || "商品首帧", motionLabel: motion.label || "动作参考", sampleInputs: [{ label: "商品首帧", sample: frame.isTemplateSample }, { label: "动作参考", sample: motion.isTemplateSample }].filter((item) => item.sample).map((item) => item.label), maximumSeconds, standardFrames: Math.min(3600, Math.max(24, Math.ceil(maximumSeconds * 24))), quote };
       writeState();
       setWorkflowStep("final");
-    } catch (error) { flash(error.message || "视频报价读取失败。", "warning"); }
+    } catch (error) {
+      state.videoQuoteError = error.message || "视频费用核对暂时失败，请重新核对。";
+      traceWorkflow("video-quote-failed", state.videoQuoteError);
+      writeState();
+      flash(state.videoQuoteError, "warning");
+    }
     finally { state.busy = ""; render(); }
   }
   async function makeVideo(formOrMode) {
@@ -3225,12 +3557,11 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
   }
   function handleAction(button) {
     const action = button.dataset.v206Action;
-    const stampedDecision = button.dataset.v206DecisionId;
-    if (stampedDecision && stampedDecision !== agentDecisionSnapshot().id) {
-      flash("当前制作状态已经更新，请按最新引导操作。", "info");
-      render();
-      return;
-    }
+    traceWorkflow("action", action);
+    // The server-side idempotency key and active-job lookup are the source of
+    // truth for paid actions. A client-side snapshot stamp can change while a
+    // user is clicking because assistant events refresh independently, so it
+    // must never turn a valid visible action into a silent no-op.
     if (action === "close") { closeCurrentView(); return; }
     if (action === "workflow-step") { setWorkflowStep(button.dataset.step); render(); return; }
     if (action === "workflow-next") { const index = workflowSteps.indexOf(currentWorkflowStep()); setWorkflowStep(workflowSteps[Math.min(index + 1, workflowSteps.length - 1)].id); render(); return; }
@@ -3294,6 +3625,13 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     return event.target instanceof Element ? event.target.closest(selector) : null;
   }
   document.addEventListener("click", (event) => {
+    const appNav = closestEventTarget(event, "[data-v206-app-nav]");
+    if (appNav?.dataset.v206AppNav) {
+      event.preventDefault();
+      if (typeof window.NianNianAppNavigate === "function") window.NianNianAppNavigate(appNav.dataset.v206AppNav);
+      else window.location.assign(appNav.dataset.v206AppNav);
+      return;
+    }
     const projectOption = closestEventTarget(event, "[data-v206-project-switch]");
     if (projectOption?.dataset.v206ProjectSwitch && UUID_PATTERN.test(projectOption.dataset.v206ProjectSwitch)) {
       window.location.assign(`/workspace?projectId=${encodeURIComponent(projectOption.dataset.v206ProjectSwitch)}`);
@@ -3324,13 +3662,6 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     const switcher = closestEventTarget(event, "[data-v206-project-switcher]");
     if (switcher?.value && UUID_PATTERN.test(switcher.value)) window.location.assign(`/workspace?projectId=${encodeURIComponent(switcher.value)}`);
   });
-  document.addEventListener("error", (event) => {
-    const media = event.target instanceof Element ? event.target.closest("[data-v206-media][data-v206-media-id]") : null;
-    if (media?.dataset.v206MediaId) {
-      const mediaId = media.dataset.v206MediaId;
-      refreshPrivateMedia(mediaId);
-    }
-  }, true);
   document.addEventListener("input", (event) => {
     const input = closestEventTarget(event, "[data-v206-assistant-input]");
     if (input) state.assistantText = input.value;
@@ -3354,19 +3685,48 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     if (document.visibilityState === "visible") scheduleTaskRefresh();
   });
   let booted = false;
+  function resetForRouteMount(nextProjectId) {
+    window.clearTimeout(taskRefreshTimer);
+    taskRefreshTimer = 0;
+    closeAssistantEventStream();
+    bootGeneration += 1;
+    loadRun += 1;
+    secondaryWorkspaceRun += 1;
+    state.projectLoading = true;
+    state.canonicalProjects = [];
+    state.canonicalMedia = [];
+    state.jobs = [];
+    state.canonicalProjectId = nextProjectId || "";
+    state.selected = Object.fromEntries(Object.keys(slots).map((slot) => [slot, null]));
+    state.chat = [];
+    state.assistantThreadId = "";
+    state.frameJobId = "";
+    state.finalJobId = "";
+    state.currentJobSnapshots = {};
+    state.showFinalVideo = false;
+    state.workflowStep = "person";
+    state.target = "person";
+    state.view = null;
+    state.toast = "";
+    state.busy = "";
+    booted = false;
+  }
   async function boot() {
     if (booted) return;
     booted = true;
+    const generation = ++bootGeneration;
     render();
     if (previewMode) return;
     try {
       await load();
+      if (generation !== bootGeneration) return;
     } catch {
       // A non-essential secondary request must never leave the signed-in
       // workspace trapped behind its initial loading skeleton.
       state.projectLoading = false;
       flash(canonicalProject() ? "部分工作台信息暂时未同步，已保留当前项目。" : "工作台加载暂时失败，请刷新重试。", "warning");
     } finally {
+      if (generation !== bootGeneration) return;
       state.projectLoading = false;
       render();
       void reconcilePendingFirstFrameDraft();
@@ -3377,11 +3737,26 @@ import { buildWorkflowSnapshot, newestProjectTask } from "./workspace-workflow-s
     mount(nextRoot) {
       root = nextRoot || document.querySelector("#v206-app");
       const nextRequested = new URLSearchParams(window.location.search).get("projectId") || "";
-      requestedProjectId = UUID_PATTERN.test(nextRequested) ? nextRequested : "";
-      state.canonicalProjectId = requestedProjectId || state.canonicalProjectId || "";
+      const normalizedRequested = UUID_PATTERN.test(nextRequested) ? nextRequested : "";
+      const nextRouteKey = `${window.location.pathname}?projectId=${normalizedRequested}`;
+      const routeChanged = hasMountedOnce && mountedRouteKey !== nextRouteKey;
+      requestedProjectId = normalizedRequested;
+      if (routeChanged) resetForRouteMount(requestedProjectId);
+      mountedRouteKey = nextRouteKey;
+      hasMountedOnce = true;
       if (!root) return;
       if (!booted) void boot();
       else render();
+    },
+    leave() {
+      window.clearTimeout(taskRefreshTimer);
+      taskRefreshTimer = 0;
+      closeAssistantEventStream();
+      mountedRouteKey = "";
+      booted = false;
+      bootGeneration += 1;
+      loadRun += 1;
+      secondaryWorkspaceRun += 1;
     },
   };
   if (root) void boot();

@@ -20,16 +20,18 @@ for (const [name, path, expectedStatus] of checks) {
 }
 
 const workspace = await (await fetch(`${baseUrl}/workspace`)).text();
-for (const required of ["/workspace-entry.css", "/workspace-v206.css", "/media-upload-hash.js", "/workspace-v206.js"]) {
+// /workspace shares the single index.html shell and lazy-loads its editor module.
+for (const required of ["/motion-v209.js", "/media-upload-hash.js", '<div id="app">', "/front-20260616.css"]) {
   if (!workspace.includes(required)) throw new Error(`workspace entry is missing ${required}`);
 }
-for (const excluded of ["/_next/static/", "/app.compat.js", "/front-20260616.css", "/front-skill-router-20260705.css"]) {
+// It must not pull legacy Next.js chunks or the old unversioned /app.compat.js entry.
+for (const excluded of ["/_next/static/", "/app.compat.js"]) {
   if (workspace.includes(excluded)) throw new Error(`workspace entry still loads ${excluded}`);
 }
-console.log("OK workspace uses the lightweight entry");
+console.log("OK workspace uses the shared index.html shell");
 
+// Display logo is delivered as a versioned static asset (not inlined in the shell).
 const logoPath = "/assets/niannian-ai-logo-128.webp";
-if (!workspace.includes(logoPath)) throw new Error(`workspace entry is missing ${logoPath}`);
 const logo = await fetch(`${baseUrl}${logoPath}?v=verify-logo`);
 const logoBytes = Number(logo.headers.get("content-length"));
 if (logo.status !== 200 || logo.headers.get("content-type") !== "image/webp" || !logoBytes || logoBytes > 10_000) {
@@ -39,13 +41,16 @@ console.log(`OK display logo: ${logo.status}, ${logoBytes} bytes`);
 
 const homepage = await (await fetch(`${baseUrl}/templates`)).text();
 if (homepage.includes("/_next/static/")) throw new Error("legacy entry still loads captured Next.js chunks");
-for (const required of ["/app.compat.js", "/motion-v209.js", '<div id="app"></div>']) {
+// The templates entry uses the versioned app.compat module, not the old bare /app.compat.js.
+for (const required of ["/app.compat-", "/motion-v209.js", '<div id="app"></div>']) {
   if (!homepage.includes(required)) throw new Error(`legacy entry is missing ${required}`);
 }
 console.log("OK legacy routes use the minimal entry");
 
-if (!workspace.includes("data-v206-project-switcher")) throw new Error("workspace entry is missing the project switcher mount");
-console.log("OK workspace includes the project switcher mount");
+// The workspace editor is a separately lazy-loaded module.
+const editor = await fetch(`${baseUrl}/workspace-v206.js`);
+if (editor.status !== 200) throw new Error(`workspace editor module unavailable: ${editor.status}`);
+console.log("OK workspace lazy-loads its editor module");
 
 const staticUrl = `${baseUrl}/front-20260616.css?v=verify-static-contract`;
 const full = await fetch(staticUrl);

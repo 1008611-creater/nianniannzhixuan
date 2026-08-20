@@ -15,6 +15,14 @@
 - After every substantive iteration, verify the affected signed-in user path in the in-app browser and compare the observed result with the intended behavior; build success, HTTP 200, or static tests alone are not completion evidence. Record any failed real-page expectation and do not claim the iteration complete until it is retested successfully.
 - When a frontend JS or CSS behavior change is deployed, give the changed resource a new versioned URL and verify in a fresh signed-in browser page that the intended control is present and actionable; a reused cached asset is not completion evidence.
 - The peer routes `/templates`, `/workspace`, `/pricing`, and `/billing` must use the same `index.html` shell. `/workspace` may lazy-load its editor module and stylesheet, but route changes must use history navigation without a document reload.
+- Project-management covers must have a terminal visual state: use the selected private medium when readable, then another bound project medium as a fallback; the card must settle within a bounded total deadline and must never remain indefinitely in a generating state. Verify this on a fresh signed-in `/projects` page after changing cover behavior.
+- Initial workspace entry must use one atomic first render: keep the loading state while the requested project, bound media, task state, and assistant conversation are read, then commit the complete view once. Background refreshes and event recovery may patch stable state only and must not replay the loading skeleton or replace the whole workspace. Verify a fresh signed-in refresh shows one loading phase followed by one settled project view, without placeholder-media flashes or repeated full-page remounts.
+
+## Domestic CDN Default
+
+- For this China-facing production site, default public delivery to the Tencent CDN domain configured for `dh.cauai.fun`; verify the provider is active, the DNS record points to the provider CNAME, and a real static asset returns the provider edge/cache headers before claiming acceleration.
+- Keep page/API responses and session- or token-authorized private media dynamic and authenticated. Do not make them publicly cacheable just to improve a speed measurement.
+- After any DNS or CDN change, verify a fresh signed-in `/templates` and `/workspace` page, a real image, and a playable video. A provider dashboard toggle or DNS record alone is not completion evidence.
 
 ## Protected Boundaries
 

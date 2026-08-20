@@ -26,6 +26,7 @@ This project-local wrapper makes the user's requested communication behavior par
 - Use an idempotency key for paid task creation. Repeated clicks, refreshes, reconnects, and retries must reuse or recover the existing task instead of creating another chargeable task.
 - On completion, verify the private output is bound to the current project and rendered or playable before claiming success. On failure, show a sanitized reason and offer retry, modify, or inspect.
 - When state is restored after a refresh or disconnect, resume from the authoritative project/task state and send one restoration message; do not replay duplicate event messages.
+- On initial workspace load, keep one loading shell while project, media, task, and conversation state are assembled, then render the complete view once. Later polling or event recovery must not remount the whole workspace or replay the loading shell.
 
 ## Project-specific handoff
 

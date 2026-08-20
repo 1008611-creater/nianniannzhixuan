@@ -1,19 +1,22 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { buildWorkflowSnapshot, newestProjectTask } from "../public/workspace-workflow-state.js";
+import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature } from "../public/workspace-workflow-state.js";
 
 const workspaceSource = await readFile(new URL("../public/workspace-v206.js", import.meta.url), "utf8");
 assert.match(workspaceSource, /from "\.\/workspace-workflow-state\.js\?v=[^"]+"/, "workspace state module must be versioned with its entry script");
 assert.doesNotMatch(workspaceSource, /\$\{guidedAgentMarkup\(\)\}/, "the right rail must not render a duplicate proactive decision card");
 assert.match(workspaceSource, /function agentDecisionSnapshot\(\)/, "the agent must have one workflow decision owner");
+assert.match(workspaceSource, /pendingMatchesCurrentInputs/, "a delayed project read must not erase a quote for unchanged video inputs");
 assert.match(workspaceSource, /result\.choices = \[choice\("打开成片", "open-result"/, "a completed final video must expose its result action in the decision snapshot");
 assert.match(workspaceSource, /decision\.choices\.slice\(0, 3\)/, "the agent must cap each decision to three choices");
 assert.match(workspaceSource, /result\.choices = \[\.\.\.new Map\(result\.choices/, "the decision snapshot must cap and validate actions before rendering");
 assert.match(workspaceSource, /确认后才会进入付费制作/, "paid actions must remain confirmation-gated");
 assert.match(workspaceSource, /data-v206-decision-id/, "agent actions must carry a decision fingerprint");
-assert.match(workspaceSource, /当前制作状态已经更新，请按最新引导操作/, "stale agent actions must be rejected visibly");
+assert.match(workspaceSource, /server-side idempotency key and active-job lookup are the source of/, "paid action deduplication must be server-authoritative");
+assert.doesNotMatch(workspaceSource, /当前制作状态已经更新，请按最新引导操作/, "a background refresh must not turn a visible action into a no-op");
 assert.match(workspaceSource, /成片报价已核对：最高/, "a prepared video quote must become an explicit confirmation decision");
 assert.match(workspaceSource, /choice\("确认并制作视频", "confirm-video-inline"/, "video confirmation must not submit a second quote");
+assert.ok(workspaceSource.indexOf('if (step.id === "final" && state.pendingVideo)') < workspaceSource.indexOf('if (presentation?.failed)'), "a current video quote must take precedence over a historical failed task");
 
 const projectId = "project-current";
 const asset = (mediaId, url = `/api/v1/media/${mediaId}/content`) => ({ mediaId, url, kind: "image" });
@@ -22,6 +25,9 @@ const base = {
   assets: { person: asset("person"), outfit: asset("outfit"), motion: { ...asset("motion"), kind: "video" } },
   signatures: { frame: "person:outfit::motion", final: "person:outfit::motion:frame" },
 };
+
+assert.equal(taskMatchesCurrentSignature({ input: { personMediaId: "person", clothesMediaId: "outfit", motionMediaId: "motion" } }, "frame", "person:outfit:motion"), true, "a completed first frame with matching generator inputs is recoverable");
+assert.equal(taskMatchesCurrentSignature({ input: { personMediaId: "person", clothesMediaId: "outfit", motionMediaId: "motion" } }, "frame", "person:outfit:scene:motion"), true, "legacy signatures with a background component remain recoverable because background is not a generator input");
 
 const previewFailure = buildWorkflowSnapshot({ ...base, unavailableMedia: new Set(["person", "outfit", "motion"]) });
 assert.equal(previewFailure.person.status, "已就绪", "preview failure must not clear a bound person");
@@ -36,6 +42,7 @@ const jobs = [
 ];
 assert.equal(newestProjectTask(jobs, projectId, "FIRST_FRAME")?.id, "new", "latest matching task must win");
 assert.equal(newestProjectTask([{ id: "current", kind: "FIRST_FRAME", status: "validating" }], projectId, "FIRST_FRAME", "current")?.id, "current", "current task id must survive a response without project metadata");
+assert.equal(newestProjectTask([{ id: "stale-current", projectId: "project-other", kind: "FIRST_FRAME", status: "completed" }], projectId, "FIRST_FRAME", "stale-current"), null, "a persisted task id from another project must never control this project");
 assert.equal(newestProjectTask([{ id: "old-active", projectId, kind: "FIRST_FRAME", status: "running", createdAt: "2026-08-15T00:00:00Z" }, { id: "current-bound", projectId, kind: "FIRST_FRAME", status: "completed", createdAt: "2026-08-14T00:00:00Z" }], projectId, "FIRST_FRAME", "current-bound")?.id, "current-bound", "the exact persisted task identity must beat a newer historical task");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs, generationSources: { new: { kind: "frame", signature: base.signatures.frame } } }).frame.status, "生成失败", "only the latest FIRST_FRAME task controls frame state");
 assert.equal(buildWorkflowSnapshot({ ...base, jobs: [{ id: "retryable", projectId, kind: "FIRST_FRAME", status: "retryable_failed", createdAt: "2026-08-14T00:00:00Z", input: { personMediaId: "person", clothesMediaId: "outfit", motionMediaId: "motion" } }], generationSources: { retryable: { kind: "frame", signature: base.signatures.frame } } }).frame.status, "生成失败", "retryable provider failures must remain visible to the user");
@@ -67,6 +74,14 @@ const trackedCompletedWithoutMedia = buildWorkflowSnapshot({
   generationSources: { tracked: { kind: "frame", signature: base.signatures.frame } },
 });
 assert.equal(trackedCompletedWithoutMedia.frame.status, "入库中", "a tracked completed task without a bound output must stay visibly ingesting");
+
+const incompleteInputsCannotIngest = buildWorkflowSnapshot({
+  ...base,
+  assets: { ...base.assets, person: null },
+  jobs: [{ id: "template-metadata", projectId, kind: "FIRST_FRAME", status: "completed", createdAt: "2026-08-14T00:00:00Z" }],
+  currentJobIds: { frame: "template-metadata" },
+});
+assert.equal(incompleteInputsCannotIngest.frame.status, "待生成", "a project missing required inputs must not show imported frame metadata as ingesting");
 
 const queuedFinal = buildWorkflowSnapshot({
   ...base,

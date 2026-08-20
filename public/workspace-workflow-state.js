@@ -13,14 +13,21 @@ function taskTime(task) {
 
 export function newestProjectTask(jobs, projectId, kind, currentJobId = "") {
   const candidates = Array.isArray(jobs) ? jobs : [];
-  const exact = candidates.find((task) => task?.id === currentJobId && String(task?.kind || "").toUpperCase() === kind);
+  const exact = candidates.find((task) => {
+    const taskProjectId = task?.project?.id || task?.projectId || "";
+    return task?.id === currentJobId
+      && String(task?.kind || "").toUpperCase() === kind
+      // Sparse create responses legitimately omit the project id. A task that
+      // names another project, however, can never be the current task.
+      && (!taskProjectId || taskProjectId === projectId);
+  });
   if (exact) return exact;
   return candidates
     .map((task, index) => ({ task, index }))
     .filter(({ task }) => {
       const taskProjectId = task?.project?.id || task?.projectId || "";
       const sameKind = String(task?.kind || "").toUpperCase() === kind;
-      return sameKind && (taskProjectId === projectId || task.id === currentJobId);
+      return sameKind && (taskProjectId === projectId || (!taskProjectId && task.id === currentJobId));
     })
     .sort((left, right) => taskTime(right.task) - taskTime(left.task) || left.index - right.index)[0]?.task || null;
 }
@@ -34,7 +41,7 @@ function taskMatchesInputs(task, outputKind, generationSources, signature, curre
   return Boolean((source && source.kind === outputKind && source.signature === signature) || task.id === currentJobId);
 }
 
-function taskMatchesCurrentSignature(task, outputKind, signature) {
+export function taskMatchesCurrentSignature(task, outputKind, signature) {
   const input = task?.input || task?.inputs || {};
   const parts = String(signature || "").split(":");
   if (outputKind === "final") {
@@ -62,7 +69,7 @@ function inputState(asset, unavailableMedia, readyLabel) {
   return { ...current, status: current.bound ? readyLabel : "待添加" };
 }
 
-function outputState({ asset, unavailableMedia, invalidated, task, outputKind, signature, generationSources, currentJobId, readyLabel, failedLabel, pendingLabel }) {
+function outputState({ asset, unavailableMedia, invalidated, task, outputKind, signature, generationSources, currentJobId, inputsReady = true, readyLabel, failedLabel, pendingLabel }) {
   const base = assetState(invalidated ? null : asset, unavailableMedia);
   const taskStatus = String(task?.status || "");
   const taskSource = task ? generationSources?.[task.id] : null;
@@ -81,7 +88,10 @@ function outputState({ asset, unavailableMedia, invalidated, task, outputKind, s
   // A completed job is not a usable output until its media is bound to the
   // current project node. This prevents "completed" from outrunning ingestion.
   if (base.bound) return { ...base, task: currentTask, phase: "bound", status: readyLabel };
-  if (COMPLETED_TASK.test(status)) return { ...base, task: currentTask, phase: "ingesting", status: "入库中" };
+  // A template can carry historical output-task metadata into a new project.
+  // Without all current inputs, that metadata must never present as a result
+  // waiting for ingestion: no user-owned frame can exist yet.
+  if (COMPLETED_TASK.test(status) && inputsReady) return { ...base, task: currentTask, phase: "ingesting", status: "入库中" };
   if (FAILED_TASK.test(status)) return { ...base, task: currentTask, phase: "failed", status: failedLabel };
   return { ...base, task: currentTask, phase: "pending", status: pendingLabel };
 }
@@ -89,7 +99,8 @@ function outputState({ asset, unavailableMedia, invalidated, task, outputKind, s
 export function buildWorkflowSnapshot({ projectId = "", assets = {}, unavailableMedia = new Set(), jobs = [], production = null, invalidated = {}, generationSources = {}, signatures = {}, currentJobIds = {} } = {}) {
   const firstFrameTask = newestProjectTask(jobs, projectId, "FIRST_FRAME", currentJobIds.frame);
   const actionTask = newestProjectTask(jobs, projectId, "ACTION_TRANSFER", currentJobIds.final);
-  const frame = outputState({ asset: assets.frame, unavailableMedia, invalidated: invalidated.frame, task: firstFrameTask, outputKind: "frame", signature: signatures.frame, generationSources, currentJobId: currentJobIds.frame, readyLabel: "已就绪", failedLabel: "生成失败", pendingLabel: "待生成" });
+  const frameInputsReady = Boolean(assets.person && assets.outfit && assets.motion);
+  const frame = outputState({ asset: assets.frame, unavailableMedia, invalidated: invalidated.frame, task: firstFrameTask, outputKind: "frame", signature: signatures.frame, generationSources, currentJobId: currentJobIds.frame, inputsReady: frameInputsReady, readyLabel: "已就绪", failedLabel: "生成失败", pendingLabel: "待生成" });
   let final = outputState({ asset: assets.final, unavailableMedia, invalidated: invalidated.final, task: actionTask, outputKind: "final", signature: signatures.final, generationSources, currentJobId: currentJobIds.final, readyLabel: "已完成", failedLabel: "制作失败", pendingLabel: "待制作" });
   if (!final.task && !final.bound && ACTIVE_TASK.test(String(production?.status || ""))) final = { ...final, task: production, phase: QUEUED_TASK.test(String(production.status || "")) ? "queued" : "processing", status: QUEUED_TASK.test(String(production.status || "")) ? "排队中" : "制作中" };
   if (!final.task && !final.bound && FAILED_TASK.test(String(production?.status || ""))) final = { ...final, task: production, status: "制作失败" };

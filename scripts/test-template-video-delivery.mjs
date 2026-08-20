@@ -22,17 +22,19 @@ const showcaseCard = app.match(/function renderShowcaseVideoCard\(item, index\) 
 assert.match(showcaseCard, /staticVideoPlaybackUrl\(item\.referenceVideoUrl\)/);
 assert.match(showcaseCard, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
 assert.match(showcaseCard, /TEMPLATE_COVER_FALLBACK/);
-assert.match(showcaseCard, /data-primary-src=/);
+assert.match(showcaseCard, /src="\$\{escapeHtml\(coverSource\)\}"/);
+assert.match(showcaseCard, /data-fallback-src/);
 assert.match(showcaseCard, /index === 0 \? "eager" : "lazy"/);
 const quickPick = app.match(/function renderTemplateQuickPick\(item, index\) \{[\s\S]*?\n\}/)?.[0] || "";
 assert.match(quickPick, /staticImagePlaybackUrl\(item\.resultCoverUrl \|\| item\.referenceImageUrl\)/);
 assert.match(quickPick, /TEMPLATE_COVER_FALLBACK/);
-assert.match(quickPick, /data-primary-src=/);
+assert.match(quickPick, /src="\$\{escapeHtml\(coverSource\)\}"/);
+assert.match(quickPick, /data-fallback-src/);
 assert.match(app, /function bindPrimaryImageProbes\(scope = document\)/);
 
 assert.match(app, /async function refreshSessionState\(\)/);
 assert.match(app, /if \(bootPath === "\/templates" \|\| bootPath === "\/workspace"\) \{[\s\S]*?await refreshSessionState\(\)/);
-assert.match(app, /const peerPaths = new Set\(\["\/templates", "\/workspace", "\/pricing", "\/billing"\]\)/);
+assert.match(app, /const peerPaths = new Set\(\["\/templates", "\/workspace", "\/projects", "\/pricing", "\/billing"\]\)/);
 
 const index = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
 const templateRouterCss = await readFile(new URL("../public/front-skill-router-templates-20260815.css", import.meta.url), "utf8");

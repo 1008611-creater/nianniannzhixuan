@@ -43,6 +43,19 @@ export function proxyHeaders(headers, upstreamOrigin, csrfOrigin = upstreamOrigi
   return result;
 }
 
+// Browser-facing hardening applied to every response leaving this proxy.
+// CSP stays permissive for inline scripts (the shell injects a small inline
+// bootstrap) but blocks cross-origin script/img/media and clickjacking.
+export const SECURITY_HEADERS = {
+  "content-security-policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "no-referrer",
+};
+
 export function proxyResponseHeaders(headers) {
   const result = new Headers(headers);
   result.delete("connection");
@@ -50,6 +63,9 @@ export function proxyResponseHeaders(headers) {
   if (result.has("content-encoding")) {
     result.delete("content-encoding");
     result.delete("content-length");
+  }
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    result.set(name, value);
   }
   return result;
 }

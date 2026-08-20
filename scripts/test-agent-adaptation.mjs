@@ -82,7 +82,7 @@ assert.match(frontend, /\["queued", "running", "retryable_failed", "failed"\]\.i
 assert.match(frontend, /actionStatus === "retryable_failed"/);
 assert.match(frontend, /改图服务暂时不可用。本次没有创建任务，也不会扣费/);
 assert.match(frontend, /restorePendingAgentImageEdit\(\);\s*\} else state\.chat = \[\];/);
-assert.match(frontend, /caller owns the first full render/i);
+assert.match(frontend, /Secondary data arrives after the first paint/i);
 assert.match(frontend, /pendingAgentImageEdit: normalizePendingAgentImageEdit/);
 const pendingNormalizer = frontend.match(/function normalizePendingAgentImageEdit\(edit\) \{[\s\S]*?\n  \}/)?.[0] || "";
 assert.doesNotMatch(pendingNormalizer, /url\s*:/, "pending agent edit storage must not persist media URLs");
@@ -108,7 +108,7 @@ assert.equal(isAssistantImageEditIntent("当前项目还缺什么"), false);
 assert.match(backend, /pathname\.startsWith\("\/api\/"\)/);
 assert.match(backend, /proxyHeaders\(request\.headers, remoteOrigin, csrfOrigin/);
 assert.match(backend, /process\.env\.REMOTE_ORIGIN/);
-assert.match(workspace, /workspace-v206\.js\?v=/);
-assert.match(workspace, /workspace-v206\.js\?v=\d{8}-[a-z0-9-]+/);
+assert.match(workspace, /workspace-v206(?:-\d{8}-\d+)?(?:\.js\?v=|-[a-z0-9-]+\.js)/);
+assert.match(workspace, /workspace-v206(?:-\d{8}-\d+)?(?:\.js\?v=\d{8}-[a-z0-9-]+|-[a-z0-9-]+\.js)/);
 
 console.log(`OK agent/frontend/backend contract: ${contract.routes.length} routes`);
