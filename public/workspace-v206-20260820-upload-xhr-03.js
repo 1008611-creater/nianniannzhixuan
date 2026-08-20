@@ -2778,7 +2778,6 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
       return raw;
     }
   }
-
   function uploadApplicationChunk(url, headers, chunk) {
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest();

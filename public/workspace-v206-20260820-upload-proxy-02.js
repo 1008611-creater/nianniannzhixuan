@@ -2778,25 +2778,6 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
       return raw;
     }
   }
-
-  function uploadApplicationChunk(url, headers, chunk) {
-    return new Promise((resolve, reject) => {
-      const request = new XMLHttpRequest();
-      request.open("PUT", url, true);
-      request.withCredentials = true;
-      request.timeout = 30_000;
-      headers.forEach((value, name) => request.setRequestHeader(name, value));
-      request.onload = () => {
-        let payload = {};
-        try { payload = JSON.parse(request.responseText || "{}"); } catch {}
-        resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, payload });
-      };
-      request.onerror = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_FAILED"));
-      request.onabort = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_ABORTED"));
-      request.ontimeout = () => reject(new Error("MEDIA_UPLOAD_TIMEOUT"));
-      request.send(chunk);
-    });
-  }
   async function uploadCosMultipart(file, upload) {
     const partSize = upload.partSize || (8 * 1024 * 1024);
     const uploaded = new Map((upload.uploadedParts || []).map((part) => [Number(part.partNumber), Number(part.bytes)]));
@@ -2884,9 +2865,8 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
-              const uploadedChunk = await uploadApplicationChunk(uploadUrl, chunkHeaders, chunk);
-              contentResponse = { ok: uploadedChunk.ok, status: uploadedChunk.status };
-              contentResult = uploadedChunk.payload;
+              contentResponse = await fetch(uploadUrl, { method: "PUT", headers: chunkHeaders, body: chunk, credentials: "same-origin" });
+              contentResult = await contentResponse.json().catch(() => ({}));
               if (contentResponse.ok) { lastError = null; break; }
               lastError = new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
               if (contentResponse.status < 500) break;

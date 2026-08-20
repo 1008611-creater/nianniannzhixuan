@@ -1,5 +1,4 @@
 const app = document.querySelector("#app");
-// Previous release contract: 20260820-upload-completion-01
 const productionWorkflowModeIds = new Set(["action-transfer"]);
 
 function initialWorkflowMode() {
@@ -1447,37 +1446,6 @@ function revokeBlobUrl(url) {
   if (String(url || "").startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
-function sameOriginUploadEndpoint(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  try {
-    const parsed = new URL(raw, window.location.origin);
-    if (parsed.hostname === "dh-origin.cauai.fun" || /^\/api\/v1\/media\//i.test(parsed.pathname)) return `${parsed.pathname}${parsed.search}`;
-    return parsed.href;
-  } catch {
-    return raw;
-  }
-}
-
-function uploadApplicationChunk(url, headers, chunk) {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PUT", url, true);
-    request.withCredentials = true;
-    request.timeout = 30_000;
-    headers.forEach((value, name) => request.setRequestHeader(name, value));
-    request.onload = () => {
-      let payload = {};
-      try { payload = JSON.parse(request.responseText || "{}"); } catch {}
-      resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, payload });
-    };
-    request.onerror = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_FAILED"));
-    request.onabort = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_ABORTED"));
-    request.ontimeout = () => reject(new Error("MEDIA_UPLOAD_TIMEOUT"));
-    request.send(chunk);
-  });
-}
-
 async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材") {
   if (!file) throw new Error("MEDIA_UPLOAD_EMPTY");
   file = normalizeTemplateVideoFile(file);
@@ -1495,7 +1463,7 @@ async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材"
     }),
   });
   const upload = intent.upload || {};
-  const uploadUrl = sameOriginUploadEndpoint(upload.uploadUrl);
+  const uploadUrl = String(upload.uploadUrl || "");
   const applicationUpload = uploadUrl.startsWith("/api/");
   const isMultipart = upload.transport === "COS_MULTIPART";
   if (isMultipart) {
@@ -1518,9 +1486,8 @@ async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材"
       let lastError;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const uploadedChunk = await uploadApplicationChunk(uploadUrl, chunkHeaders, chunk);
-          contentResponse = { ok: uploadedChunk.ok, status: uploadedChunk.status };
-          contentResult = uploadedChunk.payload;
+          contentResponse = await fetch(uploadUrl, { method: "PUT", headers: chunkHeaders, body: chunk, credentials: "same-origin" });
+          contentResult = await contentResponse.json().catch(() => ({}));
           if (contentResponse.ok) { lastError = null; break; }
           lastError = new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
           if (contentResponse.status < 500) break;
@@ -3824,9 +3791,7 @@ let workspaceV206StylesPromise = null;
 
 function ensureWorkspaceV206Styles() {
   if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
-  // Legacy release marker retained for source-contract compatibility:
-  // href = "/workspace-v206-20260819-no-preview-rerender-02.css"
-  const href = "/workspace-v206-20260820-upload-xhr-03.css";
+  const href = "/workspace-v206-20260819-no-preview-rerender-02.css";
   const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
     || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
   if (!existing) {
@@ -3849,9 +3814,7 @@ async function ensureWorkspaceV206Mount() {
     return;
   }
   if (!workspaceV206ModulePromise) {
-    // Legacy release marker retained for source-contract compatibility:
-    // workspaceV206ModulePromise = import("/workspace-v206-20260819-no-preview-rerender-02.js")
-    workspaceV206ModulePromise = import("/workspace-v206-20260820-upload-xhr-03.js");
+    workspaceV206ModulePromise = import("/workspace-v206-20260819-no-preview-rerender-02.js");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;
@@ -8376,7 +8339,7 @@ async function uploadTemplateVideoMultipart(file, upload) {
   for (let offset = 0, partNumber = 1; offset < file.size; offset += partSize, partNumber += 1) {
     const part = file.slice(offset, Math.min(offset + partSize, file.size));
     if (uploadedParts.get(partNumber) === part.size) continue;
-    const authorization = await fetchJson(sameOriginUploadEndpoint(upload.partUrlEndpoint), { method: "POST", body: JSON.stringify({ partNumber }) });
+    const authorization = await fetchJson(upload.partUrlEndpoint, { method: "POST", body: JSON.stringify({ partNumber }) });
     let uploaded = false;
     let lastStatus = "";
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -8394,8 +8357,8 @@ async function uploadTemplateVideoMultipart(file, upload) {
     }
     if (!uploaded) throw new Error(`SIGNED_UPLOAD_FAILED${lastStatus}`);
   }
-  // Completion is performed once by the caller after the transport finishes;
-  // a second completion makes valid multipart uploads look failed.
+  const completed = await fetchJson(upload.completeEndpoint, { method: "POST", body: "{}" });
+  if (!completed.upload?.completed) throw new Error("MEDIA_MULTIPART_INCOMPLETE");
 }
 
 async function loadPersonalTemplateVideos() {

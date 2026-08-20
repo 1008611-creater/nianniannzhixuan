@@ -10,3 +10,9 @@ scripts/agent-vault-token-tool/publish*/
 npm-debug.log*
 *.log
 .DS_Store
+
+# 本地产物(非发布资源,按 AGENTS.md 排除;切勿入库)
+.workbuddy/
+evidence/
+playback/
+scripts/redeploy-niannian-front.sh

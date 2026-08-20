@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
@@ -21,12 +21,28 @@ const proxyTimeoutMs = Number(process.env.PROXY_TIMEOUT_MS || 120_000);
 const generatedImageMaxBytes = Number(process.env.GENERATED_IMAGE_MAX_BYTES || 25 * 1024 * 1024);
 const publicDir = resolve("public");
 const playbackDir = resolve(process.env.PLAYBACK_DIR || "playback");
+const posterDir = join(playbackDir, "posters");
+const projectCoverDir = join(playbackDir, "project-covers");
+const projectOrganizationFile = join(playbackDir, "project-organization.json");
 const cdnPlaybackEnabled = process.env.CDN_PLAYBACK_ENABLED === "1";
 const cdnPlaybackHost = String(process.env.CDN_PLAYBACK_HOST || new URL(process.env.PUBLIC_ORIGIN || "https://dh.cauai.fun").host).trim().toLowerCase();
 const cdnPlaybackAuthKey = readRuntimeSecret(process.env.CDN_PLAYBACK_AUTH_KEY, process.env.CDN_PLAYBACK_AUTH_KEY_FILE);
 const cdnPlaybackTtlSeconds = Math.max(60, Math.min(3_600, Number(process.env.CDN_PLAYBACK_TTL_SECONDS || 600)) || 600);
 const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const playbackJobs = new Map();
+const projectCoverJobs = new Map();
+const projectCoverQueue = [];
+const projectCoverFailures = new Map();
+// A project list often requests many cover files at once. Retain only a
+// short-lived, per-media grant for the same authenticated session so a
+// completed private cover does not re-probe the legacy source on every paint.
+const projectCoverAccess = new Map();
+let projectCoverWorkers = 0;
+const projectCoverWorkerLimit = 2;
+// Covers are a presentation enhancement: a stale private source must not keep a project card pending forever.
+const projectCoverSourceTimeoutMs = 12_000;
+const projectCoverFailureTtlMs = 10 * 60 * 1_000;
+const projectCoverAccessTtlMs = 60_000;
 const generatedImageInputs = new Map();
 const assistantEventAudit = new Map();
 const mimeTypes = {
@@ -50,6 +66,8 @@ const publicMediaCdnOrigin = (() => {
 })();
 
 mkdirSync(playbackDir, { recursive: true });
+mkdirSync(posterDir, { recursive: true });
+mkdirSync(projectCoverDir, { recursive: true });
 
 function readRuntimeSecret(value, file) {
   if (String(value || "").trim()) return String(value).trim();
@@ -94,6 +112,43 @@ function hasValidCdnPlaybackSignature(request, mediaId) {
 
 function playbackFile(mediaId) {
   return join(playbackDir, `${mediaId}.mp4`);
+}
+
+function posterFile(mediaId) {
+  return join(posterDir, `${mediaId}.webp`);
+}
+
+function projectCoverFile(mediaId) {
+  return join(projectCoverDir, `${mediaId}.webp`);
+}
+
+function projectCoverAccessKey(request, mediaId) {
+  const credentials = [request.headers.cookie, request.headers.authorization]
+    .filter((value) => typeof value === "string" && value.trim())
+    .join("\n");
+  if (!credentials) return "";
+  return `${mediaId}:${createHash("sha256").update(credentials).digest("hex")}`;
+}
+
+function hasProjectCoverAccess(accessKey) {
+  if (!accessKey) return false;
+  const expiresAt = projectCoverAccess.get(accessKey) || 0;
+  if (expiresAt > Date.now()) return true;
+  projectCoverAccess.delete(accessKey);
+  return false;
+}
+
+function grantProjectCoverAccess(accessKey) {
+  if (!accessKey) return;
+  projectCoverAccess.set(accessKey, Date.now() + projectCoverAccessTtlMs);
+  // Bound this process-local authorization cache even when a browser rotates
+  // through many sessions. Entries hold hashes only and are never persisted.
+  if (projectCoverAccess.size > 4_000) {
+    const now = Date.now();
+    for (const [key, expiresAt] of projectCoverAccess) {
+      if (expiresAt <= now || projectCoverAccess.size <= 3_000) projectCoverAccess.delete(key);
+    }
+  }
 }
 
 const projectIdPattern = /^[0-9a-f-]{36}$/i;
@@ -245,17 +300,54 @@ async function streamAssistantEvents(request, response, projectId) {
 function derivativeHeaders(headers) {
   const result = new Headers(headers);
   ["host", "connection", "content-length", "content-type", "range", "origin", "referer"].forEach((name) => result.delete(name));
-  result.set("accept", "video/mp4,video/*;q=0.9,*/*;q=0.8");
+  result.set("accept", "image/avif,image/webp,image/png,image/jpeg,video/mp4,video/*;q=0.9,*/*;q=0.8");
   return result;
+}
+
+async function generateProjectCover(mediaId, headers) {
+  const output = projectCoverFile(mediaId);
+  if (existsSync(output) && statSync(output).size > 0) return true;
+  const inputFile = `${output}.source`;
+  const temporary = `${output}.part.webp`;
+  try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
+  try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
+  let upstream;
+  try {
+    upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
+      headers: derivativeHeaders(headers),
+      signal: AbortSignal.timeout(Math.min(proxyTimeoutMs, projectCoverSourceTimeoutMs)),
+    });
+    if (!upstream.ok || !upstream.body) throw new Error(`MEDIA_SOURCE_${upstream.status}`);
+    await pipeline(Readable.fromWeb(upstream.body), createWriteStream(inputFile));
+    if (!existsSync(inputFile) || statSync(inputFile).size === 0) throw new Error("MEDIA_SOURCE_EMPTY");
+    const result = await runFfmpeg([
+      "-hide_banner", "-loglevel", "error", "-i", inputFile,
+      "-frames:v", "1", "-vf", "scale='min(720,iw)':-2", "-c:v", "libwebp", "-quality", "82", "-y", temporary,
+    ]);
+    if (result.code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) {
+      throw new Error(`COVER_FFMPEG_EXIT_${result.code}${result.stderr ? `:${result.stderr.replace(/\s+/g, " ").slice(-240)}` : ""}`);
+    }
+    renameSync(temporary, output);
+    return true;
+  } finally {
+    try { await upstream?.body?.cancel(); } catch {}
+    try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
+    try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
+  }
 }
 
 async function generatePlaybackDerivative(mediaId, headers) {
   const output = playbackFile(mediaId);
-  if (existsSync(output) && statSync(output).size > 0) return true;
+  const poster = posterFile(mediaId);
+  const playbackReady = existsSync(output) && statSync(output).size > 0;
+  const posterReady = existsSync(poster) && statSync(poster).size > 0;
+  if (playbackReady && posterReady) return true;
   const inputFile = `${output}.source.mp4`;
   const temporary = `${output}.part.mp4`;
+  const temporaryPoster = `${poster}.part.webp`;
   try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
   try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
+  try { if (existsSync(temporaryPoster)) unlinkSync(temporaryPoster); } catch {}
   let upstream;
   try {
     upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
@@ -269,26 +361,55 @@ async function generatePlaybackDerivative(mediaId, headers) {
     // back to the full original on every request.
     await pipeline(Readable.fromWeb(upstream.body), createWriteStream(inputFile));
     if (!existsSync(inputFile) || statSync(inputFile).size === 0) throw new Error("MEDIA_SOURCE_EMPTY");
-    const ffmpeg = spawn("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-i", inputFile,
-      "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
-      "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-y", temporary,
-    ], { stdio: ["ignore", "ignore", "pipe"] });
-    let stderr = "";
-    ffmpeg.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-800); });
-    const [code] = await once(ffmpeg, "close");
-    if (code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) throw new Error(`FFMPEG_EXIT_${code}${stderr ? `:${stderr.replace(/\s+/g, " ").slice(-240)}` : ""}`);
-    renameSync(temporary, output);
+    if (!posterReady) {
+      const posterResult = await runFfmpeg([
+        "-hide_banner", "-loglevel", "error", "-ss", "0.35", "-i", inputFile,
+        "-frames:v", "1", "-vf", "scale='min(720,iw)':-2", "-c:v", "libwebp", "-quality", "82", "-y", temporaryPoster,
+      ]);
+      if (posterResult.code !== 0 || !existsSync(temporaryPoster) || statSync(temporaryPoster).size === 0) {
+        try { if (existsSync(temporaryPoster)) unlinkSync(temporaryPoster); } catch {}
+        const firstFrameResult = await runFfmpeg([
+          "-hide_banner", "-loglevel", "error", "-i", inputFile,
+          "-frames:v", "1", "-vf", "scale='min(720,iw)':-2", "-c:v", "libwebp", "-quality", "82", "-y", temporaryPoster,
+        ]);
+        if (firstFrameResult.code !== 0 || !existsSync(temporaryPoster) || statSync(temporaryPoster).size === 0) {
+          console.warn(`[playback] poster failed ${mediaId}: ${String(firstFrameResult.stderr || posterResult.stderr || "UNKNOWN").replace(/\s+/g, " ").slice(-180)}`);
+        }
+      }
+      if (existsSync(temporaryPoster) && statSync(temporaryPoster).size > 0) renameSync(temporaryPoster, poster);
+    }
+    if (!playbackReady) {
+      const result = await runFfmpeg([
+        "-hide_banner", "-loglevel", "error", "-i", inputFile,
+        "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-y", temporary,
+      ]);
+      if (result.code !== 0 || !existsSync(temporary) || statSync(temporary).size === 0) throw new Error(`FFMPEG_EXIT_${result.code}${result.stderr ? `:${result.stderr.replace(/\s+/g, " ").slice(-240)}` : ""}`);
+      renameSync(temporary, output);
+    }
     return true;
   } finally {
     try { await upstream?.body?.cancel(); } catch {}
     try { if (existsSync(inputFile)) unlinkSync(inputFile); } catch {}
     try { if (existsSync(temporary)) unlinkSync(temporary); } catch {}
+    try { if (existsSync(temporaryPoster)) unlinkSync(temporaryPoster); } catch {}
   }
 }
 
+function runFfmpeg(args) {
+  return new Promise((resolveRun) => {
+    const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    ffmpeg.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-800); });
+    ffmpeg.once("error", (error) => resolveRun({ code: -1, stderr: String(error?.message || "SPAWN_FAILED") }));
+    ffmpeg.once("close", (code) => resolveRun({ code, stderr }));
+  });
+}
+
 function schedulePlaybackDerivative(mediaId, headers) {
-  if (!/^[0-9a-f-]{36}$/i.test(mediaId) || playbackJobs.has(mediaId)) return;
+  if (!/^[0-9a-f-]{36}$/i.test(mediaId)) return Promise.resolve(false);
+  const existing = playbackJobs.get(mediaId);
+  if (existing) return existing;
   const job = (async () => {
     for (let attempt = 0; attempt < 6; attempt += 1) {
       try {
@@ -303,6 +424,7 @@ function schedulePlaybackDerivative(mediaId, headers) {
     }
   })().finally(() => playbackJobs.delete(mediaId));
   playbackJobs.set(mediaId, job);
+  return job;
 }
 
 function localFile(pathname) {
@@ -704,6 +826,224 @@ async function servePlayback(request, response, mediaId) {
   await sendUpstreamResponse(response, upstream);
 }
 
+function scheduleProjectCover(mediaId, headers) {
+  if (!/^[0-9a-f-]{36}$/i.test(mediaId)) return Promise.resolve(false);
+  const existing = projectCoverJobs.get(mediaId);
+  if (existing) return existing;
+  let finish;
+  const job = new Promise((resolve) => { finish = resolve; });
+  projectCoverJobs.set(mediaId, job);
+  projectCoverQueue.push(async () => {
+    let ready = false;
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          if (await generateProjectCover(mediaId, headers)) {
+            ready = true;
+            break;
+          }
+        } catch (error) {
+          if (attempt === 2) {
+            const detail = String(error?.message || "UNKNOWN").replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").slice(0, 300);
+            console.warn(`[project-cover] generation failed ${mediaId}: ${detail}`);
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt + 1)));
+      }
+    } finally {
+      projectCoverJobs.delete(mediaId);
+      if (ready) projectCoverFailures.delete(mediaId);
+      else projectCoverFailures.set(mediaId, Date.now() + projectCoverFailureTtlMs);
+      finish(ready);
+    }
+  });
+  drainProjectCoverQueue();
+  return job;
+}
+
+function drainProjectCoverQueue() {
+  while (projectCoverWorkers < projectCoverWorkerLimit && projectCoverQueue.length) {
+    const work = projectCoverQueue.shift();
+    projectCoverWorkers += 1;
+    Promise.resolve(work()).finally(() => {
+      projectCoverWorkers -= 1;
+      drainProjectCoverQueue();
+    });
+  }
+}
+
+async function servePoster(request, response, mediaId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const authorizationProbe = new Headers(headers);
+  authorizationProbe.set("range", "bytes=0-0");
+  const upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
+    method: request.method,
+    headers: authorizationProbe,
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!upstream.ok) {
+    await sendUpstreamResponse(response, upstream);
+    return;
+  }
+  try { await upstream.body?.cancel(); } catch {}
+  const poster = posterFile(mediaId);
+  if (!existsSync(poster) || statSync(poster).size === 0) schedulePlaybackDerivative(mediaId, headers);
+  if (existsSync(poster) && statSync(poster).size > 0) {
+    serveStatic(request, response, poster, "private, max-age=300, must-revalidate");
+    return;
+  }
+  response.writeHead(202, {
+    "content-type": "image/webp",
+    "cache-control": "private, no-store",
+    "retry-after": "2",
+    "x-media-poster-state": "preparing",
+  });
+  response.end();
+}
+
+async function serveProjectCover(request, response, mediaId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const accessKey = projectCoverAccessKey(request, mediaId);
+  const cover = projectCoverFile(mediaId);
+  if (existsSync(cover) && statSync(cover).size > 0 && hasProjectCoverAccess(accessKey)) {
+    serveStatic(request, response, cover, "private, max-age=300, must-revalidate");
+    return;
+  }
+  const authorizationProbe = new Headers(headers);
+  authorizationProbe.set("range", "bytes=0-0");
+  let upstream;
+  try {
+    upstream = await fetch(new URL(`/api/v1/media/${encodeURIComponent(mediaId)}/content`, remoteOrigin), {
+      method: request.method,
+      headers: authorizationProbe,
+      redirect: "manual",
+      signal: AbortSignal.timeout(Math.min(proxyTimeoutMs, projectCoverSourceTimeoutMs)),
+    });
+  } catch {
+    projectCoverFailures.set(mediaId, Date.now() + projectCoverFailureTtlMs);
+    response.writeHead(424, { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" });
+    response.end(JSON.stringify({ error: "PROJECT_COVER_UNAVAILABLE" }));
+    return;
+  }
+  if (!upstream.ok) {
+    await sendUpstreamResponse(response, upstream);
+    return;
+  }
+  try { await upstream.body?.cancel(); } catch {}
+  grantProjectCoverAccess(accessKey);
+  if (existsSync(cover) && statSync(cover).size > 0) {
+    projectCoverFailures.delete(mediaId);
+    serveStatic(request, response, cover, "private, max-age=300, must-revalidate");
+    return;
+  }
+  const failedAt = projectCoverFailures.get(mediaId) || 0;
+  if (failedAt > Date.now()) {
+    response.writeHead(424, { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" });
+    response.end(JSON.stringify({ error: "PROJECT_COVER_UNAVAILABLE" }));
+    return;
+  }
+  if (failedAt) projectCoverFailures.delete(mediaId);
+  scheduleProjectCover(mediaId, headers);
+  response.writeHead(202, {
+    "content-type": "image/webp",
+    "cache-control": "private, no-store",
+    "retry-after": "2",
+    "x-project-cover-state": "preparing",
+  });
+  response.end();
+}
+
+function readProjectOrganizationStore() {
+  try {
+    const value = JSON.parse(readFileSync(projectOrganizationFile, "utf8"));
+    if (value?.version === 1 && value.owners && typeof value.owners === "object") return value;
+  } catch {}
+  return { version: 1, owners: {} };
+}
+
+function writeProjectOrganizationStore(store) {
+  const temporary = `${projectOrganizationFile}.part`;
+  writeFileSync(temporary, JSON.stringify(store));
+  renameSync(temporary, projectOrganizationFile);
+}
+
+async function projectOrganizationOwner(request) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const upstream = await fetch(new URL("/api/v1/auth/me", remoteOrigin), {
+    headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!upstream.ok) return { upstream };
+  const payload = await upstream.json().catch(() => null);
+  const user = payload?.user || payload?.account || payload || {};
+  const identity = String(user?.id || user?.userId || user?.accountId || "");
+  if (!identity) throw new Error("PROJECT_ORGANIZATION_IDENTITY_MISSING");
+  return { owner: createHash("sha256").update(identity).digest("hex").slice(0, 48) };
+}
+
+async function verifyOwnedProject(request, projectId) {
+  const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
+  const upstream = await fetch(new URL(`/api/v1/projects/${encodeURIComponent(projectId)}`, remoteOrigin), {
+    headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(proxyTimeoutMs),
+  });
+  if (!upstream.ok) return upstream;
+  try { await upstream.body?.cancel(); } catch {}
+  return null;
+}
+
+function sendLocalJson(response, status, body) {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+  response.end(JSON.stringify(body));
+}
+
+async function serveProjectOrganization(request, response, projectId = "", action = "") {
+  if (request.method !== "GET" && !validCsrfRequest(request)) {
+    sendLocalJson(response, 403, { error: "CSRF_INVALID" });
+    return;
+  }
+  const identity = await projectOrganizationOwner(request);
+  if (identity.upstream) {
+    await sendUpstreamResponse(response, identity.upstream);
+    return;
+  }
+  if (projectId) {
+    const ownership = await verifyOwnedProject(request, projectId);
+    if (ownership) {
+      await sendUpstreamResponse(response, ownership);
+      return;
+    }
+  }
+  const store = readProjectOrganizationStore();
+  const ownerStore = store.owners[identity.owner] || { projects: {} };
+  const projects = ownerStore.projects && typeof ownerStore.projects === "object" ? ownerStore.projects : {};
+  if (request.method === "GET") {
+    sendLocalJson(response, 200, { projects });
+    return;
+  }
+  const payload = await readJsonRequest(request, 16 * 1024);
+  const current = projects[projectId] && typeof projects[projectId] === "object" ? projects[projectId] : {};
+  let next;
+  if (action === "organization") {
+    const groupName = String(payload?.groupName || "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 40);
+    next = { ...current, groupName, updatedAt: new Date().toISOString() };
+  } else if (action === "trash") {
+    next = { ...current, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  } else if (action === "restore") {
+    next = { ...current, deletedAt: null, updatedAt: new Date().toISOString() };
+  } else {
+    sendLocalJson(response, 404, { error: "PROJECT_ORGANIZATION_ACTION_NOT_FOUND" });
+    return;
+  }
+  projects[projectId] = next;
+  store.owners[identity.owner] = { projects };
+  writeProjectOrganizationStore(store);
+  sendLocalJson(response, 200, { entry: next });
+}
+
 function serveCdnPlayback(request, response, mediaId) {
   if (!hasValidCdnPlaybackSignature(request, mediaId)) {
     response.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" });
@@ -756,14 +1096,37 @@ async function serveOriginalDownload(request, response, mediaId) {
 
 async function proxy(request, response) {
   const url = new URL(request.url, remoteOrigin);
+  // Some browser privacy filters block the literal `billing/summary` path
+  // before the request leaves the page. Keep the public request same-origin
+  // and translate this narrow read-only alias only inside the trusted proxy.
+  if (url.pathname === "/api/v1/account/summary") url.pathname = "/api/v1/billing/summary";
+  if (url.pathname === "/api/v1/account/quote") url.pathname = "/api/v1/billing/quote";
   const headers = proxyHeaders(request.headers, remoteOrigin, csrfOrigin, request.headers.host);
-  const mediaUpload = request.method === "PUT" && /^\/api\/v1\/media\/[0-9a-f-]{36}\/content$/i.test(url.pathname);
+  const mediaUpload = ["PUT", "POST"].includes(request.method) && /^\/api\/v1\/media\/[0-9a-f-]{36}\/content$/i.test(url.pathname);
   let body;
   if (mediaUpload) {
-    body = await readUploadChunk(request);
+    try {
+      body = await readUploadChunk(request);
+    } catch (error) {
+      const code = error?.code === "ECONNRESET" || error?.code === "ERR_STREAM_PREMATURE_CLOSE"
+        ? "UPLOAD_STREAM_INTERRUPTED"
+        : error?.message === "UPLOAD_CHUNK_TOO_LARGE"
+          ? error.message
+          : "UPLOAD_STREAM_INTERRUPTED";
+      response.writeHead(code === "UPLOAD_CHUNK_TOO_LARGE" ? 413 : 400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      response.end(JSON.stringify({ error: code }));
+      return;
+    }
     headers.delete("transfer-encoding");
     headers.set("content-length", String(body.length));
-    console.log(`[upload] bytes=${body.length} declared=${headers.get("x-upload-content-length") || "-"} offset=${headers.get("x-upload-offset") || "-"} chunk=${headers.get("x-upload-chunk-length") || "-"} type=${headers.get("content-type") || "-"} origin=${headers.get("origin") || "-"} referer=${headers.get("referer") || "-"}`);
+    // Some cached clients still send one complete body instead of the
+    // application upload protocol's chunk headers. Treat it as a single
+    // chunk so the authenticated upstream accepts both client generations.
+    if (!headers.has("x-upload-offset")) headers.set("x-upload-offset", "0");
+    if (!headers.has("x-upload-chunk-length")) headers.set("x-upload-chunk-length", String(body.length));
+    if (!headers.has("x-upload-content-length")) headers.set("x-upload-content-length", String(body.length));
+    if (!headers.has("content-range")) headers.set("content-range", `bytes 0-${Math.max(0, body.length - 1)}/${body.length}`);
+    console.log(`[upload] bytes=${body.length} declared=${headers.get("x-upload-content-length") || "-"} offset=${headers.get("x-upload-offset") || "-"} chunk=${headers.get("x-upload-chunk-length") || "-"} type=${headers.get("content-type") || "-"} session=${headers.has("cookie") ? "present" : "missing"} csrf=${headers.has("x-csrf-token") ? "present" : "missing"} origin=${headers.get("origin") || "-"} referer=${headers.get("referer") || "-"}`);
   }
   const startedAt = Date.now();
   const controller = new AbortController();
@@ -778,6 +1141,19 @@ async function proxy(request, response) {
       redirect: "manual",
       signal: controller.signal,
     });
+    if (mediaUpload && upstream.status === 405) {
+      // The legacy upload route is deployed as POST on some environments,
+      // while newer clients use PUT. The body is already buffered, so retry
+      // this narrow media route without exposing it to the browser.
+      upstream = await fetch(url, {
+        method: "POST",
+        headers,
+        body,
+        duplex: "half",
+        redirect: "manual",
+        signal: controller.signal,
+      });
+    }
   } catch (error) {
     response.writeHead(error?.name === "AbortError" ? 504 : 502, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     response.end(JSON.stringify({ error: error?.name === "AbortError" ? "UPSTREAM_TIMEOUT" : "UPSTREAM_UNAVAILABLE" }));
@@ -789,8 +1165,21 @@ async function proxy(request, response) {
     console.log(`[media] range=${request.headers.range || "-"} status=${upstream.status} ttfbMs=${Date.now() - startedAt} length=${upstream.headers.get("content-length") || "-"} contentRange=${upstream.headers.get("content-range") || "-"} acceptRanges=${upstream.headers.get("accept-ranges") || "-"}`);
   }
   await logProxyResult(request, url, upstream);
+  if (request.method === "POST" && url.pathname === "/api/v1/media/upload-intents" && upstream.ok) {
+    const intent = await upstream.clone().json().catch(() => null);
+    const uploadUrl = String(intent?.upload?.uploadUrl || "");
+    let uploadPath = "";
+    try { uploadPath = new URL(uploadUrl).pathname; } catch { uploadPath = uploadUrl.startsWith("/") ? uploadUrl : ""; }
+    console.log(`[upload-intent] transport=${String(intent?.upload?.transport || "-")} path=${uploadPath || "-"}`);
+  }
   const completedMedia = url.pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/complete$/i);
   if (request.method === "POST" && completedMedia && upstream.ok) schedulePlaybackDerivative(completedMedia[1], headers);
+  const importedTemplate = request.method === "POST" && url.pathname === "/api/v1/media/import-workspace-template";
+  if (importedTemplate && upstream.ok) {
+    const imported = await upstream.clone().json().catch(() => null);
+    const mediaId = String(imported?.media?.id || imported?.id || "");
+    if (/^[0-9a-f-]{36}$/i.test(mediaId)) schedulePlaybackDerivative(mediaId, headers);
+  }
   await sendUpstreamResponse(response, upstream);
 }
 
@@ -828,6 +1217,16 @@ createServer(async (request, response) => {
     const playbackMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/playback$/i);
     if (["GET", "HEAD"].includes(request.method) && playbackMatch) {
       await servePlayback(request, response, playbackMatch[1]);
+      return;
+    }
+    const posterMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/poster$/i);
+    if (["GET", "HEAD"].includes(request.method) && posterMatch) {
+      await servePoster(request, response, posterMatch[1]);
+      return;
+    }
+    const projectCoverMatch = pathname.match(/^\/api\/v1\/media\/([0-9a-f-]{36})\/cover$/i);
+    if (["GET", "HEAD"].includes(request.method) && projectCoverMatch) {
+      await serveProjectCover(request, response, projectCoverMatch[1]);
       return;
     }
     const cdnPlaybackMatch = pathname.match(/^\/_cdn-playback\/([0-9a-f-]{36})\.nnvideo$/i);
@@ -868,13 +1267,26 @@ createServer(async (request, response) => {
       }
       return;
     }
+    if (request.method === "GET" && pathname === "/api/local/projects/organization") {
+      await serveProjectOrganization(request, response);
+      return;
+    }
+    const projectOrganizationMatch = pathname.match(/^\/api\/local\/projects\/([0-9a-f-]{36})\/(organization|trash|restore)$/i);
+    if (request.method === "POST" && projectOrganizationMatch) {
+      await serveProjectOrganization(request, response, projectOrganizationMatch[1], projectOrganizationMatch[2].toLowerCase());
+      return;
+    }
+    if (["GET", "HEAD"].includes(request.method) && pathname === "/workspace-v206-20260817-48.js") {
+      serveStatic(request, response, join(publicDir, "workspace-v206.js"));
+      return;
+    }
     const file = localFile(pathname);
     if (["GET", "HEAD"].includes(request.method) && file && existsSync(file) && statSync(file).isFile()) {
       serveStatic(request, response, file);
       return;
     }
     if (pathname.startsWith("/api/") || /\.[A-Za-z0-9]{1,8}$/.test(pathname)) return await proxy(request, response);
-    const appPaths = new Set(["/access", "/admin", "/billing", "/login", "/pricing", "/templates", "/workspace"]);
+    const appPaths = new Set(["/access", "/admin", "/billing", "/login", "/pricing", "/projects", "/templates", "/workspace"]);
     const index = join(publicDir, "index.html");
     if (["GET", "HEAD"].includes(request.method) && appPaths.has(pathname) && existsSync(index)) {
       await serveIndex(request, response);

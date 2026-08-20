@@ -6,6 +6,7 @@
 2. Load `agent/skills/i-have-adhd/SKILL.md` for every user-facing turn in this project.
 3. State the current step, the smallest next action, and one concrete handoff action.
 4. After each substantive stage, report the concrete result first, then name the single most valuable next action and offer three mutually exclusive directions (A/B/C) when a decision is needed.
+5. For workspace entry, require one atomic first render: assemble the requested project, bound media, task state, and assistant conversation before committing the settled view. Background refresh and reconnect recovery must patch stable state without replaying the loading shell or replacing the whole workspace; verify one loading phase followed by one settled view.
 
 ## Product Boundary
 
@@ -31,5 +32,7 @@
 ## Delivery
 
 - Verify the signed-in `/workspace?projectId=...` path in a real browser for media or task changes.
+- For this China-facing site, make Tencent CDN the default public delivery path: confirm the provider is active, `dh.cauai.fun` resolves to its CNAME, and static image/script responses show the provider edge/cache before calling acceleration complete. Keep authenticated APIs and private media dynamic.
+- After each DNS/CDN change, recheck fresh signed-in `/templates` and `/workspace` pages, image dimensions, and video playback; never rely on the provider console alone.
 - Production deployment remains explicitly authorized only; never place credentials in this directory.
 - The user has explicitly authorized direct production deployment for this site because it currently has no customers; after each verified iteration, deploy the runtime source to the online server instead of stopping at local preview.

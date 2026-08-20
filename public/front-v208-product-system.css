@@ -1350,3 +1350,80 @@ main {
   .template-showcase-grid { grid-template-columns: minmax(0, 1fr) !important; }
   .template-showcase-grid .showcase-video-caption h2 { overflow-wrap: anywhere; }
 }
+
+/* Project management is a scan-first operational surface, not a second workspace. */
+.project-management-page { max-width: 1180px; padding-top: 44px; padding-bottom: 72px; }
+.project-management-head { display: flex; align-items: end; justify-content: space-between; gap: 28px; padding-bottom: 24px; border-bottom: 1px solid var(--product-line); }
+.project-management-head .eyebrow { margin: 0 0 8px; color: var(--product-green); font-size: 13px; font-weight: 800; }
+.project-management-head h1 { margin: 0; color: var(--product-green-deep); font-size: 36px; line-height: 1.1; letter-spacing: 0; }
+.project-management-head p:not(.eyebrow) { margin: 10px 0 0; color: var(--product-muted); }
+.project-management-actions { display: flex; flex: 0 0 auto; gap: 10px; align-items: center; }
+.project-management-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 24px 0; border: 1px solid var(--product-line); border-radius: 6px; background: rgba(255, 255, 252, .58); }
+.project-management-summary > div { display: grid; gap: 5px; min-height: 88px; align-content: center; padding: 16px 22px; border-right: 1px solid var(--product-line); }
+.project-management-summary > div:last-child { border-right: 0; }
+.project-management-summary strong { color: var(--product-green-deep); font-size: 26px; line-height: 1; }
+.project-management-summary span { color: var(--product-muted); font-size: 13px; }
+.project-management-list { display: grid; gap: 10px; }
+.project-management-filters { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 18px; }
+.project-management-filters button { min-height: 32px; padding: 0 11px; border: 1px solid var(--product-line); border-radius: 4px; background: rgba(255, 255, 252, .48); color: var(--product-green-deep); font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.project-management-filters button:hover { border-color: var(--product-green); }
+.project-management-filters button.active { border-color: var(--product-green-deep); background: var(--product-green-deep); color: #fff; }
+.project-management-row { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; gap: 18px; align-items: center; min-height: 132px; padding: 12px; border: 1px solid var(--product-line); border-radius: 6px; background: rgba(255, 255, 252, .66); }
+.project-management-preview { display: grid; position: relative; width: 132px; height: 106px; overflow: hidden; place-items: center; border-radius: 4px; background: #edf0eb; color: var(--product-muted); font-size: 13px; text-align: center; }
+.project-management-preview img, .project-management-preview video { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; background: transparent; }
+.project-management-preview-fallback { position: absolute; inset: 0; display: grid; z-index: 2; place-items: center; padding: 10px; background: #edf0eb; color: var(--product-muted); }
+.project-management-preview.is-ready .project-management-preview-fallback { display: none; }
+.project-management-preview.is-failed img, .project-management-preview.is-failed video { display: none; }
+.project-management-info { min-width: 0; }
+.project-management-title { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.project-management-title h2 { overflow-wrap: anywhere; margin: 0; color: var(--product-green-deep); font-size: 17px; line-height: 1.25; }
+.project-management-title span { flex: 0 0 auto; color: var(--product-green); font-size: 13px; font-weight: 800; }
+.project-management-group { margin: 7px 0 -4px !important; color: var(--product-green) !important; font-size: 12px !important; font-weight: 800; }
+.project-management-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 13px 0 10px; }
+.project-management-steps span { padding: 4px 7px; border: 1px solid var(--product-line); border-radius: 3px; color: var(--product-muted); font-size: 12px; line-height: 1; white-space: nowrap; }
+.project-management-steps span.ready { border-color: rgba(40, 112, 77, .35); background: rgba(40, 112, 77, .08); color: var(--product-green); }
+.project-management-info > p { margin: 0; color: var(--product-muted); font-size: 13px; }
+.project-management-row-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: 296px; }
+.project-management-row-actions .compact { min-height: 36px; }
+.project-management-row-actions .danger-button { border-color: rgba(172, 76, 55, .4); color: #9f432e; }
+.project-management-row-actions .danger-button:hover { border-color: #9f432e; background: rgba(172, 76, 55, .06); }
+.project-empty { display: grid; min-height: 260px; place-content: center; justify-items: center; gap: 12px; text-align: center; border-top: 1px solid var(--product-line); border-bottom: 1px solid var(--product-line); color: var(--product-muted); }
+.project-empty h1, .project-empty h2, .project-empty p { margin: 0; }
+.project-empty h1, .project-empty h2 { color: var(--product-green-deep); }
+
+@media (max-width: 760px) {
+  .project-management-page { padding-top: 30px; }
+  .project-management-head { align-items: stretch; flex-direction: column; }
+  .project-management-actions { width: 100%; }
+  .project-management-actions > * { flex: 1 1 0; }
+  .project-management-summary > div { padding: 14px 12px; }
+  .project-management-row { grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
+  .project-management-preview { width: 92px; height: 116px; }
+  .project-management-row-actions { grid-column: 1 / -1; justify-content: stretch; }
+  .project-management-row-actions > * { flex: 1 1 0; }
+  .project-management-filters { margin-bottom: 14px; }
+}
+
+/* Creating a same-style project is an explicit, reversible step before any media is imported. */
+.same-style-project-backdrop { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 24px; background: rgba(21, 35, 28, .42); backdrop-filter: blur(3px); }
+.same-style-project-dialog { position: relative; width: min(100%, 520px); padding: 30px 32px 26px; border: 1px solid rgba(40, 112, 77, .22); border-radius: 12px; background: #fffefa; box-shadow: 0 24px 70px rgba(21, 35, 28, .24); }
+.same-style-project-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.same-style-project-dialog h2 { margin: 6px 0 0; color: var(--product-green-deep); font-size: 24px; line-height: 1.25; overflow-wrap: anywhere; }
+.same-style-project-kicker { margin: 0; color: var(--product-green); font-size: 13px; font-weight: 800; letter-spacing: .02em; }
+.same-style-project-close { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; margin: -2px -4px 0 0; border: 1px solid var(--product-line); border-radius: 8px; background: transparent; color: var(--product-green-deep); cursor: pointer; font: inherit; font-size: 22px; line-height: 1; }
+.same-style-project-close:hover { border-color: var(--product-green); background: rgba(40, 112, 77, .08); }
+.same-style-project-close:focus-visible { outline: 3px solid rgba(40, 112, 77, .18); outline-offset: 2px; }
+.same-style-project-intro { margin: 14px 0 0; color: var(--product-muted); line-height: 1.7; }
+.same-style-project-field { display: block; margin: 24px 0 8px; color: var(--product-green-deep); font-size: 14px; font-weight: 800; }
+.same-style-project-dialog input { width: 100%; min-height: 46px; box-sizing: border-box; padding: 0 13px; border: 1px solid var(--product-line); border-radius: 7px; background: #fff; color: var(--product-green-deep); font: inherit; outline: none; }
+.same-style-project-dialog input:focus { border-color: var(--product-green); box-shadow: 0 0 0 3px rgba(40, 112, 77, .12); }
+.same-style-project-dialog .form-note { min-height: 20px; margin: 9px 0 0; }
+.same-style-project-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(40, 112, 77, .14); }
+.same-style-project-actions > * { min-height: 42px; }
+.same-style-project-actions .generate-button { min-height: 42px; }
+
+@media (max-width: 560px) {
+  .same-style-project-backdrop { align-items: end; padding: 12px; }
+  .same-style-project-dialog { width: 100%; padding: 24px 18px 20px; border-radius: 10px; }
+  .same-style-project-actions > * { flex: 1 1 0; }
+}

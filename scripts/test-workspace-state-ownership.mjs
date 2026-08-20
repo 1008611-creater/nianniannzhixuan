@@ -33,7 +33,7 @@ assert.match(workspace, /function recoverCompletedFinalBinding\(\{ force = false
 assert.match(workspace, /nodes\/FINAL_VIDEO/, "completed video recovery must bind only the FINAL_VIDEO node");
 assert.match(workspace, /completedJob\(job\) && finalOutputMediaId\(job\) && actionTaskMatchesCurrentInputs\(job\)/, "recovery must require a completed task with a concrete private output and current inputs");
 assert.match(workspace, /previousFailure\?\.key === key/, "automatic binding retries must be bounded after a failure");
-assert.match(workspace, /void recoverCompletedFinalBinding\(\);/, "initial hydration must recover a previously completed unbound result");
+assert.match(workspace, /void recoverCompletedFrameBinding\(\)\.then\(\(\) => recoverCompletedFinalBinding\(\)\);/, "initial hydration must recover completed unbound frame and video results");
 assert.match(workspace, /return workflowSnapshot\(\)\[step\.id\]\?\.status/);
 assert.match(workspace, /function recordPendingAssignment\(projectId, slot, asset, mutation\)/);
 assert.match(workspace, /function displayAssetFor\(id\)/);
@@ -47,6 +47,7 @@ assert.ok(refreshTaskState, "refreshTaskState must exist");
 assert.doesNotMatch(refreshTaskState[0], /assistant\/threads\//);
 assert.match(refreshTaskState[0], /taskRefreshInFlight = true/);
 assert.match(refreshTaskState[0], /mutation !== state\.sourceMutation/);
+assert.match(refreshTaskState[0], /await recoverCompletedFrameBinding\(\);/);
 assert.match(refreshTaskState[0], /await recoverCompletedFinalBinding\(\);/);
 assert.match(refreshTaskState[0], /catch \{/);
 assert.match(refreshTaskState[0], /finally \{[\s\S]*?taskRefreshInFlight = false;[\s\S]*?scheduleTaskRefresh\(5_000\)/);

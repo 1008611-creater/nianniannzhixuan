@@ -1459,25 +1459,6 @@ function sameOriginUploadEndpoint(value) {
   }
 }
 
-function uploadApplicationChunk(url, headers, chunk) {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PUT", url, true);
-    request.withCredentials = true;
-    request.timeout = 30_000;
-    headers.forEach((value, name) => request.setRequestHeader(name, value));
-    request.onload = () => {
-      let payload = {};
-      try { payload = JSON.parse(request.responseText || "{}"); } catch {}
-      resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, payload });
-    };
-    request.onerror = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_FAILED"));
-    request.onabort = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_ABORTED"));
-    request.ontimeout = () => reject(new Error("MEDIA_UPLOAD_TIMEOUT"));
-    request.send(chunk);
-  });
-}
-
 async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材") {
   if (!file) throw new Error("MEDIA_UPLOAD_EMPTY");
   file = normalizeTemplateVideoFile(file);
@@ -1518,9 +1499,8 @@ async function uploadTemplateMediaToPrivateStore(file, label = "已上传素材"
       let lastError;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const uploadedChunk = await uploadApplicationChunk(uploadUrl, chunkHeaders, chunk);
-          contentResponse = { ok: uploadedChunk.ok, status: uploadedChunk.status };
-          contentResult = uploadedChunk.payload;
+          contentResponse = await fetch(uploadUrl, { method: "PUT", headers: chunkHeaders, body: chunk, credentials: "same-origin" });
+          contentResult = await contentResponse.json().catch(() => ({}));
           if (contentResponse.ok) { lastError = null; break; }
           lastError = new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
           if (contentResponse.status < 500) break;
@@ -3826,7 +3806,7 @@ function ensureWorkspaceV206Styles() {
   if (workspaceV206StylesPromise) return workspaceV206StylesPromise;
   // Legacy release marker retained for source-contract compatibility:
   // href = "/workspace-v206-20260819-no-preview-rerender-02.css"
-  const href = "/workspace-v206-20260820-upload-xhr-03.css";
+  const href = "/workspace-v206-20260820-upload-proxy-02.css";
   const existing = document.querySelector(`link[data-workspace-v206-style="1"]`)
     || document.querySelector(`link[href^="${href.split("?")[0]}"]`);
   if (!existing) {
@@ -3851,7 +3831,7 @@ async function ensureWorkspaceV206Mount() {
   if (!workspaceV206ModulePromise) {
     // Legacy release marker retained for source-contract compatibility:
     // workspaceV206ModulePromise = import("/workspace-v206-20260819-no-preview-rerender-02.js")
-    workspaceV206ModulePromise = import("/workspace-v206-20260820-upload-xhr-03.js");
+    workspaceV206ModulePromise = import("/workspace-v206-20260820-upload-proxy-02.js");
   }
   await workspaceV206ModulePromise.catch((error) => {
     return null;

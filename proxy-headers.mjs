@@ -1,19 +1,5 @@
 const LOCAL_PROXY_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
-// Security response headers applied to every browser-facing response.
-// `script-src`/`style-src` allow inline (the legacy templates use inline scripts/styles);
-// tighten with nonces once the templates are refactored. `img-src`/`media-src` are
-// restricted to same-origin + data: because static and private media are served by this proxy.
-export const SECURITY_HEADERS = {
-  "content-security-policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'",
-  "strict-transport-security": "max-age=31536000; includeSubDomains",
-  "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY",
-  "referrer-policy": "no-referrer",
-};
-
 function localUrl(value) {
   try {
     const url = new URL(String(value || ""));
@@ -56,6 +42,19 @@ export function proxyHeaders(headers, upstreamOrigin, csrfOrigin = upstreamOrigi
   }
   return result;
 }
+
+// Browser-facing hardening applied to every response leaving this proxy.
+// CSP stays permissive for inline scripts (the shell injects a small inline
+// bootstrap) but blocks cross-origin script/img/media and clickjacking.
+export const SECURITY_HEADERS = {
+  "content-security-policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "no-referrer",
+};
 
 export function proxyResponseHeaders(headers) {
   const result = new Headers(headers);
