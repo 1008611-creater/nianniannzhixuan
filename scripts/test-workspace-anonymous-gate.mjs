@@ -30,4 +30,20 @@ assert.doesNotMatch(branch, /requestedProjectId && sessionAuthFailed/, "跳转�
 // 6) 死代码 sessionAuthFailed 不应残留(仅为旧门禁服务)。
 assert.doesNotMatch(workspace, /\bsessionAuthFailed\b/, "sessionAuthFailed 仅为旧门禁服务, 修复后必须清理");
 
+// 7) 版本化快照才是壳实际 import 的工作台模块(app.compat.js 硬编码, 无回退链),
+//    它必须同带修复——否则只修裸 workspace-v206.js 等于没修(线上依旧旧版)。
+const legacy = await readFile(new URL("../public/app.compat.js", import.meta.url), "utf8");
+assert.match(
+  legacy,
+  /workspaceV206ModulePromise = import\("\/workspace-v206-20260820-upload-xhr-03\.js"\)/,
+  "壳必须 import 带修复的版本化快照, 而不是裸 workspace-v206.js"
+);
+const snapshot = await readFile(
+  new URL("../public/workspace-v206-20260820-upload-xhr-03.js", import.meta.url),
+  "utf8",
+);
+assert.match(snapshot, /window\.location\.replace\("\/access"\)/, "实际 import 的快照必须含无条件跳转");
+assert.doesNotMatch(snapshot, /flash\(sessionAuthFailed/, "实际 import 的快照不能含旧 flash 兜底");
+assert.doesNotMatch(snapshot, /requestedProjectId && sessionAuthFailed/, "实际 import 的快照不能含旧局部门禁");
+
 console.log("OK anonymous workspace access is gated to /access before any render");
