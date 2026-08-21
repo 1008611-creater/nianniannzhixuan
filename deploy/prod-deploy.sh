@@ -2,8 +2,10 @@
 # prod-deploy.sh — 念念智选生产部署脚本 (dh.cauai.fun / 38.76.193.254)
 #
 # 部署机制(实测): /opt/niannian-web 是源码目录(非 git 仓库),
-#   部署 = 从本地 main 抽取 server.mjs + proxy-headers.mjs → scp →
+#   部署 = 从本地 main 抽取 server.mjs + proxy-headers.mjs + public/ → scp →
 #   docker compose build → up -d → 接入 app_default 网络(Caddy 反代所在)→ 验证。
+#   public/ 必须一起部署: 前端(workspace-v206.js 等)改动只在 public/ 里,
+#   漏掉它会出现"服务端已更新、前端仍是旧版"的假上线。
 #
 # 关键坑: Caddy 容器 deeptutor-public-caddy 在 app_default 网络, 按 Docker DNS
 #   reverse_proxy niannian-web:18893 反代。新容器必须接在 app_default 否则 502。
@@ -35,31 +37,35 @@ extract_main() {
   local dir; dir="$(mktemp -d)"
   git show main:server.mjs > "$dir/server.mjs" || { echo "✗ 无法从 main 抽取 server.mjs"; exit 1; }
   git show main:proxy-headers.mjs > "$dir/proxy-headers.mjs" || { echo "✗ 无法从 main 抽取 proxy-headers.mjs"; exit 1; }
+  git archive main public | tar -x -C "$dir" || { echo "✗ 无法从 main 抽取 public/"; exit 1; }
   echo "$dir"
 }
 
 do_deploy() {
-  echo "==> [1/6] 部署前: 给当前运行镜像打回滚标签 $ROLLBACK_TAG"
+  echo "==> [1/7] 部署前: 给当前运行镜像打回滚标签 $ROLLBACK_TAG"
   local cur; cur="$(ssh_cmd "docker inspect -f '{{.Config.Image}}' niannian-web 2>/dev/null" || true)"
   if [ -n "$cur" ]; then
     ssh_cmd "docker tag '$cur' '$ROLLBACK_TAG'" && echo "    已标记 $cur -> $ROLLBACK_TAG" || echo "    (标记失败, 继续)"
   fi
 
-  echo "==> [2/6] 从本地 main 抽取部署文件"
+  echo "==> [2/7] 从本地 main 抽取部署文件"
   local d; d="$(extract_main)"
-  echo "    临时目录 $d (server.mjs $(wc -c < "$d/server.mjs")B, proxy-headers.mjs $(wc -c < "$d/proxy-headers.mjs")B)"
+  echo "    临时目录 $d (server.mjs $(wc -c < "$d/server.mjs")B, proxy-headers.mjs $(wc -c < "$d/proxy-headers.mjs")B, public/ $(find "$d/public" -type f | wc -l) files)"
 
-  echo "==> [3/6] scp 到 $SERVER:$DEPLOY_DIR/"
+  echo "==> [3/7] scp server.mjs + proxy-headers.mjs -> $DEPLOY_DIR/"
   scp_cmd "$d/server.mjs" "$d/proxy-headers.mjs" "$SERVER:$DEPLOY_DIR/" || { echo "✗ scp 失败"; exit 1; }
+
+  echo "==> [4/7] scp public/ -> $DEPLOY_DIR/public/ (前端修复必须随行)"
+  scp_cmd -r "$d/public" "$SERVER:$DEPLOY_DIR/" || { echo "✗ scp public/ 失败"; exit 1; }
   rm -rf "$d"
 
-  echo "==> [4/6] 服务端: docker compose build + up -d"
+  echo "==> [5/7] 服务端: docker compose build + up -d"
   ssh_cmd "cd $DEPLOY_DIR && docker compose build && docker compose up -d" || { echo "✗ 构建/启动失败, 请手动回滚"; exit 1; }
 
-  echo "==> [5/6] 将容器接入 app_default(Caddy 反代所在网络, 否则 502)"
+  echo "==> [6/7] 将容器接入 app_default(Caddy 反代所在网络, 否则 502)"
   ssh_cmd "docker network connect $APP_NET niannian-web 2>/dev/null || true"
 
-  echo "==> [6/6] 等待健康并检查"
+  echo "==> [7/7] 等待健康并检查"
   ssh_cmd "for i in \$(seq 1 20); do c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:18893/healthz); [ \"\$c\" = 200 ] && { echo ready; break; }; sleep 1; done"
   do_verify
 }
