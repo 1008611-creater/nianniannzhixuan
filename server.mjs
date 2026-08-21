@@ -1183,9 +1183,59 @@ async function proxy(request, response) {
   await sendUpstreamResponse(response, upstream);
 }
 
+// ---- Auth endpoint rate limiting (brute-force / credential-stuffing guard) ----
+// These POSTs are rejected here, before reaching the upstream, so a sprayed
+// credential never amplifies upstream load and the CDN origin stays responsive.
+const AUTH_RATE_LIMITS = {
+  "/api/v1/auth/login": { max: 8, windowMs: 60_000 },
+  "/api/v1/auth/register": { max: 5, windowMs: 60_000 },
+  "/api/auth/request-code": { max: 3, windowMs: 60_000 },
+  "/api/auth/admin-login": { max: 5, windowMs: 60_000 },
+};
+const authRateBuckets = new Map();
+function authClientKey(request) {
+  const forwarded = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwarded || request.socket?.remoteAddress || "unknown";
+}
+function authRateLimitRetryAfter(request, pathname) {
+  const rule = AUTH_RATE_LIMITS[pathname];
+  if (!rule) return null;
+  const now = Date.now();
+  if (authRateBuckets.size > 10_000) {
+    // Opportunistic prune so the bucket map never grows without bound.
+    for (const [key, entry] of authRateBuckets) {
+      if (entry.resetAt <= now) authRateBuckets.delete(key);
+    }
+  }
+  const key = `${pathname}|${authClientKey(request)}`;
+  const entry = authRateBuckets.get(key);
+  if (!entry || entry.resetAt <= now) {
+    authRateBuckets.set(key, { count: 1, resetAt: now + rule.windowMs });
+    return null;
+  }
+  entry.count += 1;
+  if (entry.count > rule.max) return Math.ceil((entry.resetAt - now) / 1000);
+  return null;
+}
+
 createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
+    // Auth POSTs are rate limited here so repeated login/register/code attempts
+    // never reach the upstream and never amplify a brute-force spray.
+    if (request.method === "POST" && AUTH_RATE_LIMITS[pathname]) {
+      const retryAfterSeconds = authRateLimitRetryAfter(request, pathname);
+      if (retryAfterSeconds !== null) {
+        response.writeHead(429, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "retry-after": String(retryAfterSeconds),
+          ...SECURITY_HEADERS,
+        });
+        response.end(JSON.stringify({ error: "尝试次数过多，请稍后再试。", retryAfterSeconds }));
+        return;
+      }
+    }
     if (request.method === "GET" && pathname === "/healthz") {
       // Intentionally minimal: do not expose internal topology (port, remoteOrigin).
       response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS });
