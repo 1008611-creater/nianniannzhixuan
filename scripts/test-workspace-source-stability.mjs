@@ -83,7 +83,7 @@ const workspaceHtml = await readFile(new URL("../public/workspace.html", import.
 assert.match(workspaceHtml, /rel="modulepreload" href="\/workspace-v206(?:-20260817-48\.js\?v=20260819-stable-render-01|-20260819-(?:stable-render-01|no-preview-rerender-02|atomic-boot-03)\.js)"/);
 assert.match(workspace, /const finalPoster = finished\.mediaId \? privateMediaPosterUrl\(finished\.mediaId\)/, "final playback must use the poster generated from the same media");
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
-assert.match(indexHtml, /app\.compat(?:\.js\?v=20260819-stable-render-01|-20260819-(?:stable-render-01|no-preview-rerender-02|atomic-boot-03)\.js)/);
+assert.match(indexHtml, /app\.compat(?:\.js\?v=20260819-stable-render-01|-20260819-(?:stable-render-01|no-preview-rerender-02|atomic-boot-03)\.js|-20260821-anonymous-gate-01\.js)/);
 assert.match(workspace, /function privateMediaPosterUrl\(mediaOrId\)/, "workspace private videos must use the authenticated poster route");
 assert.match(workspace, /function bindPrivateVideoPosters\(\)/, "workspace must retry a poster while an older video is being prepared");
 assert.match(legacy, /function bindPrivateVideoPosters\(scope = document\)/, "all shell video views must receive the same private poster behavior");

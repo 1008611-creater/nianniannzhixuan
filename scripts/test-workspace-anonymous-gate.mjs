@@ -32,14 +32,21 @@ assert.doesNotMatch(workspace, /\bsessionAuthFailed\b/, "sessionAuthFailed 仅�
 
 // 7) 版本化快照才是壳实际 import 的工作台模块(app.compat.js 硬编码, 无回退链),
 //    它必须同带修复——否则只修裸 workspace-v206.js 等于没修(线上依旧旧版)。
-const legacy = await readFile(new URL("../public/app.compat.js", import.meta.url), "utf8");
+//    且前端行为变更必须换新版本化 URL(缓存击穿), 否则 CDN/浏览器继续伺服旧内容。
+const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
 assert.match(
-  legacy,
-  /workspaceV206ModulePromise = import\("\/workspace-v206-20260820-upload-xhr-03\.js"\)/,
-  "壳必须 import 带修复的版本化快照, 而不是裸 workspace-v206.js"
+  indexHtml,
+  /<script src="\/app\.compat-20260821-anonymous-gate-01\.js">/,
+  "index.html 必须加载新版本化 compat 模块(缓存击穿)"
+);
+const compat = await readFile(new URL("../public/app.compat-20260821-anonymous-gate-01.js", import.meta.url), "utf8");
+assert.match(
+  compat,
+  /workspaceV206ModulePromise = import\("\/workspace-v206-20260821-anonymous-gate-01\.js"\)/,
+  "新 compat 必须 import 带修复的新版本化工作台快照"
 );
 const snapshot = await readFile(
-  new URL("../public/workspace-v206-20260820-upload-xhr-03.js", import.meta.url),
+  new URL("../public/workspace-v206-20260821-anonymous-gate-01.js", import.meta.url),
   "utf8",
 );
 assert.match(snapshot, /window\.location\.replace\("\/access"\)/, "实际 import 的快照必须含无条件跳转");

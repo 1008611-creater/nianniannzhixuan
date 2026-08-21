@@ -52,6 +52,15 @@ const editor = await fetch(`${baseUrl}/workspace-v206.js`);
 if (editor.status !== 200) throw new Error(`workspace editor module unavailable: ${editor.status}`);
 console.log("OK workspace lazy-loads its editor module");
 
+// Cache-busting contract: index.html loads the versioned compat module, which imports
+// the versioned workspace module carrying the anonymous auth gate. Both must resolve,
+// otherwise browsers keep serving stale cached copies of the buggy workspace.
+for (const versioned of ["/app.compat-20260821-anonymous-gate-01.js", "/workspace-v206-20260821-anonymous-gate-01.js"]) {
+  const res = await fetch(`${baseUrl}${versioned}`);
+  if (res.status !== 200) throw new Error(`versioned shell asset unavailable: ${versioned} -> ${res.status}`);
+  console.log(`OK versioned shell asset: ${versioned}`);
+}
+
 const staticUrl = `${baseUrl}/front-20260616.css?v=verify-static-contract`;
 const full = await fetch(staticUrl);
 const head = await fetch(staticUrl, { method: "HEAD" });
