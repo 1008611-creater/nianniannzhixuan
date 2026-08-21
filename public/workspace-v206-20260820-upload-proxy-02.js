@@ -1134,16 +1134,18 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
     // session can never leave the workspace in its indefinite loading state.
     const session = await request("/api/v1/auth/me").catch((error) => ({ user: null, error }));
     if (run !== loadRun) return;
-    state.session = session.user || null;
+    const sessionAuthFailed = session.error?.status === 401;
+    state.session = session.user || (sessionAuthFailed ? null : state.session);
     state.sessionLoaded = true;
     state.projects = [];
     if (!state.session) {
       state.projectLoading = false;
-      const returnTo = requestedProjectId
-        ? `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`
-        : `${window.location.pathname}${window.location.search}` || "/workspace";
-      localStorage.setItem("authReturnTo", returnTo);
-      window.location.replace("/access");
+      if (requestedProjectId && sessionAuthFailed) {
+        localStorage.setItem("authReturnTo", `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`);
+        window.location.replace("/access");
+        return;
+      }
+      flash(sessionAuthFailed ? "登录已失效，请重新登录。" : "登录状态暂时无法确认，请刷新重试。", "warning");
       return;
     }
     const requestedProjectResult = await requestedProjectPromise;
@@ -2776,25 +2778,6 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
       return raw;
     }
   }
-
-  function uploadApplicationChunk(url, headers, chunk) {
-    return new Promise((resolve, reject) => {
-      const request = new XMLHttpRequest();
-      request.open("PUT", url, true);
-      request.withCredentials = true;
-      request.timeout = 30_000;
-      headers.forEach((value, name) => request.setRequestHeader(name, value));
-      request.onload = () => {
-        let payload = {};
-        try { payload = JSON.parse(request.responseText || "{}"); } catch {}
-        resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, payload });
-      };
-      request.onerror = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_FAILED"));
-      request.onabort = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_ABORTED"));
-      request.ontimeout = () => reject(new Error("MEDIA_UPLOAD_TIMEOUT"));
-      request.send(chunk);
-    });
-  }
   async function uploadCosMultipart(file, upload) {
     const partSize = upload.partSize || (8 * 1024 * 1024);
     const uploaded = new Map((upload.uploadedParts || []).map((part) => [Number(part.partNumber), Number(part.bytes)]));
@@ -2882,9 +2865,8 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
-              const uploadedChunk = await uploadApplicationChunk(uploadUrl, chunkHeaders, chunk);
-              contentResponse = { ok: uploadedChunk.ok, status: uploadedChunk.status };
-              contentResult = uploadedChunk.payload;
+              contentResponse = await fetch(uploadUrl, { method: "PUT", headers: chunkHeaders, body: chunk, credentials: "same-origin" });
+              contentResult = await contentResponse.json().catch(() => ({}));
               if (contentResponse.ok) { lastError = null; break; }
               lastError = new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
               if (contentResponse.status < 500) break;

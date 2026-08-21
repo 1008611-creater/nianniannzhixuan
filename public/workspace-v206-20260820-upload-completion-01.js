@@ -1134,16 +1134,18 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
     // session can never leave the workspace in its indefinite loading state.
     const session = await request("/api/v1/auth/me").catch((error) => ({ user: null, error }));
     if (run !== loadRun) return;
-    state.session = session.user || null;
+    const sessionAuthFailed = session.error?.status === 401;
+    state.session = session.user || (sessionAuthFailed ? null : state.session);
     state.sessionLoaded = true;
     state.projects = [];
     if (!state.session) {
       state.projectLoading = false;
-      const returnTo = requestedProjectId
-        ? `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`
-        : `${window.location.pathname}${window.location.search}` || "/workspace";
-      localStorage.setItem("authReturnTo", returnTo);
-      window.location.replace("/access");
+      if (requestedProjectId && sessionAuthFailed) {
+        localStorage.setItem("authReturnTo", `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`);
+        window.location.replace("/access");
+        return;
+      }
+      flash(sessionAuthFailed ? "登录已失效，请重新登录。" : "登录状态暂时无法确认，请刷新重试。", "warning");
       return;
     }
     const requestedProjectResult = await requestedProjectPromise;
@@ -2762,39 +2764,6 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
   function clearMultipartUpload(file, sha) {
     try { localStorage.removeItem(uploadResumeKey(file, sha)); } catch {}
   }
-  function sameOriginUploadEndpoint(value) {
-    const raw = String(value || "").trim();
-    if (!raw) return "";
-    try {
-      const parsed = new URL(raw, window.location.origin);
-      // The legacy API may return its public origin in an upload intent. Keep
-      // the browser on the authenticated frontend proxy instead of sending
-      // cookies-less uploads to the origin host.
-      if (parsed.hostname === "dh-origin.cauai.fun" || /^\/api\/v1\/media\//i.test(parsed.pathname)) return `${parsed.pathname}${parsed.search}`;
-      return parsed.href;
-    } catch {
-      return raw;
-    }
-  }
-
-  function uploadApplicationChunk(url, headers, chunk) {
-    return new Promise((resolve, reject) => {
-      const request = new XMLHttpRequest();
-      request.open("PUT", url, true);
-      request.withCredentials = true;
-      request.timeout = 30_000;
-      headers.forEach((value, name) => request.setRequestHeader(name, value));
-      request.onload = () => {
-        let payload = {};
-        try { payload = JSON.parse(request.responseText || "{}"); } catch {}
-        resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, payload });
-      };
-      request.onerror = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_FAILED"));
-      request.onabort = () => reject(new Error("MEDIA_UPLOAD_TRANSPORT_ABORTED"));
-      request.ontimeout = () => reject(new Error("MEDIA_UPLOAD_TIMEOUT"));
-      request.send(chunk);
-    });
-  }
   async function uploadCosMultipart(file, upload) {
     const partSize = upload.partSize || (8 * 1024 * 1024);
     const uploaded = new Map((upload.uploadedParts || []).map((part) => [Number(part.partNumber), Number(part.bytes)]));
@@ -2802,7 +2771,7 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
     for (let offset = 0, partNumber = 1; offset < file.size; offset += partSize, partNumber += 1) {
       const chunk = file.slice(offset, Math.min(offset + partSize, file.size));
       if (uploaded.get(partNumber) === chunk.size) continue;
-      const part = await mediaRequest(sameOriginUploadEndpoint(upload.partUrlEndpoint), { method: "POST", body: JSON.stringify({ partNumber }) });
+      const part = await mediaRequest(upload.partUrlEndpoint, { method: "POST", body: JSON.stringify({ partNumber }) });
       const putHeaders = new Headers(part.upload?.requiredHeaders || {});
       let response;
       let lastError;
@@ -2856,7 +2825,7 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
         body: JSON.stringify({ kind, label: originalName.replace(/\.[^.]+$/, "") || "已上传素材", originalName, mimeType, bytes: file.size, sha256: fileSha }),
       });
       const uploadHeaders = new Headers(intent.upload?.requiredHeaders || {});
-      const uploadUrl = sameOriginUploadEndpoint(intent.upload?.uploadUrl);
+      const uploadUrl = intent.upload?.uploadUrl || "";
       const cosMultipart = intent.upload?.transport === "COS_MULTIPART";
       const applicationUpload = uploadUrl.startsWith("/api/");
       let multipartStatus = null;
@@ -2882,9 +2851,8 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
-              const uploadedChunk = await uploadApplicationChunk(uploadUrl, chunkHeaders, chunk);
-              contentResponse = { ok: uploadedChunk.ok, status: uploadedChunk.status };
-              contentResult = uploadedChunk.payload;
+              contentResponse = await fetch(uploadUrl, { method: "PUT", headers: chunkHeaders, body: chunk, credentials: "same-origin" });
+              contentResult = await contentResponse.json().catch(() => ({}));
               if (contentResponse.ok) { lastError = null; break; }
               lastError = new Error(contentResult.error || "MEDIA_UPLOAD_FAILED");
               if (contentResponse.status < 500) break;
