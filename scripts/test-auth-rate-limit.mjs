@@ -6,10 +6,12 @@ import { readFile } from "node:fs/promises";
 const server = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
 
 // 1) 限速清单必须覆盖关键认证端点。
+// 注: 代理层观测到的是腾讯 CDN 边缘 IP(每请求可能不同), 故限额为突发防护式
+// (登录 20/min)而非按真实用户精确限速; 后者属于 CDN/WAF 层能力。
 assert.match(
   server,
-  /AUTH_RATE_LIMITS = \{\s*"\/api\/v1\/auth\/login": \{ max: 8, windowMs: 60_000 \}/,
-  "登录端点必须限速(8 次/分钟/IP)",
+  /AUTH_RATE_LIMITS = \{\s*"\/api\/v1\/auth\/login": \{ max: 20, windowMs: 60_000 \}/,
+  "登录端点必须限速(20 次/分钟/可见IP, 突发防护)",
 );
 for (const path of ["/api/v1/auth/login", "/api/v1/auth/register", "/api/auth/request-code", "/api/auth/admin-login"]) {
   assert.ok(server.includes(`"${path}"`), `${path} 必须在限速清单中`);

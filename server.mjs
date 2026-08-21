@@ -1183,13 +1183,17 @@ async function proxy(request, response) {
   await sendUpstreamResponse(response, upstream);
 }
 
-// ---- Auth endpoint rate limiting (brute-force / credential-stuffing guard) ----
+// ---- Auth endpoint rate limiting (burst / credential-spray guard) ----
 // These POSTs are rejected here, before reaching the upstream, so a sprayed
 // credential never amplifies upstream load and the CDN origin stays responsive.
+// NOTE: behind the Tencent CDN the proxy observes CDN edge IPs (per-request
+// varying), not the real client IP, so limits are intentionally burst-oriented
+// to avoid blocking legit users who share an edge. Per-user limits belong to
+// the CDN/WAF edge, which does see the real client address.
 const AUTH_RATE_LIMITS = {
-  "/api/v1/auth/login": { max: 8, windowMs: 60_000 },
-  "/api/v1/auth/register": { max: 5, windowMs: 60_000 },
-  "/api/auth/request-code": { max: 3, windowMs: 60_000 },
+  "/api/v1/auth/login": { max: 20, windowMs: 60_000 },
+  "/api/v1/auth/register": { max: 10, windowMs: 60_000 },
+  "/api/auth/request-code": { max: 10, windowMs: 60_000 },
   "/api/auth/admin-login": { max: 5, windowMs: 60_000 },
 };
 const authRateBuckets = new Map();
@@ -1225,6 +1229,7 @@ createServer(async (request, response) => {
     // never reach the upstream and never amplify a brute-force spray.
     if (request.method === "POST" && AUTH_RATE_LIMITS[pathname]) {
       const retryAfterSeconds = authRateLimitRetryAfter(request, pathname);
+      console.log(`[auth-ratelimit] ${pathname} ip=${authClientKey(request)} ${retryAfterSeconds === null ? "ok" : `BLOCKED retry=${retryAfterSeconds}s`}`);
       if (retryAfterSeconds !== null) {
         response.writeHead(429, {
           "content-type": "application/json; charset=utf-8",
