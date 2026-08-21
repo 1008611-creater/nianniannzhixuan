@@ -1134,18 +1134,16 @@ import { buildWorkflowSnapshot, newestProjectTask, taskMatchesCurrentSignature }
     // session can never leave the workspace in its indefinite loading state.
     const session = await request("/api/v1/auth/me").catch((error) => ({ user: null, error }));
     if (run !== loadRun) return;
-    const sessionAuthFailed = session.error?.status === 401;
-    state.session = session.user || (sessionAuthFailed ? null : state.session);
+    state.session = session.user || null;
     state.sessionLoaded = true;
     state.projects = [];
     if (!state.session) {
       state.projectLoading = false;
-      if (requestedProjectId && sessionAuthFailed) {
-        localStorage.setItem("authReturnTo", `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`);
-        window.location.replace("/access");
-        return;
-      }
-      flash(sessionAuthFailed ? "登录已失效，请重新登录。" : "登录状态暂时无法确认，请刷新重试。", "warning");
+      const returnTo = requestedProjectId
+        ? `/workspace?projectId=${encodeURIComponent(requestedProjectId)}`
+        : `${window.location.pathname}${window.location.search}` || "/workspace";
+      localStorage.setItem("authReturnTo", returnTo);
+      window.location.replace("/access");
       return;
     }
     const requestedProjectResult = await requestedProjectPromise;
