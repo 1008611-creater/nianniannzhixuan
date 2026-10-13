@@ -1,0 +1,22 @@
+/* V209 media integrity: source action posters must never be cropped by card layout. */
+.showcase-video-shell {
+  background: #e8f0e6 !important;
+}
+
+.showcase-video-card .showcase-video-shell > img,
+.showcase-video-card .showcase-video-shell > video {
+  object-fit: contain !important;
+  object-position: center;
+  background: transparent;
+}
+
+/* These are portrait source videos, including the former wide featured tile. */
+.showcase-video-card,
+.showcase-video-card.featured {
+  grid-column: span 1 !important;
+}
+
+.showcase-video-card .showcase-video-shell,
+.showcase-video-card.featured .showcase-video-shell {
+  aspect-ratio: 9 / 16 !important;
+}
