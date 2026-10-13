@@ -1,0 +1,2357 @@
+{
+  "date": "2026-10-13",
+  "scope": "Sanitized source snapshots recovered from running deployments; production untouched; excluded environment credentials, user data, runtime storage, generated/build output and unreviewed media.",
+  "repository": "1008611-creater/nianniannzhixuan",
+  "variants": [
+    {
+      "name": "niannian-web",
+      "source": "niannian-web",
+      "server": "haika-1757",
+      "sourcePath": "/opt/niannian-web",
+      "relationship": "Current deployed source snapshot; runtime data excluded",
+      "excludedSensitiveAndRuntimeFiles": true,
+      "files": [
+        {
+          "path": ".dockerignore",
+          "sha256": "c70bdb97f0a453fca3241f9d8a93719cfe914726110dd7b7c8fedbbc00ae6f40"
+        },
+        {
+          "path": "agent/AGENTS.md",
+          "sha256": "bd2371ac0ca3d7147e2842a61053d7bd5c3dbca16a91449e900b7b09302c1d8c"
+        },
+        {
+          "path": "agent/contracts/workspace-api.json",
+          "sha256": "867ef7aa7e0f852a466e9892d0e0af1a7b742b4f0574817fef446b5ba312873e"
+        },
+        {
+          "path": "agent/skills/i-have-adhd/SKILL.md",
+          "sha256": "80aa30eb663e7a3481f70a6ecbf2b3fc17345015e5fc3cd7619401ccdf9e550b"
+        },
+        {
+          "path": "app/compose.yaml",
+          "sha256": "fd303462ad28a2bba51798eb858df91b535a59ecd2a969b5de5762ed510e3c5f"
+        },
+        {
+          "path": "app/Dockerfile",
+          "sha256": "c63a2ab0efe7e8deb923f459da613d3669dacaec04bc5e8366e8788eb7b0a7c4"
+        },
+        {
+          "path": "app/package.json",
+          "sha256": "716abd2d9ee5ffac73be3a2b406e58983f42b9d9c7470b6f9789339f1014571f"
+        },
+        {
+          "path": "app/proxy-headers.mjs",
+          "sha256": "9eea7a2927542ff1cb006b413e61938bbdc5266bc07471dac149d4c47ff1a146"
+        },
+        {
+          "path": "app/public/app.compat.js",
+          "sha256": "bc3877dbe7b3c4d34c71f47ce63558290e28c20ff728e795831d59ef58c190b0"
+        },
+        {
+          "path": "app/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "app/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "app/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "app/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "app/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "app/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "app/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "app/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "app/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "app/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "app/public/workspace-v206.js",
+          "sha256": "e762c2b66a780ced76b5108e585bed16405ccaba7c239094473123e5cfe5a214"
+        },
+        {
+          "path": "app/public/workspace.html",
+          "sha256": "ff7d1d8fe0592b539e894f72460266c552453a8e241555e3b2078640180f0a30"
+        },
+        {
+          "path": "app/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "app/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "app/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "app/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "app/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "app/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "app/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "app/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "app/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "app/server.mjs",
+          "sha256": "57776f10e6b2ed6d65dc0228e1d8ea92ec34d71bcb2bd0f4dbe57706bb5a478f"
+        },
+        {
+          "path": "app/workspace-v206.js",
+          "sha256": "d5f85d25a2d704c985e90e01fda42e985dfacdb09bcec2a581fb4cfcdc7d17f2"
+        },
+        {
+          "path": "app.compat.js",
+          "sha256": "2cda8569469e9f1919f1edbd26cc10125a7ad0f9bb72776552b78c9a2eb46b91"
+        },
+        {
+          "path": "compose.yaml",
+          "sha256": "9b64396a5e0d3ef81a41f425895a245a6333f5d514fb1c34336bbd0758da9358"
+        },
+        {
+          "path": "contracts/workspace-api.json",
+          "sha256": "867ef7aa7e0f852a466e9892d0e0af1a7b742b4f0574817fef446b5ba312873e"
+        },
+        {
+          "path": "Dockerfile",
+          "sha256": "954723744f719039b891499c7c5451f2328108ed42bf08dd37e78fe283d07070"
+        },
+        {
+          "path": "front-v208-product-system.css",
+          "sha256": "9d6dddcfdcc38f35e55e55fb86495168f6e99e6975c03e888707d1d067bf30c4"
+        },
+        {
+          "path": "index.html",
+          "sha256": "b8bf8f3ea25120c34d7dc662aa4bddbc9fa35505457741a46ea23d46df445064"
+        },
+        {
+          "path": "package.json",
+          "sha256": "e5aa4da7ec9e09c9ccd82b576f594ce02cc09ea1fb6293f44f8aef6f9e330f72"
+        },
+        {
+          "path": "proxy-headers.mjs",
+          "sha256": "6149930b23e6b6300c6e2da719ec18aa4b9f7358380d8e62efc5c8d984258810"
+        },
+        {
+          "path": "public/app.compat-20260819-atomic-boot-03.js",
+          "sha256": "bdd31bd268fd228299f8232cd8ff8d41855cc050dce257b0813d36b8fed9343d"
+        },
+        {
+          "path": "public/app.compat-20260819-no-preview-rerender-02.js",
+          "sha256": "172e8c3f41cfb0d106e534bba1e652987d8e878637c691142144c4f8af5f50cc"
+        },
+        {
+          "path": "public/app.compat-20260819-stable-render-01.js",
+          "sha256": "7b62de7f2ed5876f692178a5660e26d203e00c557850a7daa76d9b37f6e49b21"
+        },
+        {
+          "path": "public/app.compat-20260820-upload-completion-01.js",
+          "sha256": "4586923df6eee532d963399e8488e3f6b173a1d2c2a885ec69dd153705be4fb2"
+        },
+        {
+          "path": "public/app.compat-20260820-upload-proxy-02.js",
+          "sha256": "d0f7ca32499e474c00029c8ff8355a456508f5b3f386ee7436dc69797f3eb663"
+        },
+        {
+          "path": "public/app.compat-20260820-upload-xhr-03.js",
+          "sha256": "2aaa138b8c6b7c74098b0318848d3f5970c41ce6b4cacb2e6b631382cf9f1fa8"
+        },
+        {
+          "path": "public/app.compat-20260821-anonymous-gate-01.js",
+          "sha256": "877a014e44747f992135e8f900b298a3d0b34ef252d53a64c29058b53c273915"
+        },
+        {
+          "path": "public/app.compat.js",
+          "sha256": "877a014e44747f992135e8f900b298a3d0b34ef252d53a64c29058b53c273915"
+        },
+        {
+          "path": "public/compose.yaml",
+          "sha256": "6ad9972f2299ad8bf3944e8bce28c6750e8d3e3c757bdbf60a2c80db9f45cc3e"
+        },
+        {
+          "path": "public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "public/front-skill-router-templates-20260815.css",
+          "sha256": "f012f1a9a52893f432cd06f71781fba64bc5e2b303121946dcb089276116d34c"
+        },
+        {
+          "path": "public/front-v208-product-system.css",
+          "sha256": "59e3fc59539d0b51e531abef6a76d762c1b65d1e6074e638188389c914c9efb8"
+        },
+        {
+          "path": "public/index.html",
+          "sha256": "037640dc2050f4fa335a4d48a1409c3f67dc912c308a65fbed7b3f401c754872"
+        },
+        {
+          "path": "public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "public/server.mjs",
+          "sha256": "49ff406d46b44ae22dfaa53b1e8fde286cfa85f94d49697277acfa81dbcd8df2"
+        },
+        {
+          "path": "public/test-template-video-delivery.mjs",
+          "sha256": "1a59aacee2cba92e23454eb48bc2db98336b2e1a790992cc068a9f1e2425d5fd"
+        },
+        {
+          "path": "public/test-workspace-template-coverage.mjs",
+          "sha256": "5e761ea9fbc7e865ba9450a6abfffe4c6be24f62eda69b1f08dfaf3909377c0f"
+        },
+        {
+          "path": "public/workspace-entry.css",
+          "sha256": "6283b319126101452d27e903d5efac01e1fa80f8d22a65a6895fe9ccbce7d3db"
+        },
+        {
+          "path": "public/workspace-v206-20260819-atomic-boot-03.css",
+          "sha256": "122e6a87073d0e05ba96259c20931fb94a082798db9711327e1a0e2c6f068cb6"
+        },
+        {
+          "path": "public/workspace-v206-20260819-atomic-boot-03.js",
+          "sha256": "4409507656057944c2d87a8f640cb222288ebd3146622914304a9a439a5d2977"
+        },
+        {
+          "path": "public/workspace-v206-20260819-no-preview-rerender-02.css",
+          "sha256": "122e6a87073d0e05ba96259c20931fb94a082798db9711327e1a0e2c6f068cb6"
+        },
+        {
+          "path": "public/workspace-v206-20260819-no-preview-rerender-02.js",
+          "sha256": "8daa238a18a127facc5e2939fff81cf63f358b99360007464daaa7dd68e7fb67"
+        },
+        {
+          "path": "public/workspace-v206-20260819-stable-render-01.css",
+          "sha256": "122e6a87073d0e05ba96259c20931fb94a082798db9711327e1a0e2c6f068cb6"
+        },
+        {
+          "path": "public/workspace-v206-20260819-stable-render-01.js",
+          "sha256": "bc307cd53bd87effac1c06c08749b14be424f525858f211241b79675047476c9"
+        },
+        {
+          "path": "public/workspace-v206-20260820-upload-completion-01.css",
+          "sha256": "122e6a87073d0e05ba96259c20931fb94a082798db9711327e1a0e2c6f068cb6"
+        },
+        {
+          "path": "public/workspace-v206-20260820-upload-completion-01.js",
+          "sha256": "d9bb6feea83988d1363abc3174d82172f8e3f8ddb4e7eabd5be30ea64e3d4792"
+        },
+        {
+          "path": "public/workspace-v206-20260820-upload-proxy-02.css",
+          "sha256": "122e6a87073d0e05ba96259c20931fb94a082798db9711327e1a0e2c6f068cb6"
+        },
+        {
+          "path": "public/workspace-v206-20260820-upload-proxy-02.js",
+          "sha256": "b2cb872d51e77ce1e474023a26aead0a203800d097af84db4b23871efc91e6bb"
+        },
+        {
+          "path": "public/workspace-v206-20260820-upload-xhr-03.css",
+          "sha256": "122e6a87073d0e05ba96259c20931fb94a082798db9711327e1a0e2c6f068cb6"
+        },
+        {
+          "path": "public/workspace-v206-20260820-upload-xhr-03.js",
+          "sha256": "a35006adcbdf71ce832c4b91fe03bd0030c52c72a1c6ed8f130f717ab713f54a"
+        },
+        {
+          "path": "public/workspace-v206-20260821-anonymous-gate-01.js",
+          "sha256": "a35006adcbdf71ce832c4b91fe03bd0030c52c72a1c6ed8f130f717ab713f54a"
+        },
+        {
+          "path": "public/workspace-v206.css",
+          "sha256": "122e6a87073d0e05ba96259c20931fb94a082798db9711327e1a0e2c6f068cb6"
+        },
+        {
+          "path": "public/workspace-v206.js",
+          "sha256": "b1dbcd4df095da7a5a6f4cde883845356eaddc3fa0575abce4588e8e3c34f03c"
+        },
+        {
+          "path": "public/workspace.html",
+          "sha256": "ef5dbef09331e73f9d723c4200ce4fdb99456d4d9e4fd03fad34994f0356a5b7"
+        },
+        {
+          "path": "public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/041b6f6/compose.yaml",
+          "sha256": "e31debbe1d9e93c1eae7df73c7bdcca6824b0b30e09a4f0aef53f968c652f318"
+        },
+        {
+          "path": "releases/041b6f6/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/041b6f6/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/041b6f6/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/041b6f6/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/041b6f6/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/041b6f6/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/041b6f6/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/041b6f6/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/041b6f6/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/041b6f6/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/041b6f6/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/041b6f6/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/041b6f6/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/041b6f6/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/041b6f6/public/workspace-v206.js",
+          "sha256": "79a67c3d66037c43857110e16fb7b08c915ee781d6f294ce5e694445ec54e071"
+        },
+        {
+          "path": "releases/041b6f6/public/workspace.html",
+          "sha256": "3c2c8bf96d2465a61cf7a0c956a79f00a0f640782bd5978a8e3f927689943d24"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/041b6f6/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/041b6f6/server.mjs",
+          "sha256": "1809a04ed2224ecfbe23f56143389950b6fc935b68ad1fc45f8f3b703dec0464"
+        },
+        {
+          "path": "releases/069ad3f/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/069ad3f/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/069ad3f/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/069ad3f/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/069ad3f/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/069ad3f/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/069ad3f/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/069ad3f/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/069ad3f/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/069ad3f/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/069ad3f/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/069ad3f/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/069ad3f/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/069ad3f/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/069ad3f/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/069ad3f/public/workspace-v206.js",
+          "sha256": "0357d5746d47aed52466bee679e810686628c996c799d2ac620d283446e5fb48"
+        },
+        {
+          "path": "releases/069ad3f/public/workspace.html",
+          "sha256": "a8d8ba1f9662effe779985111da772ea36ff1732adc62eeb82f70df1297bc372"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/069ad3f/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/069ad3f/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/1ee7055/compose.yaml",
+          "sha256": "e31debbe1d9e93c1eae7df73c7bdcca6824b0b30e09a4f0aef53f968c652f318"
+        },
+        {
+          "path": "releases/1ee7055/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/1ee7055/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/1ee7055/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/1ee7055/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/1ee7055/public/copy-cleanup.js",
+          "sha256": "8f134772250c48c9d01edf1535d87c8b30ba83617c7f932b6016ed8be5cbd7e9"
+        },
+        {
+          "path": "releases/1ee7055/public/front-20260616.css",
+          "sha256": "5b2b846f043ea29c4140406af53c6fa33ea95552474394954b75467a356ead23"
+        },
+        {
+          "path": "releases/1ee7055/public/front-skill-router-20260705.css",
+          "sha256": "22e186af28c7659d7575a317976268ba371b65ab17337c421cbe72ca5b2075ed"
+        },
+        {
+          "path": "releases/1ee7055/public/front-v208-product-system.css",
+          "sha256": "cd18989afe447070522e80a747baea5151474968b3bfc2c4e794f5c397d73b69"
+        },
+        {
+          "path": "releases/1ee7055/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/1ee7055/public/media-upload-hash.js",
+          "sha256": "759f7db5f3a430370887672356cc566989f6ab2009890fcb4fd94d5c6573acf1"
+        },
+        {
+          "path": "releases/1ee7055/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/1ee7055/public/motion-v209.js",
+          "sha256": "81bd94ccabb98a41173be5eacc7ccafb1bd6e60201ad15bda2874f2b6950302c"
+        },
+        {
+          "path": "releases/1ee7055/public/workspace-entry.css",
+          "sha256": "4f05fda9e7cf9de63ab4cc4a467984cf0599a915cbcb829e0927f755137baf71"
+        },
+        {
+          "path": "releases/1ee7055/public/workspace-v206.css",
+          "sha256": "3327058f41f3964c305b4b2ce83a26838ca13239393f048f4a583c4661395066"
+        },
+        {
+          "path": "releases/1ee7055/public/workspace-v206.js",
+          "sha256": "158870f365d08a8a02b6edbf133b8cc9c2caaf5463153781d8db8b51acd763db"
+        },
+        {
+          "path": "releases/1ee7055/public/workspace.html",
+          "sha256": "5ae6b424600f3f509310fccc67c9a92934883f3516a992272bfce890b7681677"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "bd057b79572a448b76dcacdb7f298ae4d14fe855b42a826a8fd9c6843c0c8edc"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "67df3efd71b0c231b2ad90ebc8191836594021b6f9b0347b2a96a484abb5276e"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "3988b9d116444927fe26d6602e287b4cafbc799c4e34446a6ab647d3bf79dc0a"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "101490e98efecef7c107273c81a4c2e16d4dea57ed1167cd5f05e51a072e4d4d"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/1ee7055/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/1ee7055/server.mjs",
+          "sha256": "d380f836b6fc470be668b0ae4e7a074fe4268ee29ea308a656c3418c170ee057"
+        },
+        {
+          "path": "releases/286c06f/compose.yaml",
+          "sha256": "e31debbe1d9e93c1eae7df73c7bdcca6824b0b30e09a4f0aef53f968c652f318"
+        },
+        {
+          "path": "releases/286c06f/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/286c06f/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/286c06f/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/286c06f/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/286c06f/public/copy-cleanup.js",
+          "sha256": "8f134772250c48c9d01edf1535d87c8b30ba83617c7f932b6016ed8be5cbd7e9"
+        },
+        {
+          "path": "releases/286c06f/public/front-20260616.css",
+          "sha256": "5b2b846f043ea29c4140406af53c6fa33ea95552474394954b75467a356ead23"
+        },
+        {
+          "path": "releases/286c06f/public/front-skill-router-20260705.css",
+          "sha256": "22e186af28c7659d7575a317976268ba371b65ab17337c421cbe72ca5b2075ed"
+        },
+        {
+          "path": "releases/286c06f/public/front-v208-product-system.css",
+          "sha256": "cd18989afe447070522e80a747baea5151474968b3bfc2c4e794f5c397d73b69"
+        },
+        {
+          "path": "releases/286c06f/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/286c06f/public/media-upload-hash.js",
+          "sha256": "759f7db5f3a430370887672356cc566989f6ab2009890fcb4fd94d5c6573acf1"
+        },
+        {
+          "path": "releases/286c06f/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/286c06f/public/motion-v209.js",
+          "sha256": "81bd94ccabb98a41173be5eacc7ccafb1bd6e60201ad15bda2874f2b6950302c"
+        },
+        {
+          "path": "releases/286c06f/public/workspace-entry.css",
+          "sha256": "4f05fda9e7cf9de63ab4cc4a467984cf0599a915cbcb829e0927f755137baf71"
+        },
+        {
+          "path": "releases/286c06f/public/workspace-v206.css",
+          "sha256": "3327058f41f3964c305b4b2ce83a26838ca13239393f048f4a583c4661395066"
+        },
+        {
+          "path": "releases/286c06f/public/workspace-v206.js",
+          "sha256": "d36c8800500a721f5e2ebcf066780cd21ee5e1dafa774e7337d54f8e6b91c326"
+        },
+        {
+          "path": "releases/286c06f/public/workspace.html",
+          "sha256": "f8412233fe14da1f042290d65458145849e30aaa5aab82fd0cf5fe0ba5961bc3"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "bd057b79572a448b76dcacdb7f298ae4d14fe855b42a826a8fd9c6843c0c8edc"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "67df3efd71b0c231b2ad90ebc8191836594021b6f9b0347b2a96a484abb5276e"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "3988b9d116444927fe26d6602e287b4cafbc799c4e34446a6ab647d3bf79dc0a"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "101490e98efecef7c107273c81a4c2e16d4dea57ed1167cd5f05e51a072e4d4d"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/286c06f/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/286c06f/server.mjs",
+          "sha256": "d380f836b6fc470be668b0ae4e7a074fe4268ee29ea308a656c3418c170ee057"
+        },
+        {
+          "path": "releases/5039c31/compose.yaml",
+          "sha256": "e31debbe1d9e93c1eae7df73c7bdcca6824b0b30e09a4f0aef53f968c652f318"
+        },
+        {
+          "path": "releases/5039c31/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/5039c31/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/5039c31/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/5039c31/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/5039c31/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/5039c31/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/5039c31/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/5039c31/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/5039c31/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/5039c31/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/5039c31/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/5039c31/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/5039c31/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/5039c31/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/5039c31/public/workspace-v206.js",
+          "sha256": "6aa30f18ad944822165cc4aa578594aa4c8bc39485b129ae236069971ee97e9d"
+        },
+        {
+          "path": "releases/5039c31/public/workspace.html",
+          "sha256": "27a41c84de754d0059e8971a142a168280337d42cfbdf072585b9275f5a00ac1"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/5039c31/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/5039c31/server.mjs",
+          "sha256": "1809a04ed2224ecfbe23f56143389950b6fc935b68ad1fc45f8f3b703dec0464"
+        },
+        {
+          "path": "releases/567276a/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/567276a/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/567276a/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/567276a/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/567276a/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/567276a/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/567276a/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/567276a/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/567276a/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/567276a/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/567276a/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/567276a/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/567276a/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/567276a/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/567276a/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/567276a/public/workspace-v206.js",
+          "sha256": "0357d5746d47aed52466bee679e810686628c996c799d2ac620d283446e5fb48"
+        },
+        {
+          "path": "releases/567276a/public/workspace.html",
+          "sha256": "2545300224c05d9055873b6a39469cb62cf217c97d4019fecd8e5523a7874441"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/567276a/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/567276a/server.mjs",
+          "sha256": "97c1f6e7cabd22f4a39dd6c13e0000f4d4baa07ab5f4dcde9e2e31e1d9d5aa34"
+        },
+        {
+          "path": "releases/67bb87b/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/67bb87b/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/67bb87b/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/67bb87b/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/67bb87b/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/67bb87b/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/67bb87b/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/67bb87b/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/67bb87b/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/67bb87b/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/67bb87b/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/67bb87b/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/67bb87b/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/67bb87b/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/67bb87b/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/67bb87b/public/workspace-v206.js",
+          "sha256": "cd00a722b8a7812d044da561b8a5fba64934968df94a960eecf404c6ac7675b7"
+        },
+        {
+          "path": "releases/67bb87b/public/workspace.html",
+          "sha256": "63fc5e417c7e33d42b69586c88a1b7eadcff5e81112deb6f6fded7a93caba28a"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/67bb87b/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/67bb87b/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/6b006d2/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/6b006d2/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/6b006d2/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/6b006d2/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/6b006d2/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/6b006d2/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/6b006d2/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/6b006d2/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/6b006d2/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/6b006d2/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/6b006d2/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/6b006d2/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/6b006d2/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/6b006d2/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/6b006d2/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/6b006d2/public/workspace-v206.js",
+          "sha256": "0357d5746d47aed52466bee679e810686628c996c799d2ac620d283446e5fb48"
+        },
+        {
+          "path": "releases/6b006d2/public/workspace.html",
+          "sha256": "a8d8ba1f9662effe779985111da772ea36ff1732adc62eeb82f70df1297bc372"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/6b006d2/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/6b006d2/server.mjs",
+          "sha256": "e818e86d0800ecccf0c42b50c4d7b6add41b447918a4d23fd163480f63c0695f"
+        },
+        {
+          "path": "releases/928a6f0/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/928a6f0/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/928a6f0/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/928a6f0/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/928a6f0/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/928a6f0/public/copy-cleanup.js",
+          "sha256": "8f134772250c48c9d01edf1535d87c8b30ba83617c7f932b6016ed8be5cbd7e9"
+        },
+        {
+          "path": "releases/928a6f0/public/front-20260616.css",
+          "sha256": "5b2b846f043ea29c4140406af53c6fa33ea95552474394954b75467a356ead23"
+        },
+        {
+          "path": "releases/928a6f0/public/front-skill-router-20260705.css",
+          "sha256": "22e186af28c7659d7575a317976268ba371b65ab17337c421cbe72ca5b2075ed"
+        },
+        {
+          "path": "releases/928a6f0/public/front-v208-product-system.css",
+          "sha256": "cd18989afe447070522e80a747baea5151474968b3bfc2c4e794f5c397d73b69"
+        },
+        {
+          "path": "releases/928a6f0/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/928a6f0/public/media-upload-hash.js",
+          "sha256": "759f7db5f3a430370887672356cc566989f6ab2009890fcb4fd94d5c6573acf1"
+        },
+        {
+          "path": "releases/928a6f0/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/928a6f0/public/motion-v209.js",
+          "sha256": "81bd94ccabb98a41173be5eacc7ccafb1bd6e60201ad15bda2874f2b6950302c"
+        },
+        {
+          "path": "releases/928a6f0/public/workspace-entry.css",
+          "sha256": "4f05fda9e7cf9de63ab4cc4a467984cf0599a915cbcb829e0927f755137baf71"
+        },
+        {
+          "path": "releases/928a6f0/public/workspace-v206.css",
+          "sha256": "3327058f41f3964c305b4b2ce83a26838ca13239393f048f4a583c4661395066"
+        },
+        {
+          "path": "releases/928a6f0/public/workspace-v206.js",
+          "sha256": "8ff68e40afa4d9bfdd2e52b91ffc3f94a49e4c1a010f6cc76f179214fe63433e"
+        },
+        {
+          "path": "releases/928a6f0/public/workspace.html",
+          "sha256": "4bf85d195047132db7bf13881f76abd84d2ed49f896427ff0659b653de9f076c"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "bd057b79572a448b76dcacdb7f298ae4d14fe855b42a826a8fd9c6843c0c8edc"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "67df3efd71b0c231b2ad90ebc8191836594021b6f9b0347b2a96a484abb5276e"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "3988b9d116444927fe26d6602e287b4cafbc799c4e34446a6ab647d3bf79dc0a"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "101490e98efecef7c107273c81a4c2e16d4dea57ed1167cd5f05e51a072e4d4d"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/928a6f0/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/928a6f0/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/935d88a/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/935d88a/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/935d88a/package.json",
+          "sha256": "1ff5f459d6cd3b301abfb6a03cc78c5c99950b09aa9be045bc4e2b33465c5416"
+        },
+        {
+          "path": "releases/935d88a/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/935d88a/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/935d88a/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/935d88a/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/935d88a/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/935d88a/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/935d88a/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/935d88a/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/935d88a/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/935d88a/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/935d88a/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/935d88a/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/935d88a/public/workspace-v206.js",
+          "sha256": "fbe00adc6082444fb4b88c02716fa914670cbfe17b15049b3da8925edd3c06e5"
+        },
+        {
+          "path": "releases/935d88a/public/workspace.html",
+          "sha256": "07196e2251dd94686c897e316cd8a2783bcdde34a410302643ecf446054f04ee"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/935d88a/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/935d88a/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/935d88a/workspace-v206.js",
+          "sha256": "629a5556e3aa86b45284fb9264a5b7be9e854619dd4a3b20787d434b5a77fbc8"
+        },
+        {
+          "path": "releases/935d88a/workspace.html",
+          "sha256": "77e5f85e0e5de9d6470a7a6f7048ebfc25dd65447b21eb562e6214031aa20e37"
+        },
+        {
+          "path": "releases/9414e9d/compose.yaml",
+          "sha256": "e31debbe1d9e93c1eae7df73c7bdcca6824b0b30e09a4f0aef53f968c652f318"
+        },
+        {
+          "path": "releases/9414e9d/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/9414e9d/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/9414e9d/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/9414e9d/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/9414e9d/public/copy-cleanup.js",
+          "sha256": "8f134772250c48c9d01edf1535d87c8b30ba83617c7f932b6016ed8be5cbd7e9"
+        },
+        {
+          "path": "releases/9414e9d/public/front-20260616.css",
+          "sha256": "5b2b846f043ea29c4140406af53c6fa33ea95552474394954b75467a356ead23"
+        },
+        {
+          "path": "releases/9414e9d/public/front-skill-router-20260705.css",
+          "sha256": "22e186af28c7659d7575a317976268ba371b65ab17337c421cbe72ca5b2075ed"
+        },
+        {
+          "path": "releases/9414e9d/public/front-v208-product-system.css",
+          "sha256": "cd18989afe447070522e80a747baea5151474968b3bfc2c4e794f5c397d73b69"
+        },
+        {
+          "path": "releases/9414e9d/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/9414e9d/public/media-upload-hash.js",
+          "sha256": "759f7db5f3a430370887672356cc566989f6ab2009890fcb4fd94d5c6573acf1"
+        },
+        {
+          "path": "releases/9414e9d/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/9414e9d/public/motion-v209.js",
+          "sha256": "81bd94ccabb98a41173be5eacc7ccafb1bd6e60201ad15bda2874f2b6950302c"
+        },
+        {
+          "path": "releases/9414e9d/public/workspace-entry.css",
+          "sha256": "4f05fda9e7cf9de63ab4cc4a467984cf0599a915cbcb829e0927f755137baf71"
+        },
+        {
+          "path": "releases/9414e9d/public/workspace-v206.css",
+          "sha256": "3327058f41f3964c305b4b2ce83a26838ca13239393f048f4a583c4661395066"
+        },
+        {
+          "path": "releases/9414e9d/public/workspace-v206.js",
+          "sha256": "158870f365d08a8a02b6edbf133b8cc9c2caaf5463153781d8db8b51acd763db"
+        },
+        {
+          "path": "releases/9414e9d/public/workspace.html",
+          "sha256": "158146761f4c90ab9b5528203f118d1973a6009ee107d67fd9c91d24a152144e"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "bd057b79572a448b76dcacdb7f298ae4d14fe855b42a826a8fd9c6843c0c8edc"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "67df3efd71b0c231b2ad90ebc8191836594021b6f9b0347b2a96a484abb5276e"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "3988b9d116444927fe26d6602e287b4cafbc799c4e34446a6ab647d3bf79dc0a"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "101490e98efecef7c107273c81a4c2e16d4dea57ed1167cd5f05e51a072e4d4d"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/9414e9d/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/9414e9d/server.mjs",
+          "sha256": "d380f836b6fc470be668b0ae4e7a074fe4268ee29ea308a656c3418c170ee057"
+        },
+        {
+          "path": "releases/b5e0930/compose.yaml",
+          "sha256": "5ce73598a2007e885a923addfe177106d6ccc66bf67d998af501bb13c3249756"
+        },
+        {
+          "path": "releases/b5e0930/Dockerfile",
+          "sha256": "c63a2ab0efe7e8deb923f459da613d3669dacaec04bc5e8366e8788eb7b0a7c4"
+        },
+        {
+          "path": "releases/b5e0930/package.json",
+          "sha256": "493e4feba7dff83c5b0efb3a981955030eddd289848e4a5728635d2ed6a69e78"
+        },
+        {
+          "path": "releases/b5e0930/proxy-headers.mjs",
+          "sha256": "9eea7a2927542ff1cb006b413e61938bbdc5266bc07471dac149d4c47ff1a146"
+        },
+        {
+          "path": "releases/b5e0930/public/app.compat.js",
+          "sha256": "bc3877dbe7b3c4d34c71f47ce63558290e28c20ff728e795831d59ef58c190b0"
+        },
+        {
+          "path": "releases/b5e0930/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/b5e0930/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/b5e0930/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/b5e0930/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/b5e0930/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/b5e0930/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/b5e0930/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/b5e0930/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/b5e0930/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/b5e0930/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/b5e0930/public/workspace-v206.js",
+          "sha256": "e762c2b66a780ced76b5108e585bed16405ccaba7c239094473123e5cfe5a214"
+        },
+        {
+          "path": "releases/b5e0930/public/workspace.html",
+          "sha256": "ff7d1d8fe0592b539e894f72460266c552453a8e241555e3b2078640180f0a30"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/b5e0930/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/b5e0930/server.mjs",
+          "sha256": "62bcfe44726284ea23d8263560a980dc0e3b5a8d5ac9843cc71c3aee517c9039"
+        },
+        {
+          "path": "releases/b6c475c/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/b6c475c/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/b6c475c/package.json",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/b6c475c/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/b6c475c/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/b6c475c/public/copy-cleanup.js",
+          "sha256": "8f134772250c48c9d01edf1535d87c8b30ba83617c7f932b6016ed8be5cbd7e9"
+        },
+        {
+          "path": "releases/b6c475c/public/front-20260616.css",
+          "sha256": "5b2b846f043ea29c4140406af53c6fa33ea95552474394954b75467a356ead23"
+        },
+        {
+          "path": "releases/b6c475c/public/front-skill-router-20260705.css",
+          "sha256": "22e186af28c7659d7575a317976268ba371b65ab17337c421cbe72ca5b2075ed"
+        },
+        {
+          "path": "releases/b6c475c/public/front-v208-product-system.css",
+          "sha256": "cd18989afe447070522e80a747baea5151474968b3bfc2c4e794f5c397d73b69"
+        },
+        {
+          "path": "releases/b6c475c/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/b6c475c/public/media-upload-hash.js",
+          "sha256": "759f7db5f3a430370887672356cc566989f6ab2009890fcb4fd94d5c6573acf1"
+        },
+        {
+          "path": "releases/b6c475c/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/b6c475c/public/motion-v209.js",
+          "sha256": "81bd94ccabb98a41173be5eacc7ccafb1bd6e60201ad15bda2874f2b6950302c"
+        },
+        {
+          "path": "releases/b6c475c/public/workspace-entry.css",
+          "sha256": "4f05fda9e7cf9de63ab4cc4a467984cf0599a915cbcb829e0927f755137baf71"
+        },
+        {
+          "path": "releases/b6c475c/public/workspace-v206.css",
+          "sha256": "3327058f41f3964c305b4b2ce83a26838ca13239393f048f4a583c4661395066"
+        },
+        {
+          "path": "releases/b6c475c/public/workspace-v206.js",
+          "sha256": "96b21407be81106a38371da385d8357ae96a422918a9a46d3a129b229698f6e5"
+        },
+        {
+          "path": "releases/b6c475c/public/workspace.html",
+          "sha256": "31edbd034f0447134c081e81242e3c74183f347359f9710b23e15c2fcfe2a775"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "bd057b79572a448b76dcacdb7f298ae4d14fe855b42a826a8fd9c6843c0c8edc"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "67df3efd71b0c231b2ad90ebc8191836594021b6f9b0347b2a96a484abb5276e"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "3988b9d116444927fe26d6602e287b4cafbc799c4e34446a6ab647d3bf79dc0a"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "101490e98efecef7c107273c81a4c2e16d4dea57ed1167cd5f05e51a072e4d4d"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/b6c475c/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/b6c475c/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/package.json",
+          "sha256": "1ff5f459d6cd3b301abfb6a03cc78c5c99950b09aa9be045bc4e2b33465c5416"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/workspace-v206.css",
+          "sha256": "7465d172da027500d2aaf2b8ed4dd947b5c771564ed0ec431a9be47e883c3709"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/workspace-v206.js",
+          "sha256": "105d70df1f642b12df642f1736684b2e4eae770ac9f4d11eca71be90a90cc51c"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/workspace.html",
+          "sha256": "24d485eb2cfaf16329b106907e62e6908b9d647595a6ddd405cef1d9d06155ef"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/same-style-inputs-17dd945/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/package.json",
+          "sha256": "1ff5f459d6cd3b301abfb6a03cc78c5c99950b09aa9be045bc4e2b33465c5416"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/workspace-v206.css",
+          "sha256": "7465d172da027500d2aaf2b8ed4dd947b5c771564ed0ec431a9be47e883c3709"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/workspace-v206.js",
+          "sha256": "0d0a239fa5976f205bff48f0a3ff6c26b1b4677c6b0ffef9106fde6e49aadd6a"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/workspace.html",
+          "sha256": "bd99ae1e9e5e07800e83fedf38c3a68d150405876822d6eb63b7fde2e44cda0b"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/same-style-inputs-1cb0976/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/package.json",
+          "sha256": "1ff5f459d6cd3b301abfb6a03cc78c5c99950b09aa9be045bc4e2b33465c5416"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/workspace-v206.css",
+          "sha256": "7465d172da027500d2aaf2b8ed4dd947b5c771564ed0ec431a9be47e883c3709"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/workspace-v206.js",
+          "sha256": "0609576c285d239460109727d544d8dd5110c0d6d333a5c86f296edfa28307f9"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/workspace.html",
+          "sha256": "99f0311fddb864fa0dd8fd71af7eedf52c594a6a6ec25e3e05c54a7ae0580b91"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/same-style-inputs-3badece/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/package.json",
+          "sha256": "1ff5f459d6cd3b301abfb6a03cc78c5c99950b09aa9be045bc4e2b33465c5416"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/workspace-v206.js",
+          "sha256": "71d2bf2be9f1123e219da0207206820c6499991dc8b63b815c3e5c686ba96a75"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/workspace.html",
+          "sha256": "1433ba878140fea6f267a3d5e7c20e3384f3e976fa3d33ed008bf660a2b1de42"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/same-style-preview-7af4d0d/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "releases/same-style-template-2117a83/package.json",
+          "sha256": "1ff5f459d6cd3b301abfb6a03cc78c5c99950b09aa9be045bc4e2b33465c5416"
+        },
+        {
+          "path": "releases/same-style-template-2117a83/package.json.previous",
+          "sha256": "145bb774469c966be4b4b1584032a7662c95d13d472385f3a6fcb2b014bb396b"
+        },
+        {
+          "path": "releases/same-style-template-2117a83/public/workspace-v206.js.previous",
+          "sha256": "6aa30f18ad944822165cc4aa578594aa4c8bc39485b129ae236069971ee97e9d"
+        },
+        {
+          "path": "releases/same-style-template-2117a83/workspace-v206.js",
+          "sha256": "629a5556e3aa86b45284fb9264a5b7be9e854619dd4a3b20787d434b5a77fbc8"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/compose.yaml",
+          "sha256": "41336362f1fd7ce92808bcdcc200d4167126b9bcd1cbad5e97f757857d3633b0"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/Dockerfile",
+          "sha256": "1f1f7b54f0d79532c66de7ea884e6fc670682b2eb859cf9c96d190f3e165270c"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/package.json",
+          "sha256": "1ff5f459d6cd3b301abfb6a03cc78c5c99950b09aa9be045bc4e2b33465c5416"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/proxy-headers.mjs",
+          "sha256": "949d4cf4e426c19b16fa009898db8adfaa80c99bb040deecdb65d2e29d3291a6"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/app.compat.js",
+          "sha256": "cd7ecd95132e741c2b3b6efc38653253785737ae608384a29e7cb2436989d6a5"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/copy-cleanup.js",
+          "sha256": "84f9284d279eb053baf20ccb341a9ff6746894b33aa9898964b85d2e35ca8124"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/front-20260616.css",
+          "sha256": "87951c769da3cd58aa2211cbffd85c69cde1893059721e6ac9a584d906f3ba71"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/front-skill-router-20260705.css",
+          "sha256": "ef51565f5317bcf7c15026ea52f22ff87441449d3fce62affa8d7079963a4039"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/front-v208-product-system.css",
+          "sha256": "4997d99aa2be17268379b98c1febde1b6757b59da8bf830c660398b5f6051726"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/index.html",
+          "sha256": "8fa65845d1b1a8a9b6d809efbeb68064d5f115cc51bde5dc1e4796e0c9545f9a"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/media-upload-hash.js",
+          "sha256": "0429e5fea3ae3672673d44a2147b1945863b75cc32e23d996bea970ed8edbe2a"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/motion-v209.css",
+          "sha256": "fa4d344eac7568a6444d227f84d13e732a148353fe4d6549cf946ce87bcb98fc"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/motion-v209.js",
+          "sha256": "981bb42b79358e92394a10e8f47248b0c92d5d9343861a1f52b67932914063fe"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/workspace-entry.css",
+          "sha256": "76450a71845178826788ea0240a7a22607ee97e3e260b58a3466f15d44770d08"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/workspace-v206.css",
+          "sha256": "0c6c3b7cea4f2fdf716b700750f29bb82ecece569dcbe1b3755a2d654b011b7b"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/workspace-v206.js",
+          "sha256": "629a5556e3aa86b45284fb9264a5b7be9e854619dd4a3b20787d434b5a77fbc8"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/workspace.html",
+          "sha256": "77e5f85e0e5de9d6470a7a6f7048ebfc25dd65447b21eb562e6214031aa20e37"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/05-c3ty_6dwfk.js",
+          "sha256": "aee2d073d2a1157cfe5c98907f90b3967de4c3625f9ffb154bd1979ae2b917b0"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/0cz1d0mv5g_q7.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/1z6x88ihszho0.js",
+          "sha256": "8790eeaaa7982c8d817c9810bbff11c10ddcc8f40c12cf695301068329fc1c72"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/2-2m2-o4zv-7g.js",
+          "sha256": "72ada577d9c59807e079d7ecfe4a1ac655e19e2994ed58d03461e3388a981250"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/2s_9cae6b1jkw.css",
+          "sha256": "c361253ac684869b3aadf48028ae32d9561330e666f1957f161c1f0dc4237e81"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/2_tdduzgm68e2.js",
+          "sha256": "fcaac45b2a02dbc83130cea4b8f535ed57a41e0b18362523d57eb7f0c7d8ee05"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/31iarpvmym1z2.js",
+          "sha256": "4ebe2b9217c39e7e774d885dbe01a2621dcfaeefcd94f8cca44a0e7d388daf84"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/3b2_ydn3fhbfw.js",
+          "sha256": "45da3ac0a548d79936d4280580bba32fa844af351248fca33916ffcf2f7c6d08"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/public/_next/static/chunks/turbopack-32qs5q91v49-j.js",
+          "sha256": "89ab61ce155607282522f7426c35ec21ab40f6cae57ecf3c0781eb22aa294569"
+        },
+        {
+          "path": "releases/same-style-template-5fe6f8e/server.mjs",
+          "sha256": "ef93207eeab8609eafa69f7d0d04451c2ddbfa8b46028b2b92605b678a5ed1d3"
+        },
+        {
+          "path": "server.mjs",
+          "sha256": "513e5968bc95ae5579dba43c6f045c4564a87ee4d1fc56db13fc06d301eb8d94"
+        },
+        {
+          "path": "test-assistant-events.mjs",
+          "sha256": "06c47718b923e779115c52603e4b4ba4bba43803418941868a247b79eaa52b9c"
+        },
+        {
+          "path": "test-workspace-source-stability.mjs",
+          "sha256": "321956a8d3d58f6ba20526e620794eb157cc8976eff9f702dcddb29139a1512e"
+        },
+        {
+          "path": "workspace-v206.js",
+          "sha256": "52223e0c215ebb77d75a57aa72688465abda122a4650aa93559e9b52569d1e43"
+        },
+        {
+          "path": "workspace-workflow-state.js",
+          "sha256": "7db6594f85f11ecfcdb2b43b9e4e0590c8d586a3d78eb1c4655acf77f3123b70"
+        },
+        {
+          "path": "workspace.html",
+          "sha256": "783eb286d76457a6d06c6a3d4d389f23bdf06b8c56235df8a6789e1bf6b36537"
+        }
+      ]
+    }
+  ]
+}
